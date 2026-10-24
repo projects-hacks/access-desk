@@ -1,7 +1,7 @@
 # Choosing the LLM
 
 The credit analyst asks a language model to decide each client's tier. Which model answers is a
-setting, not a rewrite: today the Claude API, optionally Factory's `droid-sdk`. A provider is
+setting, not a rewrite: Factory's `droid-sdk` by default (running `claude-opus-5-5`), with the Claude API as the backup. A provider is
 only a function that takes the conversation and returns text. Everything that makes the answer
 safe stays in our Python code and is the same for every provider.
 
@@ -15,9 +15,10 @@ safe stays in our Python code and is the same for every provider.
 
 | Setting | Meaning |
 |---|---|
-| `LLM_PROVIDER` | `anthropic` (default) or `factory` |
-| `LLM_FALLBACK` | provider to try if the first fails or is unavailable (e.g. `anthropic`); empty means none |
-| `FACTORY_MODEL` | the model Droid should use |
+| `LLM_PROVIDER` | `factory` (default) or `anthropic` |
+| `LLM_FALLBACK` | provider to try if the first fails or is unavailable; default `anthropic`; empty means none |
+| `FACTORY_MODEL` | the model Droid should use; default `claude-opus-5-5`, the one the gate was run on |
+| `FACTORY_TIMEOUT_SECONDS` / `FACTORY_ATTEMPTS` | 120 s per try; 2 tries, each in a fresh session |
 | `FACTORY_API_KEY` | Factory key; without it `factory` is unavailable |
 
 The Claude settings (`ANTHROPIC_API_KEY`, model) are unchanged.
@@ -47,8 +48,9 @@ breaks the guardrails twice, the next one is tried; if none works the determinis
 
 ## Switching and rolling back
 
-Set `LLM_PROVIDER=factory` (and `FACTORY_API_KEY`, `FACTORY_MODEL`), restart the agents. To roll
-back, set `LLM_PROVIDER=anthropic` and restart. Past decisions keep the provider they were made
+Factory is the default. It needs the `droid` CLI on the PATH and `FACTORY_API_KEY`; without them
+the Claude API answers instead, so nobody has to install anything to run the agents. To roll back,
+set `LLM_PROVIDER=anthropic` and restart. Past decisions keep the provider they were made
 with.
 
 ## The gate
@@ -73,10 +75,28 @@ Exit codes: 0 gate passed, 1 gate failed, 2 provider not available (no key or `d
 | Full cycle | at most 90 s |
 | Cost | reported only (`unknown` unless prices are given; Claude defaults to $4 / $20 per million tokens) |
 
-## Still to do live (not yet done)
+## Gate result (Factory, `claude-opus-5-5`, run live)
 
-1. Install the `droid` CLI.
-2. Set `FACTORY_API_KEY`.
-3. Run the Phase 0 hello-world (one trivial question through the provider, no tools).
-4. Run the gate for `factory` and compare with `anthropic`.
-5. Only if it passes, set `LLM_PROVIDER=factory`.
+Two month-ends (2025-10-31 and 2025-12-31) plus a three-run repeat of 2025-12-31, 87 calls,
+`droid` 0.249.0, six calls at a time:
+
+| Check | Result | Pass mark |
+|---|---|---|
+| Valid within two tries | 35 of 36 (97%) | 95% |
+| Right when it differs from the rules | 6 of 6 | 5 of 6 |
+| Repeatability | 16 of 17 (94%) | 90% |
+| Full cycle | 38.5 s | 90 s |
+| Cost | unknown (Factory reports tokens, not price): 136k in / 45k out | reported only |
+
+**What the first run taught us.** The first run failed two checks (92% valid, 82% repeatable)
+because, with six Droid processes at once, some timed out at 60 s or came back cut short. The same
+clients answered correctly alone. The adapter now allows 120 s and retries once in a fresh
+session; the rerun passed.
+
+**Known limits.** Still about one call in 36 comes back unusable and falls to the next provider; the
+slowest call took 115 s; the sample is smaller than the 5-month Claude backtest (6 differences
+against 17), so rerun the gate with all cutoffs before relying on it for more than the demo. The
+default Droid model (`gpt-6-sol`) was not gated and gave a connection error once; stay on
+`claude-opus-5-5` unless you gate another.
+
+**Lockdown, tested live.** Asked to write a file and run a command, the session did neither.

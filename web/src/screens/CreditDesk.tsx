@@ -248,6 +248,7 @@ export function CreditDesk() {
                               item={credit.filter((w) => w.clientId === c.id && w.kind !== 'EXPLOIT_FLAG').at(-1)}
                               review={credit.filter((w) => w.clientId === c.id && w.kind === 'CREDIT_REVIEW').at(-1)}
                               note={(id) => audit.filter((a) => a.workItemId === id && a.action === 'TRANSITION' && a.allowed).at(-1)?.detail ?? ''}
+                              kept={audit.filter((a) => a.clientId === c.id && a.action === 'AGENT_WAITED' && a.toState.startsWith('claude_kept_tier')).at(-1)?.detail}
                             />
                             {(flagsOf.get(c.id) ?? []).map((f) => {
                               const evidence = parse<Evidence[]>(f.evidenceJson) ?? [];
@@ -360,13 +361,15 @@ function Bar({ value }: { value: number | undefined }) {
  * from, the patterns, the rules' answer, the guardrails, Claude's decision and
  * where it stands with the controller.
  */
-function Trace({ client, profile, flags, item, review, note }: {
+function Trace({ client, profile, flags, item, review, note, kept }: {
   client: { id: string; name: string; tier: number; strategic: boolean };
   profile: { reliabilityScore: number; valueScore: number; coverageRatio: number; coverageDetail: string; expectedSettleOn?: string } | undefined;
   flags: { id: string; pattern: string; status: string; score: number; months: number }[];
   item: { id: bigint; kind: string; state: string; proposalJson: string; title: string } | undefined;
   review: { proposalJson: string } | undefined;
   note: (id: bigint) => string;
+  /** Set when Claude deliberately kept the tier the rules wanted to change. */
+  kept?: string;
 }) {
   const meta = item ? parse<DecisionMeta & ReviewProposal>(item.proposalJson) : undefined;
   const b = (review && parse<ReviewProposal>(review.proposalJson)?.breakdown) ?? meta?.breakdown;
@@ -407,7 +410,9 @@ function Trace({ client, profile, flags, item, review, note }: {
               <p><b>{actionText(meta.baseline.action, from, meta.baseline.to_tier)}</b>{meta.baseline.policy_ref ? ` (${meta.baseline.policy_ref})` : ''}</p>
               {!!meta.baseline.reasons?.length && <ul>{meta.baseline.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
             </>
-          : <p><b>keep tier {client.tier}</b> <span className="muted">— nothing to decide, so Claude was not asked</span></p>}
+          : kept
+            ? <p><b>change proposed</b> <span className="muted">— Claude was asked and kept the tier (see Decision)</span></p>
+            : <p><b>keep tier {client.tier}</b> <span className="muted">— nothing to decide, so Claude was not asked</span></p>}
       </li>
       <li>
         <h4>Guardrails <span className="muted">what any decision must respect</span></h4>
@@ -426,7 +431,9 @@ function Trace({ client, profile, flags, item, review, note }: {
               {!!choice.policy?.success_criteria.length && <p>Success when: {choice.policy.success_criteria.map(criterionText).join('; ')}</p>}
               {!!choice.cited_invoice_ids.length && <p className="muted">Cites {choice.cited_invoice_ids.join(', ')}</p>}
             </>
-          : <p>{meta?.baseline ? `Rules decided: ${actionText(meta.baseline.action, from, meta.baseline.to_tier)}.` : `No change for ${client.name}.`}</p>}
+          : kept
+            ? <p><span className="pill by-claude">Claude kept tier {client.tier}</span> {kept}</p>
+            : <p>{meta?.baseline ? `Rules decided: ${actionText(meta.baseline.action, from, meta.baseline.to_tier)}.` : `No change for ${client.name}.`}</p>}
       </li>
       <li>
         <h4>Controller</h4>
@@ -529,7 +536,7 @@ type AuditRow = {
 };
 type ItemRow = { id: bigint; kind: string; state: string; title: string; proposalJson: string; reasoning: string; clientId: string; autoApplied: boolean };
 
-const FEED_ACTIONS = new Set(['PROPOSE', 'AUTO_APPLIED', 'CREDIT_SCORED', 'TIER_CHANGED', 'POLICY_ACTIVATED', 'POLICY_REJECTED', 'TRANSITION']);
+const FEED_ACTIONS = new Set(['PROPOSE', 'AUTO_APPLIED', 'AGENT_WAITED', 'CREDIT_SCORED', 'TIER_CHANGED', 'POLICY_ACTIVATED', 'POLICY_REJECTED', 'TRANSITION']);
 
 /**
  * Everything the agents and the controller just did, newest first, every
@@ -542,6 +549,7 @@ function Feed({ audit, items, nameOf, tierOf }: {
   const rows = audit
     .filter((a) => FEED_ACTIONS.has(a.action) && (!a.workItemId || itemOf.has(a.workItemId) || a.action === 'TIER_CHANGED'))
     .filter((a) => a.action !== 'TRANSITION' || a.toState === 'APPROVED' || a.toState === 'REJECTED')
+    .filter((a) => a.action !== 'AGENT_WAITED' || a.toState.startsWith('claude_kept_tier'))
     .sort((a, b) => Number(b.id - a.id))
     .slice(0, 80);
   const decisions = items.filter((w) => w.kind !== 'EXPLOIT_FLAG').map((w) => parse<DecisionMeta>(w.proposalJson));
@@ -563,6 +571,9 @@ function Feed({ audit, items, nameOf, tierOf }: {
           const w = a.workItemId ? itemOf.get(a.workItemId) : undefined;
           const time = a.at.toDate().toLocaleTimeString();
           const who = <span className={`who ${a.actorRole.toLowerCase()}`}>{a.actorRole === 'AGENT' ? 'agent' : a.actorRole.toLowerCase()}</span>;
+          if (a.action === 'AGENT_WAITED') {
+            return <li key={String(a.id)} className="ev decision differs"><time>{time}</time><span className="who agent">Credit Analyst</span><b>{nameOf(a.clientId)}</b> <span className="pill by-claude">Claude kept the tier</span><span className="pill differs">differs from rules</span><p>{a.detail}</p></li>;
+          }
           if (a.action === 'CREDIT_SCORED') {
             return <li key={String(a.id)} className="ev score"><time>{time}</time>{who}<b>{nameOf(a.clientId)}</b> scored · {a.toState}<span className="muted"> · {a.detail}</span></li>;
           }

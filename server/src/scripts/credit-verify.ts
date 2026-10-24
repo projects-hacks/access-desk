@@ -39,7 +39,7 @@ const LIVE = new Set(['PROPOSED', 'NEEDS_INFO', 'APPROVED', 'POSTED']);
 const { conn } = await connectStdb();
 await new Promise<void>((resolve) =>
   conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([
-    tables.client, tables.creditProfile, tables.exploitFlag, tables.workItem, tables.invoice, tables.clock,
+    tables.client, tables.creditProfile, tables.exploitFlag, tables.workItem, tables.invoice, tables.clock, tables.auditEvent,
   ]),
 );
 const db = conn.db;
@@ -85,9 +85,16 @@ const decidedBy = (w: { proposalJson: string }) => {
     return 'rules';
   }
 };
-const claudeClients = new Set([...db.workItem.iter()]
-  .filter((w) => (w.kind === 'CREDIT_REVIEW' || w.kind === 'POLICY_DRAFT') && LIVE.has(w.state) && decidedBy(w) === 'claude')
-  .map((w) => w.clientId));
+// A tier Claude deliberately kept against the rules' proposal leaves no work item, only an audit row.
+const keptByClaude = new Set([...db.auditEvent.iter()]
+  .filter((a) => a.action === 'AGENT_WAITED' && a.toState.startsWith('claude_kept_tier'))
+  .map((a) => a.clientId));
+const claudeClients = new Set([
+  ...[...db.workItem.iter()]
+    .filter((w) => (w.kind === 'CREDIT_REVIEW' || w.kind === 'POLICY_DRAFT') && LIVE.has(w.state) && decidedBy(w) === 'claude')
+    .map((w) => w.clientId),
+  ...keptByClaude,
+]);
 const subjects = reviews.map((w) => w.subjectId);
 const dupes = reviews.map((w) => w.clientId).filter((s, i, all) => all.indexOf(s) !== i);
 const ruled = clients.filter((c) => !claudeClients.has(c.id));
@@ -106,7 +113,7 @@ for (const cid of claudeClients) {
   const c = clients.find((x) => x.id === cid)!;
   const rules = expectedSubject(cid, START_TIER[cid] ?? c.tier) ?? 'stay';
   const mine = reviews.find((w) => w.clientId === cid)?.subjectId ?? 'stay';
-  if (rules !== mine) console.log(`  ·   ${c.name}: Claude chose ${mine}; rules said ${rules}`);
+  if (rules !== mine) console.log(`  ·   ${c.name}: Claude chose ${mine}${keptByClaude.has(cid) && mine === 'stay' ? ' (kept on purpose)' : ''}; rules said ${rules}`);
 }
 check(reviews.every((w) => w.requiredRole === 'CONTROLLER'), 'Every review needs a controller');
 check(!reviews.some((w) => w.subjectId.startsWith('tier:') && clients.find((c) => c.id === w.clientId)?.strategic),

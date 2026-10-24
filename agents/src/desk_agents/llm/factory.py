@@ -137,11 +137,7 @@ def factory_ask(
         return None
     limit = timeout if timeout is not None else settings.factory_timeout_seconds
 
-    def ask(messages: list[dict[str, Any]]) -> Reply:
-        from ..credit import guardrails as g
-
-        prompt = flatten(messages)
-        sch = schema if schema is not None else g.Decision.model_json_schema()
+    def once(prompt: str, sch: dict[str, Any]) -> Reply:
         cwd = tempfile.mkdtemp(prefix="desk-droid-")
         try:
             text = _run(lambda: asyncio.wait_for(_session(sdk, prompt, sch, cwd, usage), limit))
@@ -158,5 +154,21 @@ def factory_ask(
             raise DecisionUnavailable("droid answer was not JSON") from e
         return Reply(text, [{"type": "text", "text": text}], provider="factory",
                      model=settings.factory_model)
+
+    def ask(messages: list[dict[str, Any]]) -> Reply:
+        from ..credit import guardrails as g
+
+        prompt = flatten(messages)
+        sch = schema if schema is not None else g.Decision.model_json_schema()
+        # Under load (several Droid processes at once) a session sometimes times out or is cut
+        # short; a fresh session usually answers, so try again before the next provider is asked.
+        last: DecisionUnavailable | None = None
+        for _ in range(max(1, settings.factory_attempts)):
+            try:
+                return once(prompt, sch)
+            except DecisionUnavailable as e:
+                last = e
+        assert last is not None
+        raise last
 
     return ask
