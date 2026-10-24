@@ -1,0 +1,18 @@
+{
+  "name": "access-desk",
+  "private": true,
+  "packageManager": "pnpm@10.12.1",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @access-desk/server --filter @access-desk/web dev",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write .",
+    "stdb:start": "spacetime start",
+    "stdb:publish": "spacetime publish --project-path spacetime access-desk",
+    "stdb:generate": "spacetime generate --lang typescript --project-path spacetime --out-dir web/src/module_bindings && spacetime generate --lang typescript --project-path spacetime --out-dir server/src/module_bindings"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10",
+    "typescript": "~5.9.3"
+  }
+}

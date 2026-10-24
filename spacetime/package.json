@@ -1,0 +1,14 @@
+{
+  "name": "@access-desk/spacetime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "build": "spacetime build"
+  },
+  "dependencies": {
+    "spacetimedb": "2.13.0"
+  }
+}

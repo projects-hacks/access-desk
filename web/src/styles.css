@@ -1,0 +1,8 @@
+:root { font-family: system-ui, sans-serif; color: #1a1a1a; background: #fafafa; }
+body { margin: 0; }
+.layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+nav { display: flex; flex-direction: column; gap: 4px; padding: 16px; border-right: 1px solid #e5e5e5; background: #fff; }
+nav h1 { font-size: 16px; margin: 0 0 12px; }
+nav button { text-align: left; padding: 8px 10px; border: 0; border-radius: 6px; background: none; cursor: pointer; }
+nav button.active { background: #eef2ff; font-weight: 600; }
+main { padding: 24px; }

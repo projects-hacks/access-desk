@@ -1,0 +1,4 @@
+packages:
+  - spacetime
+  - server
+  - web
