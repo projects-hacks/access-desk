@@ -79,3 +79,20 @@ export const accessLever = table(
     workItemId: t.u64().optional(),
   },
 );
+
+/**
+ * Fine-grained permissions under the four levers (crypto vs fiat withdrawals, buy vs sell...).
+ * No row means the permission follows its lever. access_lever stays the summary the rest reads.
+ */
+export const permission = table(
+  { public: true },
+  {
+    id: t.string().primaryKey(),
+    clientId: t.string().index('btree'),
+    /** crypto_withdrawals | fiat_withdrawals | transfers | staking | buy | sell | derivatives | otc | api | borrowing */
+    key: t.string(),
+    enabled: t.bool(),
+    workItemId: t.u64().optional(),
+    updatedAt: t.timestamp(),
+  },
+);

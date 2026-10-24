@@ -7,7 +7,7 @@ const BASELINE = [
   ['pol-001', 'Apply payments that match quoted invoices or an exact set of open invoices', { when: 'payer verified by account or wallet', then: 'apply automatically' }],
   ['pol-002', 'Short by $50.00 or less: apply in full and book the difference to bank fees (6850)', { when: 'quoted invoices, short <= 5000 cents', then: 'write off to 6850' }],
   ['pol-004', 'Affiliate payments apply to the parent client per the CRM map', { when: 'payer is a mapped affiliate', then: 'apply to parent' }],
-  ['pol-005', 'Collect overdue fees from custody cash where the contract allows debits, up to the auto-apply limit', { when: 'debit clause signed, USD custody covers the overdue invoices', then: 'debit custody, apply to the invoices' }],
+  ['pol-005', 'Collect overdue fees from custody cash where the contract allows debits', { when: 'debit clause signed, USD custody covers the overdue invoices', then: 'debit custody, apply to the invoices' }],
   ['pol-006', 'Restrict one lever one step at a time, covered by the contract, after the cure period; never hold more than is owed', { when: 'undisputed invoices overdue, cure period expired', then: 'apply the smallest step; Tier 1, strategic clients and offboarding steps go to a controller' }],
   ['pol-007', 'Send payment reminders and notices without approval', { when: 'invoice overdue or access restricted', then: 'notify the client' }],
   ['pol-008', 'Never force a hedged book to close-only; stop new positions instead', { when: 'client has open hedged positions', then: 'NO_NEW_POSITIONS, not CLOSE_ONLY' }],

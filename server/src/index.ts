@@ -12,7 +12,7 @@ import { buildSeedPlan } from './integrations/nessie/seed-plan';
 
 if (!env.SERVER_HOST) {
   console.error('This server runs sync and the gateway on the shared database, and only one may run (the hosted one).\n'
-    + 'Use the hosted API (VITE_API_URL). To run it here anyway, stop the hosted one first: pnpm dev:server');
+    + 'Use the hosted API (VITE_API_URL). Run one here (pnpm dev:server) only against a database the hosted one does not use.');
   process.exit(1);
 }
 

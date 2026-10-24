@@ -49,6 +49,8 @@ class Plan:
     policy_outcomes: list[tuple[str, str]] = field(default_factory=list)
     proposals: list[Proposal] = field(default_factory=list)
     withdraw: list[int] = field(default_factory=list)
+    # (client, code, reason): Claude kept a tier the rules wanted to change. Nothing else records it.
+    kept: list[tuple[str, str, str]] = field(default_factory=list)
 
 
 def subject_of(d: TierDecision) -> str | None:
@@ -194,6 +196,8 @@ def plan(
         o = outcomes.get(cid)
         if o is None:
             continue
+        if o.decided_by == "claude" and o.baseline.action != "stay" and o.final.action == "stay":
+            out.kept.append(_kept(b, o))
         subject = subject_of(o.final)
         if subject and subject not in open_subjects:
             out.proposals.append(_review_proposal(b, s, flags[cid], o, subject))
@@ -237,6 +241,18 @@ def _json(raw: str) -> Any:
         return json.loads(raw)
     except (ValueError, TypeError):
         return raw
+
+
+KEPT = "claude_kept_tier"
+
+
+def _kept(b: ClientBook, o: Outcome) -> tuple[str, str, str]:
+    """The audit code and reason for a tier Claude kept against the rules' proposal."""
+    base = o.baseline
+    wanted = f"tier {base.current} -> {base.to_tier}" if base.action == "tier_change" else "a review"
+    code = f"{KEPT}:{base.action}:{base.to_tier}"
+    why = o.choice.reasons[0] if o.choice and o.choice.reasons else "no reason given"
+    return b.client.id, code, f"Claude kept tier {base.current}; the rules proposed {wanted}. {why}"[:480]
 
 
 def _score(x: float) -> int:
@@ -353,7 +369,18 @@ class CreditAnalyst(Agent):
             self.db.record_policy_outcome(key, outcome)
         for work_item_id in p.withdraw:
             self.db.decide(work_item_id, "WITHDRAWN", "superseded by a newer credit review")
+        self._record_kept(p.kept)
         return p.proposals
+
+    def _record_kept(self, kept: list[tuple[str, str, str]]) -> None:
+        """Audit each kept tier once (the audit log is the memory, so a restart doesn't repeat it)."""
+        if not kept:
+            return
+        seen = {(a["client_id"], a["to_state"]) for a in self.db.sql("SELECT * FROM audit_event")
+                if a["action"] == "AGENT_WAITED" and a["to_state"].startswith(KEPT)}
+        for cid, code, reason in kept:
+            if (cid, code) not in seen:
+                self.db.record_wait(cid, code, reason)
 
 
 __all__ = ["CompanyPolicy", "CreditAnalyst", "Plan", "plan"]

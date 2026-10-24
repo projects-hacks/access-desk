@@ -191,9 +191,40 @@ def test_timeout_raises_and_cleans_up():
     FakeClient.hang = True
     with pytest.raises(DecisionUnavailable, match="timed out"):
         factory.factory_ask(timeout=0.05)(msgs())
-    (c,) = FakeClient.instances
-    assert c.closed
-    assert not os.path.exists(c.init_kw["cwd"])
+    # One try per attempt (settings.factory_attempts), each closed and its folder removed.
+    assert len(FakeClient.instances) == settings.factory_attempts == 2
+    for c in FakeClient.instances:
+        assert c.closed
+        assert not os.path.exists(c.init_kw["cwd"])
+
+
+def test_a_cut_short_session_is_retried_in_a_fresh_one(monkeypatch):
+    """Under load Droid sometimes ends a session early; the second session's answer is used."""
+    first = FakeClient.script
+    seen = {"n": 0}
+    orig = FakeClient.receive_response
+
+    async def flaky(self):
+        seen["n"] += 1
+        if seen["n"] == 1:  # first session: text cut off mid-JSON
+            yield Delta("{\"action\": \"sta")
+            yield Done(None)
+            return
+        async for ev in orig(self):
+            yield ev
+
+    monkeypatch.setattr(FakeClient, "receive_response", flaky)
+    out = factory.factory_ask()(msgs())
+    assert json.loads(out.text) and out.provider == "factory"
+    assert len(FakeClient.instances) == 2 and first is FakeClient.script
+
+
+def test_attempts_setting_limits_retries(monkeypatch):
+    monkeypatch.setattr(settings, "factory_attempts", 1)
+    FakeClient.hang = True
+    with pytest.raises(DecisionUnavailable):
+        factory.factory_ask(timeout=0.05)(msgs())
+    assert len(FakeClient.instances) == 1
 
 
 def test_retry_prompt_carries_the_original_and_the_violations():

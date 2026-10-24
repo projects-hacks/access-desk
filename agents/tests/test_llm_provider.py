@@ -46,13 +46,23 @@ def wired(monkeypatch):
     return wire
 
 
-def test_default_is_anthropic_and_unchanged(monkeypatch):
-    assert settings.llm_provider == "anthropic"
-    assert llm.provider_chain() == ["anthropic"]
-    monkeypatch.setattr(settings, "anthropic_api_key", None)
-    assert llm.get_ask() is None  # no key: the rules decide, as before
+def test_default_is_factory_then_claude_then_the_rules(monkeypatch):
+    assert settings.llm_provider == "factory"
+    assert settings.factory_model == "claude-opus-5-5"  # the model the gate was run on
+    assert llm.provider_chain() == ["factory", "anthropic"]
+    # No droid / Factory key: Claude answers, as before.
+    monkeypatch.setitem(llm.BUILDERS, "factory", lambda **k: None)  # droid missing or no key
     monkeypatch.setattr(settings, "anthropic_api_key", "sk-test")
     assert llm.get_ask() is not None
+    # Neither available: nothing to ask, so the rules decide.
+    monkeypatch.setattr(settings, "anthropic_api_key", None)
+    assert llm.get_ask() is None
+
+
+def test_rollback_is_one_setting(monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "anthropic")
+    monkeypatch.setattr(settings, "llm_fallback", "")
+    assert llm.provider_chain() == ["anthropic"]
 
 
 def test_chain_order_and_cleanup(monkeypatch):
