@@ -27,10 +27,12 @@ import UpsertCustodyHoldingReducer from "../upsert_custody_holding_reducer";
 import UpsertDisputeReducer from "../upsert_dispute_reducer";
 import UpsertInvoiceReducer from "../upsert_invoice_reducer";
 import UpsertLoanReducer from "../upsert_loan_reducer";
+import UpsertMetricSnapshotReducer from "../upsert_metric_snapshot_reducer";
 import UpsertOwedToClientReducer from "../upsert_owed_to_client_reducer";
 import UpsertPayerIdentityReducer from "../upsert_payer_identity_reducer";
 import UpsertPolicyReducer from "../upsert_policy_reducer";
 import UpsertPositionReducer from "../upsert_position_reducer";
+import UpsertPrecedentReducer from "../upsert_precedent_reducer";
 import UpsertRawRecordReducer from "../upsert_raw_record_reducer";
 
 export type AdvanceClockParams = __Infer<typeof AdvanceClockReducer>;
@@ -54,9 +56,11 @@ export type UpsertCustodyHoldingParams = __Infer<typeof UpsertCustodyHoldingRedu
 export type UpsertDisputeParams = __Infer<typeof UpsertDisputeReducer>;
 export type UpsertInvoiceParams = __Infer<typeof UpsertInvoiceReducer>;
 export type UpsertLoanParams = __Infer<typeof UpsertLoanReducer>;
+export type UpsertMetricSnapshotParams = __Infer<typeof UpsertMetricSnapshotReducer>;
 export type UpsertOwedToClientParams = __Infer<typeof UpsertOwedToClientReducer>;
 export type UpsertPayerIdentityParams = __Infer<typeof UpsertPayerIdentityReducer>;
 export type UpsertPolicyParams = __Infer<typeof UpsertPolicyReducer>;
 export type UpsertPositionParams = __Infer<typeof UpsertPositionReducer>;
+export type UpsertPrecedentParams = __Infer<typeof UpsertPrecedentReducer>;
 export type UpsertRawRecordParams = __Infer<typeof UpsertRawRecordReducer>;
 

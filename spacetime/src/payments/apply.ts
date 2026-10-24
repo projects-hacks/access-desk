@@ -22,8 +22,11 @@ function hasOpenDispute(ctx: Ctx, invoiceId: string): boolean {
   return [...ctx.db.dispute.invoiceId.filter(invoiceId)].some((d) => d.status !== 'resolved');
 }
 
-/** Effective paid = billing's amount + our own applications. Status follows from it. */
-export function recomputeInvoice(ctx: Ctx, invoiceId: string) {
+/**
+ * Effective paid = billing's amount + our own applications. Status follows from it.
+ * `paidOn` is billing's date, or the value date of the cash that completed it here.
+ */
+export function recomputeInvoice(ctx: Ctx, invoiceId: string, paidOnIfCompleted?: string) {
   const inv = ctx.db.invoice.id.find(invoiceId);
   if (!inv) return;
   const ours = activeApps(ctx, invoiceId).filter((a) => a.method !== 'prior').reduce((s, a) => s + a.amountCents, 0n);
@@ -31,7 +34,10 @@ export function recomputeInvoice(ctx: Ctx, invoiceId: string) {
   const status = hasOpenDispute(ctx, invoiceId)
     ? 'disputed'
     : paidCents >= inv.amountCents ? 'paid' : paidCents > 0n ? 'partially_paid' : 'open';
-  if (paidCents !== inv.paidCents || status !== inv.status) ctx.db.invoice.id.update({ ...inv, paidCents, status });
+  const paidOn = status === 'paid' ? (inv.paidOn ?? paidOnIfCompleted) : undefined;
+  if (paidCents !== inv.paidCents || status !== inv.status || paidOn !== inv.paidOn) {
+    ctx.db.invoice.id.update({ ...inv, paidCents, status, paidOn });
+  }
 }
 
 /** Open invoices a payment can apply to. Disputed invoices are protected. */
@@ -126,7 +132,7 @@ export function applyPlan(ctx: Ctx, m: Movement, clientId: string, plan: MatchPl
   if (plan.excessCents > 0n) {
     ctx.db.clientCredit.insert({ id: 0n, clientId, kind: 'overpayment', amountCents: plan.excessCents, movementId: m.id });
   }
-  for (const id of touched) recomputeInvoice(ctx, id);
+  for (const id of touched) recomputeInvoice(ctx, id, m.valueOn);
   setMatchStatus(ctx, m.id, 'matched');
   return newlyApplied;
 }

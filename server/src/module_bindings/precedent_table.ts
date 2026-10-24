@@ -11,11 +11,15 @@ import {
 } from "spacetimedb";
 
 export default __t.row({
-  id: __t.u64().primaryKey(),
-  workItemId: __t.u64().name("work_item_id"),
+  id: __t.string().primaryKey(),
   clientId: __t.string().name("client_id"),
+  workItemId: __t.option(__t.u64()).name("work_item_id"),
+  decidedOn: __t.string().name("decided_on"),
   situation: __t.string(),
+  proposed: __t.string(),
   decision: __t.string(),
   overrideReason: __t.string().name("override_reason"),
   outcome: __t.string(),
+  policyRef: __t.string().name("policy_ref"),
+  source: __t.string(),
 });

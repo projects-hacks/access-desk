@@ -15,6 +15,8 @@ export const invoice = table(
     sourcePaidCents: t.i64(),
     /** Billing's amount plus our own applications not yet in billing. Status derives from this. */
     paidCents: t.i64(),
+    /** Date the invoice became fully paid. */
+    paidOn: t.string().optional(),
     status: t.string(),
   },
 );

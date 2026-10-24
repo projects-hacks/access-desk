@@ -28,16 +28,33 @@ export const policy = table(
   },
 );
 
+/** A past decision and its outcome. Overrides here are what new policies are drafted from. */
 export const precedent = table(
   { public: true },
   {
-    id: t.u64().primaryKey().autoInc(),
-    workItemId: t.u64().index('btree'),
+    id: t.string().primaryKey(),
     clientId: t.string().index('btree'),
+    workItemId: t.u64().optional(),
+    decidedOn: t.string(),
     situation: t.string(),
+    proposed: t.string(),
     decision: t.string(),
     overrideReason: t.string(),
     outcome: t.string(),
+    policyRef: t.string(),
+    /** `history` (imported) or `live` (decided in this system). */
+    source: t.string(),
+  },
+);
+
+/** Weekly trend values (e.g. share of cases needing a person). */
+export const metricSnapshot = table(
+  { public: true },
+  {
+    id: t.string().primaryKey(),
+    weekEnding: t.string(),
+    metric: t.string().index('btree'),
+    value: t.f64(),
   },
 );
 

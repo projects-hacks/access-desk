@@ -123,7 +123,7 @@ function onIncoming(ctx: Ctx, m: Movement, previous: Movement | undefined) {
         policyRef, confidence: 0.98, requiredRole: 'ACCOUNTANT', autoApplied: true,
       });
   const applied = applyPlan(ctx, m, payer.clientId, plan, policyRef, item?.id);
-  if (!item) {
+  if (!item && !m.isHistory) {
     audit(ctx, { action: 'CASH_RECONCILED', subjectType: 'cash_movement', subjectId: m.id, clientId: payer.clientId, detail: `${m.bankRef} already applied in billing` });
   }
   if (applied > 0n) {

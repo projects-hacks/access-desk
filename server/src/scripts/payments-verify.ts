@@ -22,10 +22,10 @@ const check = (ok: boolean, label: string, detail = '') => {
 };
 
 const invoices = (clientId: string, period?: string) =>
-  [...db.invoice.iter()].filter((i) => i.clientId === clientId && (!period || i.period === period));
+  [...db.invoice.iter()].filter((i) => i.clientId === clientId && (period ? i.period === period : i.issuedOn >= '2026-01-01'));
 const allPaid = (list: { status: string }[]) => list.length > 0 && list.every((i) => i.status === 'paid');
 const statuses = (list: { id: string; status: string }[]) => list.map((i) => `${i.id}:${i.status}`).join(' ');
-const cash = (bankRef: string) => [...db.cashMovement.iter()].find((m) => m.bankRef === bankRef);
+const cash = (bankRef: string) => [...db.cashMovement.iter()].find((m) => m.bankRef === bankRef && !m.isHistory);
 const items = (clientId: string, kind?: string) =>
   [...db.workItem.iter()].filter((w) => w.clientId === clientId && (!kind || w.kind === kind));
 const credits = (clientId: string, kind: string) =>
@@ -79,6 +79,14 @@ check(bad.length === 0, 'No invoice paid below zero or above its amount', bad.ma
 const history = ['ORG-90101', 'ORG-90107', 'ORG-90118', 'ORG-90302'];
 check(history.every((c) => allPaid(invoices(c, '2026-01')) && items(c).length === 0),
   'Cash billing had already applied reconciles quietly (no duplicate work)');
+const historyCash = [...db.cashMovement.iter()].filter((m) => m.isHistory);
+check(historyCash.length > 0 && historyCash.every((m) => m.matchStatus === 'matched'), `All ${historyCash.length} history payments reconciled`);
+const historyIds = new Set(historyCash.map((m) => m.id));
+check([...db.workItem.iter()].every((w) => !historyIds.has(w.subjectId)), 'History created no work items');
+const historyInvoices = [...db.invoice.iter()].filter((i) => i.issuedOn < '2026-01-01' && i.status === 'paid');
+check(historyInvoices.length > 0 && historyInvoices.every((i) => i.paidOn), 'Every paid invoice has a paid date');
+const stillClaimable = [...db.invoice.iter()].filter((i) => i.paidOn && i.paidOn < '2026-02-01' && i.status !== 'paid');
+check(stillClaimable.length === 0, 'No history invoice reopened by matching', stillClaimable.map((i) => i.id).join(' '));
 const human = [...db.workItem.iter()].filter((w) => w.state === 'PROPOSED');
 const auto = [...db.workItem.iter()].filter((w) => w.autoApplied);
 console.log(`\n${auto.length} handled automatically, ${human.length} need a person:`);

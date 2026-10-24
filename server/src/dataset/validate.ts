@@ -72,5 +72,40 @@ export function validateDataset(ds: Dataset): string[] {
   }
 
   for (const c of ds.cases) if (c.clientId && !clients.has(c.clientId)) problems.push(`case ${c.id}: unknown client`);
+
+  // History: every history invoice is paid, by cash dated before the bank window.
+  const historyIds = new Set(ds.history.cash.flatMap((p) => p.refs));
+  const paidBy = new Map<string, number>();
+  for (const p of ds.history.cash) {
+    if (p.valueDate >= ds.bankWindowStart || p.valueDate < ds.history.start) problems.push(`${p.id}: history cash dated ${p.valueDate}`);
+    if (!clients.has(p.clientId)) problems.push(`${p.id}: unknown client`);
+    for (const ref of p.refs) {
+      const inv = invoices.get(ref);
+      if (!inv) problems.push(`${p.id}: ref ${ref} missing`);
+      else if (inv.clientId !== p.clientId) problems.push(`${p.id}: ref ${ref} belongs to ${inv.clientId}`);
+    }
+  }
+  for (const inv of ds.invoices.filter((i) => historyIds.has(i.id))) {
+    if (inv.status !== 'paid' || inv.paidCents !== inv.amountCents || !inv.paidOn) problems.push(`${inv.id}: history invoice not fully paid`);
+  }
+  // Cash and invoices agree: what the history wires carry equals what billing applied.
+  for (const p of ds.history.cash) paidBy.set(p.clientId, (paidBy.get(p.clientId) ?? 0) + p.amountCents);
+  for (const [clientId, cents] of paidBy) {
+    const applied = ds.invoices.filter((i) => i.clientId === clientId && historyIds.has(i.id)).reduce((s, i) => s + i.paidCents, 0);
+    if (applied !== cents) problems.push(`${clientId}: history cash ${cents} != applied ${applied}`);
+  }
+  // Patterns are really in the data.
+  const juniper = ds.invoices.filter((i) => i.clientId === 'ORG-90677' && historyIds.has(i.id));
+  if (!juniper.length || juniper.some((i) => i.paidOn !== addDays(i.dueOn, 20))) problems.push('Juniper: history not paid on day 20');
+  const kestrelLate = ds.invoices.filter((i) => i.clientId === 'ORG-90412' && ['2025-10', '2025-11', '2025-12'].includes(i.period) && i.paidOn! > i.dueOn);
+  if (new Set(kestrelLate.map((i) => i.period)).size !== 3) problems.push('Kestrel: expected 3 late months in the last 90 days');
+  // Precedent outcomes match the payments ("paid in 4d").
+  for (const prc of ds.history.precedents) {
+    if (!clients.has(prc.clientId)) problems.push(`${prc.id}: unknown client`);
+    const days = /Paid in (\d+)d/.exec(prc.outcome)?.[1];
+    if (days && !ds.history.cash.some((p) => p.clientId === prc.clientId && p.valueDate === addDays(prc.decidedOn, Number(days)))) {
+      problems.push(`${prc.id}: no payment ${days} days after ${prc.decidedOn}`);
+    }
+  }
   return problems;
 }

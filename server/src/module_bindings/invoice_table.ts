@@ -21,5 +21,6 @@ export default __t.row({
   amountCents: __t.i64().name("amount_cents"),
   sourcePaidCents: __t.i64().name("source_paid_cents"),
   paidCents: __t.i64().name("paid_cents"),
+  paidOn: __t.option(__t.string()).name("paid_on"),
   status: __t.string(),
 });

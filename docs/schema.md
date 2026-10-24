@@ -17,7 +17,7 @@ The SpacetimeDB module in `spacetime/` is the system of work. Business rules liv
 
 Rajeev owns the schema and is the only one who publishes. Others change fields or reducers in a PR; reducers live in per-area files (`reducers/<area>.ts`). Breaking changes wipe the shared database, so announce them first. Schema freezes Saturday ~2 PM.
 
-## Core tables (37)
+## Core tables (38)
 
 **World**
 
@@ -49,7 +49,7 @@ Rajeev owns the schema and is the only one who publishes. Others change fields o
 
 | Table | Fields | Written by | Read by |
 |---|---|---|---|
-| `invoice` | id, client_id, product, label, period, issued_on, due_on, amount_cents, source_paid_cents, paid_cents, status (open / partially_paid / paid / disputed / void) | sync; paid_cents and status: payment checking | aging, seats 1–2, invoice lists |
+| `invoice` | id, client_id, product, label, period, issued_on, due_on, amount_cents, source_paid_cents, paid_cents, paid_on, status (open / partially_paid / paid / disputed / void) | sync; paid_cents and status: payment checking | aging, seats 1–2, invoice lists |
 | `dispute` | id, invoice_id, client_id, amount_cents, reason, opened_on, status, owner | sync, RM | proposals exclude it |
 | `cash_movement` | id, source (nessie / chain), platform_account, direction, rail (WIRE / ACH / USDC / BOOK), amount_cents, value_on, status (pending / posted / cancelled / returned), memo, orig_name, orig_account, refs, bank_ref, reverses, raw_id, match_status, is_history | sync; match_status: payment checking | payments tab, ticker |
 | `payment_application` | id, movement_id, invoice_id, amount_cents, method (exact / referenced / split / short_fee / alias / account / overpay_credit / reversal), policy_ref, work_item_id, reversed | payment checking | invoice status, tie-out, audit |
@@ -87,7 +87,8 @@ Rajeev owns the schema and is the only one who publishes. Others change fields o
 |---|---|---|---|
 | `credit_profile` | client_id, value_score, reliability_score, coverage_ratio, coverage_detail, expected_settle_on, updated_at | credit analyst | client profile, clients list |
 | `policy` | key (`pol-014@2`), policy_id, version, status (draft / active / retired), title, rule_json, learned_from, approved_by | agents draft; controller activates | policies, every citation |
-| `precedent` | id, work_item_id, client_id, situation, decision, override_reason, outcome | decision reducer | policy drafting |
+| `precedent` | id, client_id, work_item_id?, decided_on, situation, proposed, decision, override_reason, outcome, policy_ref, source (history / live) | sync (history), agents (live) | policy drafting, replay |
+| `metric_snapshot` | id, week_ending, metric, value | sync (history), agents | trend charts |
 | `exploit_flag` | id, client_id, pattern, score, status (flagged / watch / cleared), months, evidence_json, proposed_fix | exploit sub-agent | exploits screen |
 
 **Audit**
@@ -98,7 +99,7 @@ Rajeev owns the schema and is the only one who publishes. Others change fields o
 
 ## Next priority
 
-`payment_promise`, `tier_default`, `client_contact`, `incident`, `payment_intent`, `usage_record`, `tie_out_run`, `tie_out_break`, `metric_snapshot`
+`payment_promise`, `tier_default`, `client_contact`, `incident`, `payment_intent`, `usage_record`, `tie_out_run`, `tie_out_break`
 
 ## If time allows
 

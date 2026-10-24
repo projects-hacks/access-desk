@@ -55,10 +55,12 @@ import UpsertCustodyHoldingReducer from "./upsert_custody_holding_reducer";
 import UpsertDisputeReducer from "./upsert_dispute_reducer";
 import UpsertInvoiceReducer from "./upsert_invoice_reducer";
 import UpsertLoanReducer from "./upsert_loan_reducer";
+import UpsertMetricSnapshotReducer from "./upsert_metric_snapshot_reducer";
 import UpsertOwedToClientReducer from "./upsert_owed_to_client_reducer";
 import UpsertPayerIdentityReducer from "./upsert_payer_identity_reducer";
 import UpsertPolicyReducer from "./upsert_policy_reducer";
 import UpsertPositionReducer from "./upsert_position_reducer";
+import UpsertPrecedentReducer from "./upsert_precedent_reducer";
 import UpsertRawRecordReducer from "./upsert_raw_record_reducer";
 
 // Import all procedure arg schemas
@@ -89,6 +91,7 @@ import InvestigationStepRow from "./investigation_step_table";
 import InvoiceRow from "./invoice_table";
 import LedgerEntryRow from "./ledger_entry_table";
 import LoanRow from "./loan_table";
+import MetricSnapshotRow from "./metric_snapshot_table";
 import NoticeRow from "./notice_table";
 import OwedToClientRow from "./owed_to_client_table";
 import PayerIdentityRow from "./payer_identity_table";
@@ -435,6 +438,20 @@ const tablesSchema = __schema({
       { name: 'loan_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, LoanRow),
+  metricSnapshot: __table({
+    name: 'metric_snapshot',
+    indexes: [
+      { accessor: 'id', name: 'metric_snapshot_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'metric', name: 'metric_snapshot_metric_idx_btree', algorithm: 'btree', columns: [
+        'metric',
+      ] },
+    ],
+    constraints: [
+      { name: 'metric_snapshot_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, MetricSnapshotRow),
   notice: __table({
     name: 'notice',
     indexes: [
@@ -545,9 +562,6 @@ const tablesSchema = __schema({
       { accessor: 'id', name: 'precedent_id_idx_btree', algorithm: 'btree', columns: [
         'id',
       ] },
-      { accessor: 'workItemId', name: 'precedent_work_item_id_idx_btree', algorithm: 'btree', columns: [
-        'workItemId',
-      ] },
     ],
     constraints: [
       { name: 'precedent_id_key', constraint: 'unique', columns: ['id'] },
@@ -631,10 +645,12 @@ const reducersSchema = __reducers(
   __reducerSchema("upsert_dispute", UpsertDisputeReducer),
   __reducerSchema("upsert_invoice", UpsertInvoiceReducer),
   __reducerSchema("upsert_loan", UpsertLoanReducer),
+  __reducerSchema("upsert_metric_snapshot", UpsertMetricSnapshotReducer),
   __reducerSchema("upsert_owed_to_client", UpsertOwedToClientReducer),
   __reducerSchema("upsert_payer_identity", UpsertPayerIdentityReducer),
   __reducerSchema("upsert_policy", UpsertPolicyReducer),
   __reducerSchema("upsert_position", UpsertPositionReducer),
+  __reducerSchema("upsert_precedent", UpsertPrecedentReducer),
   __reducerSchema("upsert_raw_record", UpsertRawRecordReducer),
 );
 

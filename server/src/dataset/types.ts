@@ -81,6 +81,8 @@ export interface Invoice {
   amountCents: number;
   /** What the billing system has applied so far (before our matching runs). */
   paidCents: number;
+  /** When billing recorded the final payment (paid invoices only). */
+  paidOn?: IsoDate;
   status: InvoiceStatus;
 }
 
@@ -148,6 +150,36 @@ export interface PlantedCase {
   demoStep?: number;
 }
 
+/** Cash from before the bank window: 12 months of payments billing already applied. */
+export interface HistoryPayment {
+  id: string;
+  clientId: string;
+  rail: 'WIRE' | 'ACH' | 'USDC';
+  amountCents: number;
+  valueDate: IsoDate;
+  refs: string[];
+}
+
+/** A past decision and how it turned out. Feeds policy drafting and replay. */
+export interface Precedent {
+  id: string;
+  clientId: string;
+  decidedOn: IsoDate;
+  situation: string;
+  proposed: string;
+  decision: string;
+  overrideReason: string;
+  outcome: string;
+  policyRef: string;
+}
+
+export interface MetricSnapshot {
+  id: string;
+  weekEnding: IsoDate;
+  metric: string;
+  value: number;
+}
+
 export interface Dataset {
   simDate: IsoDate;
   /** Bank data before this date stays in the simulator's history only. */
@@ -160,4 +192,10 @@ export interface Dataset {
   onchain: OnchainPayment[];
   loans: Loan[];
   cases: PlantedCase[];
+  history: {
+    start: IsoDate;
+    cash: HistoryPayment[];
+    precedents: Precedent[];
+    metrics: MetricSnapshot[];
+  };
 }

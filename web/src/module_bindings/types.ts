@@ -275,6 +275,7 @@ export const Invoice = __t.object("Invoice", {
   amountCents: __t.i64(),
   sourcePaidCents: __t.i64(),
   paidCents: __t.i64(),
+  paidOn: __t.option(__t.string()),
   status: __t.string(),
 });
 export type Invoice = __Infer<typeof Invoice>;
@@ -300,6 +301,14 @@ export const Loan = __t.object("Loan", {
   borrowingAllowed: __t.bool(),
 });
 export type Loan = __Infer<typeof Loan>;
+
+export const MetricSnapshot = __t.object("MetricSnapshot", {
+  id: __t.string(),
+  weekEnding: __t.string(),
+  metric: __t.string(),
+  value: __t.f64(),
+});
+export type MetricSnapshot = __Infer<typeof MetricSnapshot>;
 
 export const Notice = __t.object("Notice", {
   id: __t.u64(),
@@ -377,13 +386,17 @@ export const Position = __t.object("Position", {
 export type Position = __Infer<typeof Position>;
 
 export const Precedent = __t.object("Precedent", {
-  id: __t.u64(),
-  workItemId: __t.u64(),
+  id: __t.string(),
   clientId: __t.string(),
+  workItemId: __t.option(__t.u64()),
+  decidedOn: __t.string(),
   situation: __t.string(),
+  proposed: __t.string(),
   decision: __t.string(),
   overrideReason: __t.string(),
   outcome: __t.string(),
+  policyRef: __t.string(),
+  source: __t.string(),
 });
 export type Precedent = __Infer<typeof Precedent>;
 

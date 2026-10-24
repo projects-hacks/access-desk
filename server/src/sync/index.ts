@@ -5,6 +5,7 @@ import type { Bank } from '../integrations/nessie/bank';
 import { env } from '../lib/env';
 import { bankRecords } from './sources/bank';
 import { chainRecords } from './sources/chain';
+import { historyRecords } from './sources/history';
 import { platformRecords } from './sources/platform';
 import { SyncWriter, type SyncRecord } from './writer';
 
@@ -14,6 +15,7 @@ const LABELS: Record<string, string> = {
   platform_admin: 'Platform admin',
   custody: 'Custody',
   positions: 'Positions & financing',
+  history: 'History (12 months)',
   bank: 'Bank feed (Nessie)',
   chain: 'On-chain wallet',
 };
@@ -60,6 +62,8 @@ export class Sync {
       for (const [source, records] of Object.entries(platformRecords(this.conn, this.ds, this.bank.map))) {
         results.push(await this.runSource(source, records));
       }
+      // After billing (it claims billing-applied cash), before live cash.
+      results.push(await this.runSource('history', historyRecords(this.conn, this.ds, this.bank.map)));
       results.push(...(await this.cashOnly()));
       return results;
     });
@@ -96,7 +100,9 @@ export class Sync {
       ['bank', await bankRecords(this.conn, this.bank, simDate)],
       ['chain', chainRecords(this.conn, this.ds, simDate)],
     ] as const) {
-      const result = await this.runSource(source, records);
+      // Live cash goes in date order, one at a time: which of two identical wires is the duplicate must not depend on timing.
+      records.sort((a, b) => a.row.valueOn.localeCompare(b.row.valueOn) || a.row.bankRef.localeCompare(b.row.bankRef));
+      const result = await this.runSource(source, records, 1);
       result.errors.push(...(await this.removeStale(source === 'bank' ? 'nessie' : 'chain', new Set(records.map((r) => r.id)))));
       results.push(result);
     }
@@ -119,8 +125,8 @@ export class Sync {
     return errors;
   }
 
-  private async runSource<Row>(source: string, records: SyncRecord<Row>[]): Promise<PassResult> {
-    const { written, errors } = await this.writer.write(source, records);
+  private async runSource<Row>(source: string, records: SyncRecord<Row>[], concurrency?: number): Promise<PassResult> {
+    const { written, errors } = await this.writer.write(source, records, concurrency);
     await this.conn.reducers.setSyncStatus({
       row: {
         source,

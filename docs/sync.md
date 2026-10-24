@@ -20,11 +20,13 @@ curl -X POST localhost:4000/sync/now   # pull the bank immediately (after settli
 | `positions` | position, loan | dataset |
 | `bank` | cash_movement | Nessie (platform's Collections and Disbursements accounts) |
 | `chain` | cash_movement | dataset (USDC to the platform wallet) |
+| `history` | cash_movement (`is_history`), precedent, metric_snapshot | dataset, 12 months ([history.md](history.md)) |
 
 Status for each is in the `sync_source` table.
 
 ## Rules
 
+- Order: platform systems → history → bank → chain. Live cash is written in date order, one at a time, so outcomes never depend on timing.
 - Only changed rows are written. Every golden row gets a `raw_record` with the source payload.
 - Cash dated after `clock.sim_date` is skipped; cash that disappears from the source is removed.
 - Fields our system owns (`match_status`, client status, lever state, loan borrowing, invoice paid/status) are never overwritten by a re-sync.

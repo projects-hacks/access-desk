@@ -10,6 +10,7 @@ import {
 import { openBank } from '../integrations/nessie/bank';
 import { bankRecords } from '../sync/sources/bank';
 import { chainRecords } from '../sync/sources/chain';
+import { historyRecords } from '../sync/sources/history';
 import { buildSeedPlan } from '../integrations/nessie/seed-plan';
 import { env } from '../lib/env';
 import { connectStdb } from '../lib/stdb';
@@ -23,6 +24,7 @@ await new Promise<void>((resolve) =>
     tables.platform, tables.clock, tables.syncSource, tables.rawRecord, tables.client, tables.payerIdentity,
     tables.contract, tables.contractClause, tables.capability, tables.accessLever, tables.invoice, tables.dispute,
     tables.cashMovement, tables.custodyHolding, tables.assetPrice, tables.owedToClient, tables.position, tables.loan,
+    tables.precedent, tables.metricSnapshot,
   ]),
 );
 
@@ -62,12 +64,15 @@ expectCount('asset_price', [...db.assetPrice.iter()].length, 3);
 expectCount('owed_to_client', [...db.owedToClient.iter()].length, owedToClient(ds).length);
 expectCount('position', [...db.position.iter()].length, ds.clients.flatMap(positionsFor).length);
 expectCount('loan', [...db.loan.iter()].length, ds.loans.length);
-expectCount('cash_movement', [...db.cashMovement.iter()].length, visibleBank.length + visibleChain.length);
+expectCount('cash_movement', [...db.cashMovement.iter()].length, visibleBank.length + visibleChain.length + ds.history.cash.length);
+expectCount('precedent', [...db.precedent.iter()].filter((p) => p.source === 'history').length, ds.history.precedents.length);
+expectCount('metric_snapshot', [...db.metricSnapshot.iter()].length, ds.history.metrics.length);
 
 
 // 2. Every movement the bank and chain show right now is in the database, field for field.
 const jsonSafe = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v);
-const live = [...(await bankRecords(conn, bank, simDate)), ...chainRecords(conn, ds, simDate)];
+const history = historyRecords(conn, ds, bank.map).filter((r) => r.table === 'cash_movement').map((r) => r.row as ReturnType<typeof chainRecords>[number]['row']);
+const live = [...(await bankRecords(conn, bank, simDate)), ...chainRecords(conn, ds, simDate), ...history.map((row) => ({ row }))];
 for (const { row: expected } of live) {
   const actual = db.cashMovement.id.find(expected.id);
   check(!!actual, `cash ${expected.bankRef} missing`);
@@ -79,7 +84,7 @@ for (const { row: expected } of live) {
     check(a === e, `cash ${expected.bankRef}: ${field} is ${a}, source says ${e}`);
   }
 }
-const liveIds = new Set(live.map((r) => r.id));
+const liveIds = new Set(live.map((r) => r.row.id));
 for (const m of db.cashMovement.iter()) check(liveIds.has(m.id), `cash ${m.bankRef} is in the database but not in the source`);
 const hidden = plan.transactions.filter((t) => t.side === 'platform' && t.transaction_date > simDate);
 const visibleRefs = new Set([...db.cashMovement.iter()].map((m) => m.bankRef));
@@ -88,6 +93,7 @@ for (const t of hidden) check(!visibleRefs.has(t.movementId), `cash ${t.movement
 // 3. No empty required fields.
 const allowEmpty: Record<string, string[]> = {
   cash_movement: ['origName', 'origAccount', 'reverses'],
+  invoice: ['paidOn'],
 };
 const tableRows: Record<string, Iterable<object>> = {
   client: db.client.iter(), payer_identity: db.payerIdentity.iter(), contract: db.contract.iter(),
@@ -141,9 +147,35 @@ check(JSON.stringify(unresolved) === JSON.stringify(expectedUnresolved),
   `unresolved payers ${unresolved.join(', ') || 'none'}; expected ${expectedUnresolved.join(', ')}`);
 console.log(`\nPayers not in the CRM (planted): ${unresolved.join(', ') || 'none'}`);
 
-// 7. Every source reported a clean pass, and the platform row follows configuration.
+// 7. History patterns are detectable from the database alone (what the exploit agent will query).
+console.log('\nHistory patterns:');
+const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
+const paidHistory = (clientId: string) =>
+  [...db.invoice.iter()].filter((i) => i.clientId === clientId && i.issuedOn < '2026-01-01' && i.paidOn);
+const pattern = (ok: boolean, label: string) => {
+  check(ok, `pattern: ${label}`);
+  console.log(`  ${ok ? 'ok ' : 'BAD'} ${label}`);
+};
+const juniper = paidHistory('ORG-90677').map((i) => days(i.dueOn, i.paidOn!));
+pattern(juniper.length >= 20 && juniper.every((d) => d === 20), `Juniper pays on day 20, one day before the day-21 restriction (${juniper.length} invoices)`);
+const kestrel = paidHistory('ORG-90412').filter((i) => ['2025-10', '2025-11', '2025-12'].includes(i.period));
+pattern(kestrel.length > 0 && kestrel.every((i) => days(i.dueOn, i.paidOn!) > 0 && days(i.dueOn, i.paidOn!) <= 30),
+  'Kestrel paid late in each of the last 3 months, always within 30 days');
+const halcyonDates = new Set(paidHistory('ORG-90101').map((i) => i.paidOn!.slice(5)));
+pattern([...halcyonDates].every((d) => ['03-31', '06-30', '09-30', '12-31', '01-31'].includes(d)), 'Halcyon pays only at quarter end');
+const monarch = paidHistory('ORG-90758');
+const lateBy = (product: string) => monarch.filter((i) => i.product === product).map((i) => days(i.dueOn, i.paidOn!));
+pattern(lateBy('API').every((d) => d <= 2) && lateBy('CUSTODY').every((d) => d >= 25), 'Monarch pays API (restricted) fast, custody late');
+const wrenCash = [...db.cashMovement.iter()].filter((m) => m.isHistory && m.origName.startsWith('Wrenfield'));
+const perInvoice = new Map<string, number>();
+for (const m of wrenCash) for (const r of m.refs) perInvoice.set(r, (perInvoice.get(r) ?? 0) + 1);
+pattern(perInvoice.size > 0 && [...perInvoice.values()].every((n) => n === 2), 'Wrenfield pays every invoice in two partial payments');
+const overrides = [...db.precedent.iter()].filter((p) => p.overrideReason);
+pattern(overrides.length === 3, `${overrides.length} past overrides of pol-003 available for drafting (the live Kestrel override makes 4)`);
+
+// 8. Every source reported a clean pass, and the platform row follows configuration.
 for (const s of db.syncSource.iter()) check(s.status === 'synced', `source ${s.source}: ${s.status} ${s.error ?? ''}`);
-check([...db.syncSource.iter()].length === 7, `expected 7 sync sources, found ${[...db.syncSource.iter()].length}`);
+check([...db.syncSource.iter()].length === 8, `expected 8 sync sources, found ${[...db.syncSource.iter()].length}`);
 check(db.platform.id.find(1)?.name === env.PLATFORM_NAME, 'platform name does not match PLATFORM_NAME');
 
 conn.disconnect();

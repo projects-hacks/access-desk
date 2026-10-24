@@ -6,6 +6,7 @@ import { accessLever, capability, client, contract, contractClause, payerIdentit
 import { assetPrice, custodyHolding, loan, owedToClient, position } from '../tables/assets';
 import { cashMovement, dispute, invoice } from '../tables/money';
 import { rawRecord, syncSource } from '../tables/sync';
+import { metricSnapshot, precedent } from '../tables/learning';
 import { recomputeInvoice } from '../payments/apply';
 import { onCashMovement, onCashRemoved } from './payments';
 
@@ -67,7 +68,9 @@ export const upsertAccessLever = spacetimedb.reducer({ row: accessLever.rowType 
 /** Billing's view of an invoice; paid amount and status are then recomputed with our applications. */
 export const upsertInvoice = spacetimedb.reducer({ row: invoice.rowType }, (ctx, { row }) => {
   requireRole(ctx, CAN_SYNC);
-  if (ctx.db.invoice.id.find(row.id)) ctx.db.invoice.id.update(row);
+  const existing = ctx.db.invoice.id.find(row.id);
+  // Keep the paid date we recorded when billing doesn't have one yet.
+  if (existing) ctx.db.invoice.id.update({ ...row, paidOn: row.paidOn ?? existing.paidOn });
   else ctx.db.invoice.insert(row);
   recomputeInvoice(ctx, row.id);
 });
@@ -131,6 +134,19 @@ export const upsertLoan = spacetimedb.reducer({ row: loan.rowType }, (ctx, { row
   const existing = ctx.db.loan.id.find(row.id);
   if (existing) ctx.db.loan.id.update({ ...row, borrowingAllowed: existing.borrowingAllowed });
   else ctx.db.loan.insert(row);
+});
+
+/** Past decisions (history import) and live ones written by agents. */
+export const upsertPrecedent = spacetimedb.reducer({ row: precedent.rowType }, (ctx, { row }) => {
+  requireRole(ctx, ['SYNC', 'AGENT', 'ADMIN']);
+  if (ctx.db.precedent.id.find(row.id)) ctx.db.precedent.id.update(row);
+  else ctx.db.precedent.insert(row);
+});
+
+export const upsertMetricSnapshot = spacetimedb.reducer({ row: metricSnapshot.rowType }, (ctx, { row }) => {
+  requireRole(ctx, ['SYNC', 'AGENT', 'ADMIN']);
+  if (ctx.db.metricSnapshot.id.find(row.id)) ctx.db.metricSnapshot.id.update(row);
+  else ctx.db.metricSnapshot.insert(row);
 });
 
 /** Cash that disappeared from the source (bank reset, or dated after the clock was moved back). */

@@ -1,6 +1,7 @@
 import type { Product } from '../domain';
 import { AFFILIATES, CLIENTS } from './clients';
 import { addDays, monthAfter } from './dates';
+import { HISTORY_PERIODS, PRECEDENTS, historyPeriodsFor, payHistory, weeklyMetrics } from './history';
 import { CASES, LOANS, LOAN_MOVEMENTS, UNKNOWN_WALLET_PAYMENT } from './scenario';
 import type { BankMovement, Client, Dataset, Invoice, OnchainPayment, Party } from './types';
 
@@ -16,7 +17,7 @@ const LABELS: Record<Product, string> = {
 const WIRE_FEE_CENTS = 1500;
 
 /** Stable pseudo-random in [0, 1) so every build produces identical numbers. */
-function unit(seed: string): number {
+export function unit(seed: string): number {
   let h = 2166136261;
   for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
   return ((h >>> 0) % 10000) / 10000;
@@ -40,7 +41,7 @@ interface DraftInvoice extends Omit<Invoice, 'id'> {
 function draftInvoices(): DraftInvoice[] {
   const drafts: DraftInvoice[] = [];
   CLIENTS.forEach((client, clientIndex) => {
-    const periods = [...(client.olderOpenPeriods ?? []), '2026-01', '2026-02'];
+    const periods = [...historyPeriodsFor(client), ...(client.olderOpenPeriods ?? []), '2026-01', '2026-02'];
     for (const period of periods) {
       const issuedOn = `${monthAfter(period)}-01`;
       const dueOn = addDays(issuedOn, client.termsDays);
@@ -92,10 +93,12 @@ type DraftMovement = Omit<BankMovement, 'id'> & { fixedId?: string };
 
 export function buildDataset(platform: Dataset['platform']): Dataset {
   const invoices = numberInvoices(draftInvoices());
+  const historyCash = payHistory(CLIENTS, invoices.filter((i) => HISTORY_PERIODS.includes(i.period) && !isOlderOpen(i)), unit);
   const byClient = (id: string) => invoices.filter((i) => i.clientId === id);
   const janOf = (id: string) => byClient(id).filter((i) => i.period === '2026-01' && i.status !== 'disputed');
   const sum = (list: Invoice[]) => list.reduce((s, i) => s + i.amountCents, 0);
-  const markApplied = (list: Invoice[]) => list.forEach((i) => ((i.paidCents = i.amountCents), (i.status = 'paid')));
+  const markApplied = (list: Invoice[], on: string) =>
+    list.forEach((i) => ((i.paidCents = i.amountCents), (i.status = 'paid'), (i.paidOn = on)));
   /** Cash dated today or yesterday hasn't been applied yet: that's the overnight matching work. */
   const appliedBySimDate = (valueDate: string) => valueDate < addDays(SIM_DATE, -1);
 
@@ -121,7 +124,7 @@ export function buildDataset(platform: Dataset['platform']): Dataset {
           amountCents: sum(jan), valueDate, status: 'completed', refs,
           caseId: b.kind === 'paid_by_affiliate' ? 'affiliate-wire' : undefined,
         });
-        if (appliedBySimDate(valueDate)) markApplied(jan);
+        if (appliedBySimDate(valueDate)) markApplied(jan, valueDate);
         break;
       }
       case 'overpaid': {
@@ -141,7 +144,7 @@ export function buildDataset(platform: Dataset['platform']): Dataset {
           });
         }
         // Billing applied the first wire; the second sits as unapplied cash.
-        markApplied(jan);
+        markApplied(jan, valueDate);
         break;
       }
       case 'wrong_reference': {
@@ -216,7 +219,7 @@ export function buildDataset(platform: Dataset['platform']): Dataset {
           amountCents: sum(jan), valueDate: b.returnedOn, status: 'completed', refs, caseId: 'ach-return',
         });
         // Billing applied the ACH before it bounced; nobody reopened the invoice.
-        markApplied(jan);
+        markApplied(jan, b.paidOn);
         break;
       }
       case 'paid_onchain':
@@ -267,7 +270,17 @@ export function buildDataset(platform: Dataset['platform']): Dataset {
     onchain,
     loans: LOANS,
     cases: CASES,
+    history: {
+      start: '2025-03-01',
+      cash: historyCash,
+      precedents: PRECEDENTS,
+      metrics: weeklyMetrics(SIM_DATE),
+    },
   };
+}
+
+function isOlderOpen(i: Invoice): boolean {
+  return CLIENTS.find((c) => c.id === i.clientId)?.olderOpenPeriods?.includes(i.period) ?? false;
 }
 
 function assignMovementIds(drafts: DraftMovement[]): BankMovement[] {
