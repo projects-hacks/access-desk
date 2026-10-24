@@ -6,6 +6,7 @@ import { cureState, defaultedInvoices } from '../payments/deadlines';
 import { formatUsd } from '../payments/match';
 import { spacetimedb } from '../schema';
 import { applyCreditReview, applyPolicyDraft } from './credit';
+import { applyPermissionChange } from './manual';
 
 /**
  * Actions agents (and people) can propose. Each one is checked against the
@@ -379,6 +380,10 @@ export function executeApproved(ctx: Ctx, workItemId: bigint) {
     }
     case 'POLICY_DRAFT': {
       applyPolicyDraft(ctx, item.id);
+      return;
+    }
+    case 'PERMISSION_CHANGE': {
+      applyPermissionChange(ctx, item.id);
       return;
     }
   }

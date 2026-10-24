@@ -397,6 +397,22 @@ export const PayerIdentity = __t.object("PayerIdentity", {
 });
 export type PayerIdentity = __Infer<typeof PayerIdentity>;
 
+export const Permission = __t.object("Permission", {
+  id: __t.string(),
+  clientId: __t.string(),
+  key: __t.string(),
+  enabled: __t.bool(),
+  workItemId: __t.option(__t.u64()),
+  updatedAt: __t.timestamp(),
+});
+export type Permission = __Infer<typeof Permission>;
+
+export const PermissionChange = __t.object("PermissionChange", {
+  key: __t.string(),
+  enabled: __t.bool(),
+});
+export type PermissionChange = __Infer<typeof PermissionChange>;
+
 export const PaymentApplication = __t.object("PaymentApplication", {
   id: __t.u64(),
   movementId: __t.string(),

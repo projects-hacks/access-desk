@@ -44,9 +44,11 @@ import PlaceHoldReducer from "./place_hold_reducer";
 import ProposeCustodyDebitReducer from "./propose_custody_debit_reducer";
 import ProposeNoticeReducer from "./propose_notice_reducer";
 import ProposePaymentMatchReducer from "./propose_payment_match_reducer";
+import ProposePermissionChangeReducer from "./propose_permission_change_reducer";
 import ProposeRestoreReducer from "./propose_restore_reducer";
 import ProposeRestrictionReducer from "./propose_restriction_reducer";
 import ProposeRestrictionWithBoundariesReducer from "./propose_restriction_with_boundaries_reducer";
+import ProposeTierChangeReducer from "./propose_tier_change_reducer";
 import ProposeWorkItemReducer from "./propose_work_item_reducer";
 import RecordAgentRunReducer from "./record_agent_run_reducer";
 import RecordInvestigationReducer from "./record_investigation_reducer";
@@ -121,6 +123,7 @@ import NoticeRow from "./notice_table";
 import OwedToClientRow from "./owed_to_client_table";
 import PayerIdentityRow from "./payer_identity_table";
 import PaymentApplicationRow from "./payment_application_table";
+import PermissionRow from "./permission_table";
 import PlatformRow from "./platform_table";
 import PolicyRow from "./policy_table";
 import PositionRow from "./position_table";
@@ -570,6 +573,20 @@ const tablesSchema = __schema({
       { name: 'payment_application_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, PaymentApplicationRow),
+  permission: __table({
+    name: 'permission',
+    indexes: [
+      { accessor: 'clientId', name: 'permission_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'permission_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'permission_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PermissionRow),
   platform: __table({
     name: 'platform',
     indexes: [
@@ -715,9 +732,11 @@ const reducersSchema = __reducers(
   __reducerSchema("propose_custody_debit", ProposeCustodyDebitReducer),
   __reducerSchema("propose_notice", ProposeNoticeReducer),
   __reducerSchema("propose_payment_match", ProposePaymentMatchReducer),
+  __reducerSchema("propose_permission_change", ProposePermissionChangeReducer),
   __reducerSchema("propose_restore", ProposeRestoreReducer),
   __reducerSchema("propose_restriction", ProposeRestrictionReducer),
   __reducerSchema("propose_restriction_with_boundaries", ProposeRestrictionWithBoundariesReducer),
+  __reducerSchema("propose_tier_change", ProposeTierChangeReducer),
   __reducerSchema("propose_work_item", ProposeWorkItemReducer),
   __reducerSchema("record_agent_run", RecordAgentRunReducer),
   __reducerSchema("record_investigation", RecordInvestigationReducer),

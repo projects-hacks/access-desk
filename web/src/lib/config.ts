@@ -7,7 +7,3 @@ export const config = {
   /** Sent as x-demo-key on demo POSTs to the hosted API. */
   demoKey: import.meta.env.VITE_DEMO_KEY as string | undefined,
 };
-// TODO: wrap <App /> in SpacetimeDBProvider (spacetimedb/react) with
-// DbConnection.builder().withUri(stdbUri).withDatabaseName(stdbDatabase).withToken(stdbToken),
-// then read tables with useTable(tables.workItem) and call conn.reducers.transitionWorkItem(...).
-// Demo controls (inject, settle, advance, withdraw, reset) are POSTs to `${apiUrl}/demo/*`.
