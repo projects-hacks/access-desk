@@ -12,14 +12,14 @@ import { applyCreditReview, applyPolicyDraft } from './credit';
  * contract, the platform's capabilities and policy before a work item exists.
  * Approval (or policy auto-approval) executes it through the gateway.
  *
- * Auto-approval follows the platform settings: an active policy covers it, the
- * amount is within the auto-apply limit, the client is not Tier 1 or strategic,
- * and it is not a restriction (restrictions always need a controller).
+ * Auto-approval: an active policy covers the kind and the client is not Tier 1
+ * or strategic. People are kept for top clients and offboarding steps (close-only,
+ * full freeze). Custody debits also stay within the auto-apply limit.
  */
 
 const PROPOSERS = ['AGENT', 'CONTROLLER', 'ADMIN'] as const;
 /** Kinds that may run without a person, and the policy that must be active for it. */
-const AUTO_POLICY: Record<string, string> = { CUSTODY_DEBIT: 'pol-005', RESTORE: 'pol-011', REMINDER: 'pol-007' };
+const AUTO_POLICY: Record<string, string> = { CUSTODY_DEBIT: 'pol-005', RESTRICTION: 'pol-006', RESTORE: 'pol-011', REMINDER: 'pol-007' };
 const LEVERS = ['withdrawals', 'trading', 'api', 'financing'] as const;
 /** Lever state and label after each restriction step. */
 const STEP_EFFECT: Record<string, { state: string; detail: string }> = {
@@ -29,6 +29,7 @@ const STEP_EFFECT: Record<string, { state: string; detail: string }> = {
   PAUSE_OTC: { state: 'limited', detail: 'OTC paused' },
   NO_NEW_POSITIONS: { state: 'limited', detail: 'No new positions · closing allowed' },
   CLOSE_ONLY: { state: 'limited', detail: 'Close-only' },
+  FULL_FREEZE: { state: 'off', detail: 'All withdrawals frozen (offboarding)' },
   NO_NEW_BORROWING: { state: 'off', detail: 'No new borrowing' },
   LOWER_LINE: { state: 'limited', detail: 'Credit line lowered' },
 };
@@ -69,16 +70,17 @@ export function canAutoApply(ctx: Ctx, kind: string, clientId: string, amountCen
   const policy = AUTO_POLICY[kind];
   const c = ctx.db.client.id.find(clientId);
   const limit = ctx.db.platform.id.find(1)?.autoApplyLimitCents ?? 0n;
-  return !!policy && policyActive(ctx, policy) && amountCents <= limit && !!c && c.tier > 1 && !c.strategic;
+  const withinLimit = kind !== 'CUSTODY_DEBIT' || amountCents <= limit;
+  return !!policy && policyActive(ctx, policy) && withinLimit && !!c && c.tier > 1 && !c.strategic;
 }
 
 /** Create the work item; execute right away when policy allows. */
 function propose(ctx: Ctx, w: {
   kind: string; clientId: string; title: string; amountCents: bigint; proposal: Record<string, unknown>;
-  reasoning: string; policyRef: string; clausesCited: string[]; confidence: number;
+  reasoning: string; policyRef: string; clausesCited: string[]; confidence: number; needsPerson?: boolean;
 }) {
   requireRole(ctx, PROPOSERS);
-  const auto = canAutoApply(ctx, w.kind, w.clientId, w.amountCents);
+  const auto = !w.needsPerson && canAutoApply(ctx, w.kind, w.clientId, w.amountCents);
   const item = createWorkItem(ctx, {
     kind: w.kind, clientId: w.clientId, subjectId: w.clientId, title: w.title, amountCents: w.amountCents,
     proposal: w.proposal, reasoning: w.reasoning, policyRef: w.policyRef, confidence: w.confidence,
@@ -137,9 +139,10 @@ export const proposeRestriction = spacetimedb.reducer(
     if (!(LEVERS as readonly string[]).includes(lever)) throw new SenderError(`unknown lever ${lever}`);
     const current = ctx.db.accessLever.id.find(`${clientId}:${lever}`);
     if (!current || current.state === 'not_used') throw new SenderError(`${lever} is not part of ${c.name}'s contract`);
-    const capabilityOk = [...ctx.db.capability.iter()].some((k) => k.lever === lever && k.step === step);
-    if (!capabilityOk) throw new SenderError(`the platform cannot ${step} on ${lever}`);
-    if (step === 'FULL_FREEZE') throw new SenderError('a full freeze needs two approvers; propose a hold of the amount owed instead');
+    const capability = [...ctx.db.capability.iter()].find((k) => k.lever === lever && k.step === step);
+    if (!capability) throw new SenderError(`the platform cannot ${step} on ${lever}`);
+    // Offboarding steps (close-only, full freeze) always go to a person.
+    const offboarding = capability.twoApprovers;
 
     const overdue = overdueInvoices(ctx, clientId);
     if (!overdue.length) throw new SenderError(`${c.name} has nothing overdue`);
@@ -169,8 +172,9 @@ export const proposeRestriction = spacetimedb.reducer(
 
     const isHold = lever === 'withdrawals' && step === 'HOLD_AMOUNT_OWED';
     propose(ctx, {
-      kind: 'RESTRICTION', clientId, amountCents: isHold ? owed : 0n, policyRef, clausesCited: cited,
-      title: isHold ? `Hold ${formatUsd(owed)} of ${c.name}'s withdrawals` : `${step.replace(/_/g, ' ').toLowerCase()} on ${c.name}'s ${lever}`,
+      kind: 'RESTRICTION', clientId, amountCents: isHold ? owed : 0n, policyRef, clausesCited: cited, needsPerson: offboarding,
+      title: isHold ? `Hold ${formatUsd(owed)} of ${c.name}'s withdrawals`
+        : `${offboarding ? 'Offboarding: ' : ''}${step.replace(/_/g, ' ').toLowerCase()} on ${c.name}'s ${lever}`,
       proposal: { lever, step, amountCents: isHold ? owed : 0n, invoiceIds: overdue.map((i) => i.id), clause: cited[0] ?? '' },
       reasoning, confidence,
     });
@@ -220,12 +224,13 @@ export const requestCustodyWithdrawal = spacetimedb.reducer(
       .filter((cmd) => (cmd.status === 'queued' || cmd.status === 'executing') && JSON.parse(cmd.actionJson).clientId === clientId)
       .reduce((s, cmd) => s + BigInt(JSON.parse(cmd.actionJson).amountCents), 0n);
     const held = heldCents(ctx, clientId);
-    const available = usdCash(ctx, clientId) - held - pending;
+    const frozen = ctx.db.accessLever.id.find(`${clientId}:withdrawals`)?.state === 'off';
+    const available = frozen ? 0n : usdCash(ctx, clientId) - held - pending;
     const allowed = available <= 0n ? 0n : amountCents < available ? amountCents : available;
     const withheld = amountCents - allowed;
     const setOff = clause(ctx, clientId, 'set_off');
-    const reason = withheld > 0n
-      ? `${formatUsd(held)} held under §${setOff?.clause ?? '7.2'} against overdue invoices; ${formatUsd(allowed)} available`
+    const reason = frozen ? 'Withdrawals are frozen (offboarding)'
+      : withheld > 0n ? `${formatUsd(held)} held under §${setOff?.clause ?? '7.2'} against overdue invoices; ${formatUsd(allowed)} available`
       : 'Within available balance';
     const request = ctx.db.accessRequest.insert({
       id: 0n, clientId, action: 'withdraw', amountCents, decision: allowed === amountCents ? 'approved' : allowed > 0n ? 'partial' : 'denied',

@@ -85,7 +85,8 @@ class SpacetimeClient:
 
     def set_deadline(self, client_id: str, kind: str, due_on: str, note: str, work_item_id: int | None = None) -> None:
         """kind: promise_to_pay | follow_up. Resolved automatically when the sim date reaches due_on."""
-        self.call("set_deadline", client_id, kind, due_on, note, work_item_id)
+        # Optional arguments are SATS sums: {"some": value} or null.
+        self.call("set_deadline", client_id, kind, due_on, note, None if work_item_id is None else {"some": work_item_id})
 
     def decide(self, work_item_id: int, to_state: str, note: str = "") -> None:
         """APPROVED | REJECTED | NEEDS_INFO | WITHDRAWN. Denied attempts are audited, not raised."""
