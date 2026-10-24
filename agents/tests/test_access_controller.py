@@ -258,10 +258,28 @@ class Precedents(unittest.TestCase):
         self.assertEqual((rows[0]["id"], rows[0]["decision"], rows[0]["override_reason"], rows[0]["outcome"], rows[0]["source"]),
                          ("PRC-L7", "Rejected", "Too strict for this tier", "", "live"))
 
-    def test_routine_approval_is_not_a_precedent(self):
-        approved = item(7, "RESTRICTION", "POSTED")
-        v = view(work_item=[approved], approvals=[event("APPROVED", "2026-03-10", 7)])
-        self.assertFalse([m for m in moves(v) if m.action == "upsert_precedent"])
+    def test_approvals_and_withdrawals_are_precedents_too(self):
+        approved = item(7, "RESTRICTION", "POSTED", {"lever": "withdrawals", "step": "HOLD_AMOUNT_OWED"})
+        withdrawn = item(8, "RESTRICTION", "WITHDRAWN", {"lever": "trading", "step": "PAUSE_OTC"})
+        v = view(owed=(), work_item=[approved, withdrawn],
+                 approvals=[event("APPROVED", "2026-03-10", 7)], withdrawals=[event("WITHDRAWN", "2026-03-12", 8)])
+        v.invoice = [{"id": "INV-1", "product": "TRADING", "issued_on": "2026-01-15", "due_on": "2026-02-01",
+                      "amount_cents": 50_000_00, "paid_cents": 50_000_00, "paid_on": "2026-03-14", "status": "paid"}]
+        rows = {m.args["row"]["id"]: m.args["row"] for m in moves(v) if m.action == "upsert_precedent"}
+        self.assertEqual((rows["PRC-L7"]["decision"], rows["PRC-L7"]["proposed"], rows["PRC-L7"]["outcome"]),
+                         ("Approved", "Hold amount owed (withdrawals, HOLD_AMOUNT_OWED)", "Paid in 4d"))
+        self.assertEqual((rows["PRC-L8"]["decision"], rows["PRC-L8"]["outcome"]),
+                         ("Withdrawn", "Paid before the restriction applied (2026-03-14)"))
+
+    def test_situation_is_short_facts_as_of_the_decision(self):
+        rejected = item(7, "RESTRICTION", "REJECTED", {"lever": "trading", "step": "PAUSE_OTC"})
+        v = view(usd=35_000_00, work_item=[rejected], rejections=[event("REJECTED", "2026-03-10", 7, detail="Renewal soon")],
+                 position=[{"status": "open", "hedge_group": "H1", "notional_cents": 1}])
+        v.client["renewal_on"] = "2026-03-22"
+        row = next(m.args["row"] for m in moves(v) if m.action == "upsert_precedent")
+        self.assertEqual(row["situation"], "Late 37 days, $50,000.00 past due (TRADING), coverage 0.7\u00d7, "
+                                           "renewal in 12 days, tier 3, hedged positions open")
+        self.assertEqual((row["proposed"], row["override_reason"]), ("Pause OTC trading (trading, PAUSE_OTC)", "Renewal soon"))
 
     def test_precedent_outcome_recorded_once_cured(self):
         rejected = item(7, "RESTRICTION", "REJECTED")
@@ -269,7 +287,7 @@ class Precedents(unittest.TestCase):
         v = view(owed=(), work_item=[rejected], precedent=[existing],
                  rejections=[event("REJECTED", "2026-03-10", 7)])
         rows = [m.args["row"] for m in moves(v) if m.action == "upsert_precedent"]
-        self.assertEqual(rows[0]["outcome"], f"Cured by {TODAY}")
+        self.assertEqual(rows[0]["outcome"], "Paid in 10d")
         v.precedent = [{**existing, "outcome": rows[0]["outcome"]}]
         self.assertFalse([m for m in moves(v) if m.action == "upsert_precedent"])
 

@@ -855,33 +855,94 @@ def grace_until(view: ClientView, today: str, escalation_days: int) -> str | Non
     return None
 
 
+DECISIONS = {"APPROVED": "Approved", "REJECTED": "Rejected", "WITHDRAWN": "Withdrawn"}
+
+
 def precedents_due(view: ClientView, world: World) -> list[Move]:
+    """Every decision on the agent's restrictions, debits and exceptions, in the same shape as the imported history."""
     known = {p["id"]: p for p in view.precedent}
     in_default = bool(defaulted_invoices(view, world.today))
     moves = []
-    for event in view.rejections + view.approvals:
+    for event in view.rejections + view.approvals + view.withdrawals:
         item = world.work_items.get(event["work_item_id"])
         if not item or item["kind"] not in LEARN_FROM:
             continue
-        if item["kind"] != "NOVEL_CASE" and event["to_state"] == "APPROVED":
-            continue
         pid = f"PRC-L{item['id']}"
         existing = known.get(pid)
-        if existing and (existing["outcome"] or in_default):
+        decided_on = event["sim_date"]
+        decision = DECISIONS[event["to_state"]]
+        outcome = "" if in_default else paid_outcome(view, decided_on, decision, world.today)
+        if existing and (existing["outcome"] or not outcome):
             continue
-        outcome = "" if in_default else f"Cured by {world.today}"
-        decision = "Approved" if event["to_state"] == "APPROVED" else "Rejected"
-        row = {
-            "id": pid, "client_id": view.id, "work_item_id": {"some": item["id"]}, "decided_on": event["sim_date"],
-            "situation": item["reasoning"][:500], "proposed": item["title"], "decision": decision,
-            "override_reason": event["detail"] if decision == "Rejected" else "", "outcome": outcome,
-            "policy_ref": item["policy_ref"], "source": "live",
-        }
         if existing:
             row = {**existing, "work_item_id": {"some": item["id"]}, "outcome": outcome}
+        else:
+            auto = " Auto-applied under its policy." if event.get("action") == "AUTO_APPLIED" else ""
+            row = {
+                "id": pid, "client_id": view.id, "work_item_id": {"some": item["id"]}, "decided_on": decided_on,
+                "situation": situation(view, item, decided_on) + auto, "proposed": proposed_text(item),
+                "decision": decision, "override_reason": event["detail"] if decision == "Rejected" else "",
+                "outcome": outcome, "policy_ref": item["policy_ref"], "source": "live",
+            }
         moves.append(Move(action="upsert_precedent", client_id=view.id, args={"row": row},
-                          summary=f"{'update' if existing else 'record'} precedent {pid}: {decision.lower()} · {outcome}"))
+                          summary=f"{'update' if existing else 'record'} precedent {pid}: {decision.lower()}"
+                                  f"{f' · {outcome}' if outcome else ''}"))
     return moves
+
+
+def unpaid_on(view: ClientView, on: str) -> list[Row]:
+    """Invoices past due and not yet paid on a past date (paid_on is when they were fully paid)."""
+    return [i for i in view.invoice
+            if i["due_on"] < on and i["status"] != "disputed" and (i.get("paid_on") is None or i["paid_on"] > on)]
+
+
+def situation(view: ClientView, item: Row, on: str) -> str:
+    """Short facts as of the decision, like the history's "Late 23 days, coverage 0.7x, renewal in 12 days"."""
+    late = unpaid_on(view, on)
+    parts = []
+    if late:
+        oldest = min(i["due_on"] for i in late)
+        amount = sum(i["amount_cents"] for i in late)
+        parts.append(f"Late {days_between(oldest, on)} days, {usd(amount)} past due "
+                     f"({', '.join(sorted({i['product'] for i in late}))})")
+        cash = next((h["value_cents"] for h in view.custody_holding if h["asset"] == "USD"), 0)
+        if amount:
+            parts.append(f"coverage {cash / amount:.1f}\u00d7")
+    renewal = view.client.get("renewal_on")
+    if renewal and renewal >= on:
+        parts.append(f"renewal in {days_between(on, renewal)} days")
+    parts.append(f"tier {view.client['tier']}{', strategic' if view.client['strategic'] else ''}")
+    if hedged(view):
+        parts.append("hedged positions open")
+    if item["kind"] == "NOVEL_CASE":
+        request = json.loads(item["proposal_json"])
+        parts.append(f"RM: {(request.get('summary') or request.get('request') or item['title'])[:160]}")
+    return ", ".join(parts)
+
+
+def proposed_text(item: Row) -> str:
+    p = json.loads(item["proposal_json"])
+    if item["kind"] == "RESTRICTION" and p.get("step"):
+        step = p["step"]
+        words = "Hold amount owed" if step == "HOLD_AMOUNT_OWED" else PROPOSAL_WORDS.get(step, step.replace("_", " ").capitalize())
+        return f"{words} ({p.get('lever', '')}, {step})"
+    if item["kind"] == "CUSTODY_DEBIT":
+        return f"Debit fees from custody ({', '.join(p.get('invoiceIds', []))})"
+    return item["title"]
+
+
+def paid_outcome(view: ClientView, decided_on: str, decision: str, today: str) -> str:
+    settled = [i["paid_on"] for i in view.invoice
+               if i["due_on"] < decided_on and i.get("paid_on") and i["paid_on"] > decided_on]
+    paid = max(settled) if settled else today
+    days = days_between(decided_on, paid)
+    if decision == "Withdrawn":
+        return f"Paid before the restriction applied ({paid})"
+    return f"Paid in {days}d" if days else "Paid the same day"
+
+
+def days_between(a: str, b: str) -> int:
+    return (date.fromisoformat(b) - date.fromisoformat(a)).days
 
 
 def add_days(iso: str, days: int) -> str:

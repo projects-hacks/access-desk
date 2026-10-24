@@ -34,6 +34,7 @@ class ClientView:
     in_transit: list[Row] = field(default_factory=list)
     rejections: list[Row] = field(default_factory=list)
     approvals: list[Row] = field(default_factory=list)
+    withdrawals: list[Row] = field(default_factory=list)
 
     @property
     def id(self) -> str:
@@ -71,7 +72,7 @@ def load_world(db: SpacetimeClient) -> World:
             if table == "work_item":
                 work_items[row["id"]] = row
 
-    for state, target in (("REJECTED", "rejections"), ("APPROVED", "approvals")):
+    for state, target in (("REJECTED", "rejections"), ("APPROVED", "approvals"), ("WITHDRAWN", "withdrawals")):
         for row in db.sql(f"SELECT * FROM audit_event WHERE to_state = '{state}'"):
             view = views.get(row["client_id"])
             item = work_items.get(row["work_item_id"] or -1)
