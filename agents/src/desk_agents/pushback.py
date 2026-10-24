@@ -3,9 +3,11 @@ import re
 from typing import Literal
 
 import anthropic
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, PrivateAttr
 
 from .config import settings
+from .llm.types import Ask
+from .seat2_llm import chain, first_good, rm_note_order
 
 log = logging.getLogger("desk_agents.pushback")
 
@@ -34,35 +36,35 @@ class RmReading(BaseModel):
     event_type: Literal["acquisition", "merger", "insolvency", "wind_down", "regulatory", "other"] | None = None
     counterparty: str | None = Field(None, description="Acquirer or merger partner, if named")
     effective_date: str | None = Field(None, description="Expected closing or effective date")
+    _read_by: str = PrivateAttr("")
+
+    @property
+    def read_by(self) -> str:
+        """Who read the note: a provider name, or "keywords"."""
+        return self._read_by
+
+
+SCHEMA = anthropic.transform_schema(RmReading)
 
 
 class Reader:
-    def __init__(self) -> None:
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key) if settings.anthropic_api_key else None
+    """Reads RM notes through Seat 2's provider order (Claude first by default), then keywords."""
+
+    def __init__(self, asks: list[tuple[str, Ask]] | None = None):
+        if asks is None:
+            asks = chain(rm_note_order(), SCHEMA, {"factory": settings.seat2_factory_timeout_seconds})
+        self._asks = asks
 
     def read(self, note: str, client_name: str, today: str) -> RmReading:
-        if self._client:
-            try:
-                return self._ask_claude(note, client_name, today)
-            except (anthropic.APIError, ValidationError) as e:
-                log.warning("Claude could not read the RM note, using keywords: %s", e)
-        return by_keywords(note)
-
-    def _ask_claude(self, note: str, client_name: str, today: str) -> RmReading:
-        response = self._client.beta.messages.parse(
-            model=settings.anthropic_model,
-            max_tokens=2048,
-            system=SYSTEM,
-            output_config={"effort": "low"},
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            messages=[{"role": "user", "content": f"Today: {today}\nClient: {client_name}\nRM note:\n{note}"}],
-            output_format=RmReading,
-        )
-        if response.stop_reason == "refusal" or response.parsed_output is None:
-            log.warning("Claude declined to read the RM note (%s), using keywords", response.stop_reason)
-            return by_keywords(note)
-        return response.parsed_output
+        messages = [{"role": "user", "content": f"{SYSTEM}\n\nToday: {today}\nClient: {client_name}\nRM note:\n{note}"}]
+        got = first_good(self._asks, messages, RmReading.model_validate_json, "read the RM note")
+        if got is None:
+            reading = by_keywords(note)
+            reading._read_by = "keywords"
+            return reading
+        reading, provider = got
+        reading._read_by = provider
+        return reading
 
 
 PAID = re.compile(r"\b(paid|wired?|sent|remitted|payment (went|is) out|in transit|mt103|imad|trn)\b", re.IGNORECASE)

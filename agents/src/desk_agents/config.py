@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     factory_attempts: int = 2
     agent_interval_seconds: float = 15.0
     watch_seconds: float = 1.0
+    # Seat 2's LLM calls, in order (see seat2_llm.py). The classifier gates the "already paid" moment.
+    seat2_rm_note_providers: str = "anthropic,factory"
+    seat2_notice_providers: str = "factory,anthropic"
+    seat2_factory_timeout_seconds: float = 15.0
+    stdb_parallel_requests: int = 4
     escalation_days: int = 7
     unwind_cost_bps: int = 50
 

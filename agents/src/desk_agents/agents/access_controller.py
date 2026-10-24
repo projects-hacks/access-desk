@@ -1,7 +1,9 @@
 import json
 import logging
 import re
-from dataclasses import dataclass
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from itertools import combinations
 from typing import Any
@@ -12,8 +14,9 @@ from ..config import settings
 from ..models import Proposal, WorkItemKind
 from ..notices import Writer
 from ..pushback import Reader, RmReading
+from ..seat2_llm import label
 from ..stdb import ReducerError
-from ..world import ClientView, Row, World, load_world
+from ..world import AuditLog, ClientView, Row, World, load_world
 from .base import Agent
 
 log = logging.getLogger("desk_agents.access_controller")
@@ -57,6 +60,7 @@ class Move:
     args: dict[str, Any]
     summary: str
     fallback: "Move | None" = None
+    after: "Move | None" = None
 
 
 @dataclass
@@ -75,21 +79,45 @@ class AccessController(Agent):
     def __init__(self, db, reader: Reader | None = None, writer: Writer | None = None):
         super().__init__(db)
         self.reader = reader or Reader()
-        self.writer = writer or Writer()
+        self.writer = writer or Writer.from_settings()
         self.names: dict[str, str] = {}
         self.readings: dict[int, RmReading] = {}
+        self.audit = AuditLog()
         self.unavailable: set[str] = set()
         self.acted = 0
+        self._lock = threading.Lock()
 
     async def run(self) -> list[Proposal]:
         world = self.observe()
         self.names = {cid: v.client["name"] for cid, v in world.clients.items()}
-        results = [(move, self.execute(move)) for move in plan(world)]
-        self.acted = sum(ok for move, ok in results if move.action not in BOOKKEEPING)
+        self.acted = 0
+        self.execute_all(plan(world), first=world.changed)
         return []
 
+    def execute_all(self, moves: list[Move], first: set[str] = frozenset()) -> None:
+        """Each client's moves in order; clients whose data just changed go first, then the rest side by side."""
+        groups: dict[str, list[Move]] = {}
+        for move in moves:
+            groups.setdefault(move.client_id, []).append(move)
+        stop = threading.Event()
+
+        def run_group(group: list[Move]) -> None:
+            for move in group:
+                if stop.is_set():
+                    return
+                try:
+                    self.execute(move)
+                except BaseException:
+                    stop.set()
+                    raise
+
+        batches = ([g for cid, g in groups.items() if cid in first], [g for cid, g in groups.items() if cid not in first])
+        with ThreadPoolExecutor(max_workers=settings.stdb_parallel_requests) as pool:
+            for batch in batches:
+                list(pool.map(run_group, batch))
+
     def observe(self) -> World:
-        world = load_world(self.db)
+        world = load_world(self.db, self.audit)
         for view in world.clients.values():
             for note in view.rm_note:
                 if note["id"] not in self.readings and not answered(view, note["id"]):
@@ -98,36 +126,45 @@ class AccessController(Agent):
         return world
 
     def execute(self, move: Move) -> bool:
-        if move.action in self.unavailable:
+        """Safe to call from several threads at once. `after` runs only when this move itself succeeds."""
+        with self._lock:
+            missing = move.action in self.unavailable
+        if missing:
             return self.execute(move.fallback) if move.fallback else False
         if move.action == "propose_notice":
             move = self.worded(move)
         try:
             getattr(self.db, move.action)(**move.args)
-            log.info("[%s] %s %s: %s", self.name, move.action, move.client_id, move.summary)
-            return True
         except ReducerError as e:
             log.warning("[%s] %s %s refused: %s", self.name, move.action, move.client_id, e)
+            return False
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
+            if e.response.status_code != 404:
+                log.warning("[%s] %s %s failed: %s", self.name, move.action, move.client_id, e)
+                return False
+            with self._lock:
+                first = move.action not in self.unavailable
                 self.unavailable.add(move.action)
+            if first:
                 log.warning("[%s] %s is not published in this database yet; %s", self.name, move.action,
                             f"using {move.fallback.action}" if move.fallback else "skipping it")
-                if move.fallback:
-                    return self.execute(move.fallback)
-            else:
-                log.warning("[%s] %s %s failed: %s", self.name, move.action, move.client_id, e)
-        return False
-
+            return self.execute(move.fallback) if move.fallback else False
+        log.info("[%s] %s %s: %s", self.name, move.action, move.client_id, move.summary)
+        if move.action not in BOOKKEEPING:
+            with self._lock:
+                self.acted += 1
+        if move.after:
+            self.execute(move.after)
+        return True
 
     def worded(self, move: Move) -> Move:
         args = move.args
         context = f"Client: {self.names.get(move.client_id, move.client_id)}"
-        body, by_claude = self.writer.write(args["channel"], args["body"], context)
-        if not by_claude:
+        body, by = self.writer.write(args["channel"], args["body"], context)
+        if not by:
             return move
-        reasoning = f"{args['reasoning']} Worded by Claude; every number checked against the facts."
-        return Move(move.action, move.client_id, {**args, "body": body, "reasoning": reasoning}, move.summary, move.fallback)
+        reasoning = f"{args['reasoning']} Worded by {label(by)}; every number checked against the facts."
+        return replace(move, args={**args, "body": body, "reasoning": reasoning})
 
 
 def plan(world: World, escalation_days: int | None = None) -> list[Move]:
@@ -173,7 +210,7 @@ def next_move(
     hold_off = waiting(view, today, escalation_days)
     debit_rejected = overdue and rejected_since(view, overdue[0]["due_on"], "CUSTODY_DEBIT")
     if overdue and not hold_off and not debit_rejected:
-        debit = custody_debit(view, today, world.platform["auto_apply_limit_cents"])
+        debit = custody_debit(view, today)
         if debit:
             return debit
 
@@ -574,13 +611,13 @@ def fill(invoices: list[Row], budget: int) -> list[Row]:
     return chosen
 
 
-def custody_debit(view: ClientView, today: str, auto_limit: int) -> Move | None:
+def custody_debit(view: ClientView, today: str) -> Move | None:
+    """Every overdue invoice USD custody covers, oldest first, in one debit (debits apply without a person)."""
     if not allowed(view, "debit"):
         return None
     overdue = overdue_invoices(view, today)
     cash = next((h["value_cents"] for h in view.custody_holding if h["asset"] == "USD"), 0)
-    auto_eligible = view.client["tier"] > 1 and not view.client["strategic"]
-    chosen = (fill(overdue, min(cash, auto_limit)) if auto_eligible else []) or fill(overdue, cash)
+    chosen = fill(overdue, cash)
     if not chosen:
         return None
     ids = [i["id"] for i in chosen]
@@ -590,10 +627,7 @@ def custody_debit(view: ClientView, today: str, auto_limit: int) -> Move | None:
         f"from custody, and USD custody of {usd(cash)} covers it. Collecting first avoids any restriction."
     )
     if len(chosen) < len(overdue):
-        reasoning += (
-            f" This covers {len(chosen)} of {len(overdue)} overdue invoices"
-            f"{' (the part within the auto-apply limit)' if total <= auto_limit < owed(overdue) else ''}; the rest follows separately."
-        )
+        reasoning += f" Custody covers {len(chosen)} of {len(overdue)} overdue invoices; the rest stays in collections."
     return Move(
         action="propose_custody_debit",
         client_id=view.id,
@@ -724,7 +758,7 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
         )
     elif match:
         finding = (
-            f"Found it: {match['title']}. It is waiting for an accountant to approve (WI-{match['id']}); "
+            f"{waiting_match(view, match, world)} The match is waiting for an accountant to approve (WI-{match['id']}); "
             "access comes back as soon as it is applied."
         )
     elif returned := [m for m in recent if m["match_status"] == "reversed"]:
@@ -736,19 +770,24 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
         )
     elif found := best_candidate(view, reading, note, world, since):
         m, evidence = found
-        reply = rm_reply_move(view, note, (
+        reply = rm_reply_move(view, note, reading=reading, finding=(
             f"{usd(m['amount_cents'])} {m['bank_ref']} from {m['orig_name']} arrived {m['value_on']} but could not be matched "
             "automatically; an accountant is reviewing it. Access comes back as soon as it is applied."
+        ))
+        proposed = rm_reply_move(view, note, reading=reading, finding=(
+            f"{found_payment(m['amount_cents'], m['orig_name'], evidence['invoices'], m['bank_ref'], m['value_on'])} "
+            "An accountant is confirming the match now; access comes back as soon as it is applied."
         ))
         signals = "; ".join(s["detail"] for s in evidence["signals"])
         return Move(
             action="propose_payment_match",
             client_id=view.id,
             args={"client_id": view.id, "movement_id": m["id"], "rm_note_id": note["id"],
-                  "reasoning": f"RM {note['author']} says {name} paid. Evidence: {signals}.",
+                  "reasoning": f"RM {note['author']} says {name} paid. Evidence: {signals}.{read_by(reading)}",
                   "evidence_json": json.dumps([evidence]), "confidence": evidence["confidence"]},
             summary=f"match {m['bank_ref']} to {name} on {note['author']}'s word and the evidence",
             fallback=reply,
+            after=proposed,
         )
     else:
         applied = sum(m["amount_cents"] for m in recent if m["match_status"] == "matched")
@@ -760,16 +799,54 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
             f"({', '.join(i['id'] for i in defaulted)}). Restrictions stay as they are. Please ask the client for the "
             "Fed IMAD or MT103 so we can trace the wire."
         )
-    return rm_reply_move(view, note, finding)
+    return rm_reply_move(view, note, finding, reading)
 
 
-def rm_reply_move(view: ClientView, note: Row, finding: str) -> Move:
+MATCH_TITLE = re.compile(r"^Confirm (\$[\d,]+\.\d{2}) from (.+?)(?: → (.+?))?(?: \([^()]*\))?$")
+
+
+def found_payment(amount_cents: int | None, sender: str, invoices: list[str], ref: str = "", on: str = "") -> str:
+    """We found it: the $148,200.00 payment from HALVARD GP HOLDINGS (JD-0042, received 2026-03-18) pays INV-1 and INV-2."""
+    detail = ", ".join(filter(None, [ref, f"received {on}" if on else ""]))
+    return (
+        f"We found it: the {f'{usd(amount_cents)} ' if amount_cents else ''}payment"
+        f"{f' from {sender}' if sender else ''}{f' ({detail})' if detail else ''}"
+        f"{f' pays {listed(invoices)}' if invoices else ''}."
+    )
+
+
+def waiting_match(view: ClientView, match: Row, world: World) -> str:
+    """What an open PAYMENT_MATCH found, from its plan, the cash movement and, failing those, its title."""
+    try:
+        proposal = json.loads(match.get("proposal_json") or "{}")
+    except ValueError:
+        proposal = {}
+    allocations = (proposal.get("plan") or {}).get("allocations") or []
+    invoices = [a["invoiceId"] for a in allocations if a.get("invoiceId")]
+    movement_id = proposal.get("movementId") or match.get("subject_id")
+    m = next((c for c in view.cash + world.unplaced if c["id"] == movement_id), None)
+    titled = MATCH_TITLE.match(match.get("title") or "")
+    amount = match.get("amount_cents") or (m and m["amount_cents"])
+    sender = m["orig_name"] if m else titled.group(2) if titled else ""
+    if not invoices and titled and titled.group(3):
+        invoices = [i.strip() for i in titled.group(3).split(",")]
+    if not amount and titled:
+        amount = int(titled.group(1).replace("$", "").replace(",", "").replace(".", ""))
+    return found_payment(amount, sender, invoices, m["bank_ref"] if m else "", m["value_on"] if m else "")
+
+
+def read_by(reading: RmReading | None) -> str:
+    return f" Note read by {label(reading.read_by)}." if reading is not None and reading.read_by else ""
+
+
+def rm_reply_move(view: ClientView, note: Row, finding: str, reading: RmReading | None = None) -> Move:
     name = view.client["name"]
     return Move(
         action="propose_notice",
         client_id=view.id,
         args={"client_id": view.id, "channel": "rm", "body": f"{finding} {note_tag(note['id'])}", "policy_ref": "pol-007",
-              "confidence": 0.9, "reasoning": f"RM {note['author']} says {name} already paid; checked the bank feed before acting."},
+              "confidence": 0.9, "reasoning": f"RM {note['author']} says {name} already paid; checked the bank feed before acting."
+                                                    f"{read_by(reading)}"},
         summary=f"reply to {note['author']} on {name}'s payment",
     )
 
@@ -853,7 +930,8 @@ def exception_case(view: ClientView, note: Row, reading: RmReading, world: World
     ]
     if past:
         facts.append("Precedents: " + "; ".join(f"{p['decided_on']} {p['decision']} → {p['outcome']}" for p in past[-3:]) + ".")
-    facts.append("The agent cannot grant exceptions; a controller decides. Escalation is paused while this is open.")
+    facts.append("The agent cannot grant exceptions; a controller decides. Escalation is paused while this is open."
+                 + read_by(reading))
     proposal = Proposal(
         kind=WorkItemKind.NOVEL_CASE,
         client_id=view.id,
@@ -937,7 +1015,7 @@ def material_event_case(view: ClientView, note: Row, reading: RmReading, world: 
         amount_cents=total_open,
         proposal={"rmNoteId": note["id"], "event": event, "counterparty": reading.counterparty, "effectiveDate": when,
                   "onlyLevers": ["withdrawals"], "investigation": [{"tool": t, "summary": x} for t, x in steps]},
-        reasoning=" ".join(plan_steps),
+        reasoning=" ".join(plan_steps) + read_by(reading),
         policy_ref="none",
         clauses_cited=[c["clause"] for c in (coc, set_off) if c and c["allowed"]],
         confidence=0.6,
