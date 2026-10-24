@@ -125,7 +125,7 @@ console.log('\nTime (scheduled reducer)');
 await agent.reducers.setDeadline({ clientId: KESTREL, kind: 'promise_to_pay', dueOn: '2026-03-05', note: 'CFO promised a wire by Thursday', workItemId: undefined });
 await demo.reducers.setClockSpeed({ secondsPerDay: 1, runUntil: '2026-03-06' });
 // Ticks are once a second, so three sim days take three to six seconds.
-for (let t = 0; t < 40 && db.clock.id.find(1)?.secondsPerDay; t++) await wait(250);
+for (let t = 0; t < 80 && db.clock.id.find(1)?.secondsPerDay; t++) await wait(250);
 await wait(500);
 const clock = db.clock.id.find(1);
 check(clock?.simDate === '2026-03-06' && clock.secondsPerDay === 0, 'Clock ran on its own to Mar 6 and paused', `${clock?.simDate} ${clock?.secondsPerDay}`);
@@ -135,25 +135,26 @@ check(promise?.status === 'broken', 'Promise to pay marked broken', promise?.sta
 await settle();
 
 await agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 'withdrawals', step: 'HOLD_AMOUNT_OWED', reasoning: reason, policyRef: 'pol-006', confidence: 0.9 });
-await wait(500);
-item = latestItem(KESTREL, 'RESTRICTION');
-check(item?.state === 'PROPOSED' && !item.autoApplied, 'Hold proposed; restrictions never auto-apply');
-check(item?.amountCents === 14_820_000n, 'Holds exactly the undisputed overdue $148,200', `${item?.amountCents}`);
-await controller.reducers.transitionWorkItem({ workItemId: item!.id, toState: 'APPROVED', note: 'verify' });
 await settle();
+item = latestItem(KESTREL, 'RESTRICTION');
+check(!!item?.autoApplied && item.state === 'POSTED', 'Hold auto-applied under pol-006 (Tier 3, cure expired) and POSTED', `${item?.state} auto=${item?.autoApplied}`);
+check(item?.amountCents === 14_820_000n, 'Holds exactly the undisputed overdue $148,200', `${item?.amountCents}`);
 const hold = [...db.hold.iter()].find((h) => h.clientId === KESTREL && h.status === 'active');
 check(hold?.amountCents === 14_820_000n, 'Hold active');
 check(db.accessLever.id.find(`${KESTREL}:withdrawals`)?.state === 'limited', 'Withdrawals limited at the platform');
-check(db.workItem.id.find(item!.id)?.state === 'POSTED', 'Restriction POSTED');
 
-await controller.reducers.proposeRestriction({ clientId: KESTREL, lever: 'api', step: 'RATE_LIMIT', reasoning: reason, policyRef: 'pol-006', confidence: 0.9 });
+// Offboarding always goes to a person, and never to the one who proposed it.
+await controller.reducers.proposeRestriction({ clientId: KESTREL, lever: 'withdrawals', step: 'FULL_FREEZE', reasoning: reason, policyRef: 'pol-006', confidence: 0.9 });
 await wait(500);
 item = latestItem(KESTREL, 'RESTRICTION');
+check(item?.state === 'PROPOSED' && !item.autoApplied && item.title.startsWith('Offboarding'), 'Full freeze (offboarding) waits for a controller', `${item?.state} ${item?.title}`);
+await agent.reducers.transitionWorkItem({ workItemId: item!.id, toState: 'APPROVED', note: '' });
 await controller.reducers.transitionWorkItem({ workItemId: item!.id, toState: 'APPROVED', note: '' });
 await wait(400);
-check(db.workItem.id.find(item!.id)?.state === 'PROPOSED', 'No self-approval');
-const denial = [...db.auditEvent.iter()].find((a) => a.workItemId === item!.id && !a.allowed);
-check(denial?.detail === 'no self-approval', 'Denial written to the audit log');
+check(db.workItem.id.find(item!.id)?.state === 'PROPOSED', 'Agent cannot approve it; neither can the controller who proposed it');
+const denial = [...db.auditEvent.iter()].find((a) => a.workItemId === item!.id && !a.allowed && a.detail === 'no self-approval');
+check(!!denial, 'Denials written to the audit log');
+await controller.reducers.transitionWorkItem({ workItemId: item!.id, toState: 'WITHDRAWN', note: 'verify: not offboarding' });
 
 console.log('\nCustody withdrawal');
 const kestrelUsd = usd(KESTREL);

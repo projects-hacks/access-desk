@@ -5,7 +5,7 @@ Agents decide; these reducers are how they act. Each one checks the contract, th
 | Reducer (wire name) | Args | Checks | On approval |
 |---|---|---|---|
 | `propose_custody_debit` | client_id, invoice_ids (empty = all overdue), reasoning, policy_ref, confidence | debit clause signed (§6.3), invoices overdue and undisputed, USD custody covers them | applications (`custody_debit`), `CUSTODY_DEBIT`, journal `JE-CD-n` (Dr 2100 / Cr 1200), holds released if cured |
-| `propose_restriction` | client_id, lever, step, reasoning, policy_ref, confidence | lever in contract, step in `capability`, something overdue, cure period over (§9.1), set-off clause for withdrawals, cross-default for levers without overdue invoices, no full freeze, no close-only on a hedged book (pol-008) | withdrawals `HOLD_AMOUNT_OWED` → hold of the undisputed overdue amount + `PLACE_HOLD`; other steps → `SET_LEVER` |
+| `propose_restriction` | client_id, lever, step, reasoning, policy_ref, confidence | lever in contract, step in `capability`, something overdue, cure period over (§9.1), set-off clause for withdrawals, cross-default for levers without overdue invoices, no close-only on a hedged book (pol-008) | withdrawals `HOLD_AMOUNT_OWED` → hold of the undisputed overdue amount + `PLACE_HOLD`; `FULL_FREEZE` → withdrawals off (and requests refused); other steps → `SET_LEVER` |
 | `propose_restore` | client_id, lever, reasoning, policy_ref, confidence | lever currently restricted | holds released / lever active |
 | `propose_notice` | client_id, channel (email / portal / rm), body, reasoning, policy_ref, confidence | non-empty body | `notice` row + `SEND_NOTICE`; marked sent on completion |
 | `set_deadline` | client_id, kind (promise_to_pay / follow_up), due_on, note, work_item_id? | date after today | resolved automatically when the date comes: `met`, `broken` or `due` |
@@ -27,8 +27,8 @@ A withdrawal during a running cure period is honored (§9.1), but if it leaves c
 
 ## Who approves
 
-- **Automatically**, when the kind's policy is active and the amount is within `platform.auto_apply_limit_cents` ($50,000) and the client is not Tier 1 or strategic: custody debits (pol-005), restores (pol-011), notices (pol-007). The item is created APPROVED with `auto_applied = true`.
-- **A controller**, for everything else. Restrictions never auto-apply.
+- **Automatically**, when the kind's policy is active and the client is not Tier 1 or strategic: restrictions (pol-006), custody debits (pol-005, also within `platform.auto_apply_limit_cents`, $50,000), restores (pol-011), notices (pol-007). The item is created APPROVED with `auto_applied = true`.
+- **A controller** for top clients (Tier 1, strategic), offboarding steps (capabilities with `two_approvers`: close-only, full freeze; titled "Offboarding: …") and custody debits over the limit.
 - `transition_work_item` enforces: approvers are ACCOUNTANT or CONTROLLER, `required_role = CONTROLLER` items need a controller, no one approves their own proposal. Denied attempts are audited, not thrown.
 - APPROVED → POSTED happens when the gateway has confirmed every command.
 
