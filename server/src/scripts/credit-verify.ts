@@ -64,12 +64,38 @@ const expectedSubject = (clientId: string, tier: number) => {
   const k = KEY[clientId];
   return k === 'stay' ? undefined : k === 'review' ? `review:${clientId}` : `tier:${clientId}:${tier}->${k}`;
 };
-const wanted = clients.map((c) => expectedSubject(c.id, c.tier)).filter((s): s is string => !!s);
+// With an API key Claude decides within the guardrails, so its choices may differ from the rules' key:
+// rules-decided clients must match the key; Claude-decided ones must stay inside the hard limits.
+const decidedBy = (w: { proposalJson: string }) => {
+  try {
+    return String(JSON.parse(w.proposalJson).decided_by ?? 'rules');
+  } catch {
+    return 'rules';
+  }
+};
+const claudeClients = new Set([...db.workItem.iter()]
+  .filter((w) => (w.kind === 'CREDIT_REVIEW' || w.kind === 'POLICY_DRAFT') && OPEN.has(w.state) && decidedBy(w) === 'claude')
+  .map((w) => w.clientId));
 const subjects = reviews.map((w) => w.subjectId);
-const dupes = subjects.filter((s, i) => subjects.indexOf(s) !== i);
-check(wanted.every((s) => subjects.includes(s)) && subjects.length === wanted.length && !dupes.length,
-  `${wanted.length} open CREDIT_REVIEW items, one per change or review (${subjects.length})`,
-  `missing ${wanted.filter((s) => !subjects.includes(s)).join(' ') || '-'}; unexpected ${subjects.filter((s) => !wanted.includes(s)).join(' ') || '-'}`);
+const dupes = reviews.map((w) => w.clientId).filter((s, i, all) => all.indexOf(s) !== i);
+const ruled = clients.filter((c) => !claudeClients.has(c.id));
+const wanted = ruled.map((c) => expectedSubject(c.id, c.tier)).filter((s): s is string => !!s);
+const ruledSubjects = reviews.filter((w) => !claudeClients.has(w.clientId)).map((w) => w.subjectId);
+check(wanted.every((s) => ruledSubjects.includes(s)) && ruledSubjects.length === wanted.length && !dupes.length,
+  `Rules-decided clients match the key (${ruled.length} clients, ${ruledSubjects.length} open reviews), one review per client`,
+  `missing ${wanted.filter((s) => !ruledSubjects.includes(s)).join(' ') || '-'}; unexpected ${ruledSubjects.filter((s) => !wanted.includes(s)).join(' ') || '-'}; duplicated ${dupes.join(' ') || '-'}`);
+const flagged = new Set(flags.filter((f) => f.status !== 'cleared').map((f) => f.clientId));
+const outOfBounds = reviews.filter((w) => claudeClients.has(w.clientId) && w.subjectId.startsWith('tier:')).filter((w) => {
+  const [from, to] = (w.subjectId.split(':')[2] ?? '').split('->').map(Number);
+  return !(from! >= 1 && to! >= 1 && to! <= 5 && to! - from! <= 2 && from! - to! <= 1 && !(flagged.has(w.clientId) && to! < Math.min(3, from!)));
+});
+check(!outOfBounds.length, `Claude-decided reviews stay inside the guardrails (${claudeClients.size} clients)`, outOfBounds.map((w) => w.subjectId).join(' '));
+for (const cid of claudeClients) {
+  const c = clients.find((x) => x.id === cid)!;
+  const rules = expectedSubject(cid, c.tier) ?? 'stay';
+  const mine = reviews.find((w) => w.clientId === cid)?.subjectId ?? 'stay';
+  if (rules !== mine) console.log(`  ·   ${c.name}: Claude chose ${mine}; rules said ${rules}`);
+}
 check(reviews.every((w) => w.requiredRole === 'CONTROLLER'), 'Every review needs a controller');
 check(!reviews.some((w) => w.subjectId.startsWith('tier:') && clients.find((c) => c.id === w.clientId)?.strategic),
   'No tier change proposed for a strategic client');
