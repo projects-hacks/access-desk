@@ -167,6 +167,7 @@ export const resetWorld = spacetimedb.reducer({ simDate: t.string() }, (ctx, { s
   wipe(db.metricSnapshot.iter(), (r: { id: string }) => r.id, (k) => db.metricSnapshot.id.delete(k));
   wipe(db.tieOutRun.iter(), (r: { id: bigint }) => r.id, (k) => db.tieOutRun.id.delete(k));
   wipe(db.bankAccount.iter(), (r: { id: string }) => r.id, (k) => db.bankAccount.id.delete(k));
+  wipe(db.permission.iter(), (r: { id: string }) => r.id, (k) => db.permission.id.delete(k));
   wipe(db.tieOutBreak.iter(), (r: { id: bigint }) => r.id, (k) => db.tieOutBreak.id.delete(k));
   wipe(db.auditEvent.iter(), (r: { id: bigint }) => r.id, (k) => db.auditEvent.id.delete(k));
   for (const p of [...db.policy.iter()]) if (p.learnedFrom !== 'baseline' && db.policy.key.delete(p.key)) rows++;

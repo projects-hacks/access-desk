@@ -397,6 +397,20 @@ export const PayerIdentity = __t.object("PayerIdentity", {
 });
 export type PayerIdentity = __Infer<typeof PayerIdentity>;
 
+export const PaymentApplication = __t.object("PaymentApplication", {
+  id: __t.u64(),
+  movementId: __t.string(),
+  invoiceId: __t.string(),
+  amountCents: __t.i64(),
+  method: __t.string(),
+  policyRef: __t.string(),
+  workItemId: __t.option(__t.u64()),
+  reversed: __t.bool(),
+  posted: __t.bool(),
+  reversalPosted: __t.bool(),
+});
+export type PaymentApplication = __Infer<typeof PaymentApplication>;
+
 export const Permission = __t.object("Permission", {
   id: __t.string(),
   clientId: __t.string(),
@@ -412,20 +426,6 @@ export const PermissionChange = __t.object("PermissionChange", {
   enabled: __t.bool(),
 });
 export type PermissionChange = __Infer<typeof PermissionChange>;
-
-export const PaymentApplication = __t.object("PaymentApplication", {
-  id: __t.u64(),
-  movementId: __t.string(),
-  invoiceId: __t.string(),
-  amountCents: __t.i64(),
-  method: __t.string(),
-  policyRef: __t.string(),
-  workItemId: __t.option(__t.u64()),
-  reversed: __t.bool(),
-  posted: __t.bool(),
-  reversalPosted: __t.bool(),
-});
-export type PaymentApplication = __Infer<typeof PaymentApplication>;
 
 export const Platform = __t.object("Platform", {
   id: __t.u8(),
