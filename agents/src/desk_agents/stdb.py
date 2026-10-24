@@ -67,6 +67,13 @@ class SpacetimeClient:
         """
         self.call("propose_restriction", client_id, lever, step, reasoning, policy_ref, confidence)
 
+    def propose_restriction_with_boundaries(
+        self, client_id: str, lever: str, step: str, reasoning: str, policy_ref: str, boundaries_json: str,
+        confidence: float = 0.9,
+    ) -> None:
+        """propose_restriction plus structured context (e.g. the full-cutoff comparison) in boundaries_json."""
+        self.call("propose_restriction_with_boundaries", client_id, lever, step, reasoning, policy_ref, confidence, boundaries_json)
+
     def propose_restore(
         self, client_id: str, lever: str, reasoning: str, policy_ref: str = "pol-011", confidence: float = 0.9,
     ) -> None:
@@ -85,8 +92,32 @@ class SpacetimeClient:
 
     def set_deadline(self, client_id: str, kind: str, due_on: str, note: str, work_item_id: int | None = None) -> None:
         """kind: promise_to_pay | follow_up. Resolved automatically when the sim date reaches due_on."""
-        # Optional arguments are SATS sums: {"some": value} or null.
-        self.call("set_deadline", client_id, kind, due_on, note, None if work_item_id is None else {"some": work_item_id})
+        self.call("set_deadline", client_id, kind, due_on, note, _option(work_item_id))
+
+    def record_agent_run(
+        self, agent: str, trigger: str, proposed: int, status: str, error: str | None, duration_ms: int,
+    ) -> None:
+        self.call("record_agent_run", agent, trigger, proposed, status, _option(error or None), duration_ms)
+
+    def propose_payment_match(
+        self, client_id: str, movement_id: str, reasoning: str, evidence_json: str, confidence: float,
+        rm_note_id: int | None = None,
+    ) -> None:
+        """Attribute unplaced cash to a client with evidence; an accountant approves once."""
+        self.call("propose_payment_match", movement_id, client_id, reasoning, evidence_json, confidence,
+                  _option(rm_note_id))
+
+    def record_wait(self, client_id: str, code: str, reason: str) -> None:
+        """Audits a decision not to act on a client who owes money."""
+        self.call("record_wait", client_id, code, reason)
+
+    def record_investigation(self, work_item_id: int, steps: list[dict[str, str]]) -> None:
+        """Steps are {tool, summary, status}, in the order the agent took them."""
+        self.call("record_investigation", work_item_id, steps)
+
+    def upsert_precedent(self, row: dict[str, Any]) -> None:
+        """A decision worth learning from. `work_item_id` is optional: pass _option(id)."""
+        self.call("upsert_precedent", row)
 
     def decide(self, work_item_id: int, to_state: str, note: str = "") -> None:
         """APPROVED | REJECTED | NEEDS_INFO | WITHDRAWN. Denied attempts are audited, not raised."""
@@ -129,6 +160,11 @@ class SpacetimeClient:
         self.call("record_policy_outcome", policy_key, outcome)
 
     # ── Reads ──────────────────────────────────────────────────────────────
+
+    def fingerprint(self) -> tuple[int, str]:
+        """Changes whenever anything is audited or the sim date moves: the cue for agents to look again."""
+        audited = self.sql("SELECT COUNT(*) AS n FROM audit_event")[0]["n"]
+        return audited, self.sql("SELECT * FROM clock")[0]["sim_date"]
 
     def open_work(self) -> list[dict[str, Any]]:
         """Work waiting on a person or an agent."""
