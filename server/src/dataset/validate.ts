@@ -54,7 +54,9 @@ export function validateDataset(ds: Dataset): string[] {
   if (zephyr?.amountCents !== 14_820_000) problems.push('Zephyr wire is not $148,200.00');
 
   const shortWire = ds.movements.find((m) => m.caseId === 'short-wire');
-  if (shortWire && total(open('ORG-90391', '2026-01')) - shortWire.amountCents !== 2500) problems.push('short wire is not $25.00 short');
+  const shortClient = ds.cases.find((k) => k.id === 'short-wire')!.clientId;
+  if (shortWire && total(open(shortClient, '2026-01')) - shortWire.amountCents !== 2500) problems.push('short wire is not $25.00 short');
+  if (shortWire && (shortWire.instructedCents! - shortWire.chargesCents! !== shortWire.amountCents)) problems.push('short wire: instructed − charges != received');
 
   const lump = ds.movements.find((m) => m.caseId === 'lump-sum');
   const fieldstoneOpen = ds.invoices.filter((i) => i.clientId === 'ORG-90229' && i.period !== '2026-02' && i.status === 'open');

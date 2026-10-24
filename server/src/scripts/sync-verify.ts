@@ -72,6 +72,7 @@ expectCount('metric_snapshot', [...db.metricSnapshot.iter()].length, ds.history.
 // 2. Every movement the bank and chain show right now is in the database, field for field.
 const jsonSafe = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v);
 const history = historyRecords(conn, ds, bank.map).filter((r) => r.table === 'cash_movement').map((r) => r.row as ReturnType<typeof chainRecords>[number]['row']);
+// Compare with rules-only parsing; Claude's hints are checked separately (parsedBy/hintsJson are ours to add).
 const live = [...(await bankRecords(conn, bank, simDate)), ...chainRecords(conn, ds, simDate), ...history.map((row) => ({ row }))];
 for (const { row: expected } of live) {
   const actual = db.cashMovement.id.find(expected.id);
@@ -79,7 +80,14 @@ for (const { row: expected } of live) {
   if (!actual) continue;
   for (const [field, value] of Object.entries(expected)) {
     if (field === 'matchStatus') continue; // owned by payment checking
-    const a = JSON.stringify((actual as Record<string, unknown>)[field], jsonSafe);
+    if (field === 'parsedBy' || field === 'hintsJson' || field === 'parseNotes') continue; // enriched by Claude when a key is set
+    const actualValue = (actual as Record<string, unknown>)[field];
+    // Floats are stored as f32: compare with a tolerance.
+    if (typeof value === 'number' && typeof actualValue === 'number') {
+      check(Math.abs(value - actualValue) < 1e-6, `cash ${expected.bankRef}: ${field} is ${actualValue}, source says ${value}`);
+      continue;
+    }
+    const a = JSON.stringify(actualValue, jsonSafe);
     const e = JSON.stringify(value, jsonSafe);
     check(a === e, `cash ${expected.bankRef}: ${field} is ${a}, source says ${e}`);
   }
@@ -92,7 +100,7 @@ for (const t of hidden) check(!visibleRefs.has(t.movementId), `cash ${t.movement
 
 // 3. No empty required fields.
 const allowEmpty: Record<string, string[]> = {
-  cash_movement: ['origName', 'origAccount', 'reverses'],
+  cash_movement: ['origName', 'origAccount', 'reverses', 'remittance', 'hintsJson', 'parseNotes', 'instructedCents', 'chargesCents', 'chargeBearer', 'returnCode'],
   invoice: ['paidOn'],
 };
 const tableRows: Record<string, Iterable<object>> = {
@@ -166,7 +174,7 @@ pattern([...halcyonDates].every((d) => ['03-31', '06-30', '09-30', '12-31', '01-
 const monarch = paidHistory('ORG-90758');
 const lateBy = (product: string) => monarch.filter((i) => i.product === product).map((i) => days(i.dueOn, i.paidOn!));
 pattern(lateBy('API').every((d) => d <= 2) && lateBy('CUSTODY').every((d) => d >= 25), 'Monarch pays API (restricted) fast, custody late');
-const wrenCash = [...db.cashMovement.iter()].filter((m) => m.isHistory && m.origName.startsWith('Wrenfield'));
+const wrenCash = [...db.cashMovement.iter()].filter((m) => m.isHistory && m.origName.toUpperCase().startsWith('WRENFIELD'));
 const perInvoice = new Map<string, number>();
 for (const m of wrenCash) for (const r of m.refs) perInvoice.set(r, (perInvoice.get(r) ?? 0) + 1);
 pattern(perInvoice.size > 0 && [...perInvoice.values()].every((n) => n === 2), 'Wrenfield pays every invoice in two partial payments');

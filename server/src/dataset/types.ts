@@ -11,7 +11,7 @@ export type JanBehavior =
   | { kind: 'open' }
   /** Pays the platform through an affiliate's bank account. */
   | { kind: 'paid_by_affiliate'; affiliate: string; daysFromDue: number }
-  /** Wire arrives short by an intermediary bank fee. */
+  /** International wire (SWIFT, charges SHA): an intermediary bank deducts its fee on the way. */
   | { kind: 'short_paid'; shortCents: number; valueDate: IsoDate }
   /** Lump sum with only the client id as reference, covering several months. */
   | { kind: 'lump_sum_no_invoice_refs'; valueDate: IsoDate }
@@ -23,7 +23,7 @@ export type JanBehavior =
   | { kind: 'partial'; invoiceProduct: Product; fraction: number; valueDate: IsoDate }
   /** Wire sent, bank hasn't posted it yet. */
   | { kind: 'in_transit'; valueDate: IsoDate }
-  /** ACH payment that later bounced. */
+  /** On ACH auto-debit: we collect, and the debit comes back R01 (insufficient funds). */
   | { kind: 'ach_returned'; paidOn: IsoDate; returnedOn: IsoDate }
   /** Settled outside the bank: on-chain USDC. */
   | { kind: 'paid_onchain'; valueDate: IsoDate; wallet: string }
@@ -59,6 +59,8 @@ export interface Client {
   extraJanInvoices?: Array<{ product: Product; label: string; amount: number; disputed?: boolean }>;
   city: string;
   state: string;
+  /** Where the client banks. International clients pay by SWIFT. */
+  bank: { name: string; id: string; country: string };
 }
 
 export interface Affiliate {
@@ -66,6 +68,7 @@ export interface Affiliate {
   legalName: string;
   parentId: string;
   relation: string;
+  bank: { name: string; id: string; country: string };
 }
 
 export type InvoiceStatus = 'open' | 'paid' | 'disputed';
@@ -119,6 +122,12 @@ export interface BankMovement {
   memoName?: string;
   /** For returns: the movement being reversed. */
   reverses?: string;
+  /** International wires: what the payer sent before intermediary charges, and the charges. */
+  instructedCents?: number;
+  chargesCents?: number;
+  chargeBearer?: 'SHA' | 'OUR' | 'BEN';
+  /** Free-text remittance the payer wrote instead of invoice numbers. */
+  remittanceText?: string;
   caseId?: string;
 }
 

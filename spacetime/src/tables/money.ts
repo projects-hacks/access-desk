@@ -47,12 +47,30 @@ export const cashMovement = table(
     amountCents: t.i64(),
     valueOn: t.string(),
     status: t.string(),
+    /** The bank's text, exactly as received. */
     memo: t.string(),
+    /** wire_in | wire_out | ach_collection | ach_return | fee | usdc_in | unknown */
+    category: t.string(),
+    /** FEDWIRE | SWIFT | ACH | BOOK | USDC | UNKNOWN */
+    network: t.string(),
     origName: t.string(),
     origAccount: t.string(),
+    /** The payer's remittance text (PMT DET / addenda). */
+    remittance: t.string(),
     refs: t.array(t.string()),
     bankRef: t.string().index('btree'),
     reverses: t.string().optional(),
+    /** International wires: amount sent before intermediary charges, the charges, who bore them. */
+    instructedCents: t.i64().optional(),
+    chargesCents: t.i64().optional(),
+    chargeBearer: t.string().optional(),
+    returnCode: t.string().optional(),
+    /** rules | claude, with confidence and notes on what was repaired or missing. */
+    parsedBy: t.string(),
+    parseConfidence: t.f32(),
+    parseNotes: t.string(),
+    /** Claude's reading of free-text remittance: periods, products, purpose. */
+    hintsJson: t.string(),
     rawId: t.string(),
     matchStatus: t.string(),
     isHistory: t.bool(),

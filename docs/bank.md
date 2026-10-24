@@ -26,6 +26,7 @@ Add `--run demo` to `bank` commands to target the demo run. Created Nessie ids l
 ## Rules
 
 - **Amounts are integer cents** (`14820000` = $148,200.00). Bills are the exception: `payment_amount` is in dollars.
+- **Realism:** formats and behaviour follow `research/140-real-world-cash-ops.md` (Fedwire/SWIFT field limits, SHA charges on international wires, ACH R01 on debits we originate, no memo on USDC).
 - **Nessie never moves balances.** We compute every balance ourselves.
 - **Nothing settles on its own.** Pending stays pending until `bank settle` or the gateway updates it.
 - **A bank record dated after the sim date is invisible** to sync. That's how the demo wire (dated Mar 10) stays hidden.
@@ -33,13 +34,18 @@ Add `--run demo` to `bank` commands to target the demo run. Created Nessie ids l
 
 ## Memo format
 
-Nessie has no counterparty fields, so the remittance info goes in `description`. Parse it with `parseMemo` in `server/src/integrations/nessie/memo.ts`.
+`description` carries bank statement text the way a US bank shows it (uppercase, names cut to 35 characters, remittance capped at 140, or 80 for ACH addenda). Formats, from `server/src/integrations/bank-text/format.ts`:
 
 ```
-WIRE IN | ORIG: Kestrel Quant LP | ORIG_ACCT: 4410220791334512 | REF: INV-1057 INV-1061 | ID: WI-5531
+WIRE TYPE:FED IN DATE:260303 TRN:WI-5419 IMAD:... ORIG:MERIDIAN FLOW PARTNERS LLC ID:<acct> SND BK:JPMORGAN CHASE BANK NA ID:021000021 PMT DET:INVOICES I776, 1777 & 1778
+WIRE TYPE:INTL IN DATE:260303 TRN:WI-5420 UETR:... ORIG:OSTRAVA DIGITAL ASSETS LP ID:<acct> SND BK:CESKA SPORITELNA AS ID:GIBACZPX INSTD AMT:USD40520.00 CHGS:SHA USD25.00 PMT DET:/INV/1802 1803 /RFB/JAN26
+ACH CCD DEBIT COLLECTION TRACE:AC-7101 CO:QUILLON SYSTEMS INC ACCT:<acct> IND ID:ORG90689 ADDENDA:INV-1769 JAN API USAGE
+ACH RETURN R01 INSUFFICIENT FUNDS TRACE:AC-7102 ORIG TRACE:AC-7101 CO:QUILLON SYSTEMS INC ACCT:<acct>
+ACCOUNT ANALYSIS FEE TRN:BF-2026-02 PERIOD:2026-02 INCOMING WIRES 8 @ 15.00
+WIRE TYPE:FED OUT DATE:260209 TRN:WI-5401 BNF:HALCYON CAPITAL LLC ID:<acct> RCV BK:... PMT DET:LN-2201 DRAWDOWN
 ```
 
-Types: `WIRE IN`, `WIRE OUT`, `ACH IN`, `ACH RETURN R01 NSF`, `BANK FEE`. Every payment is recorded on both sides: a withdrawal on the payer's account and a deposit on ours, both with the same `ID`.
+Each client writes references its own way (`INV1050 INV1051`, `INV-1050/1051`, `INVOICES 1050, 1051 & 1052`, `PMT INV 1050-1052`, `/INV/1050 1051`), some with typos, some in words only. `parseBankText` (`bank-text/parse.ts`) reads it back into fields with a confidence and notes; Claude (`bank-text/interpret.ts`, needs `ANTHROPIC_API_KEY`) reads free-text remittance the rules can't. Every payment is recorded on both sides: a withdrawal on the payer's account and a deposit on ours, with the same reference.
 
 ## What's seeded
 

@@ -80,7 +80,23 @@ function onIncoming(ctx: Ctx, m: Movement, previous: Movement | undefined) {
     const inv = ctx.db.invoice.id.find(id);
     return inv?.clientId === payer.clientId && !cands.some((c) => c.id === id && c.balanceCents > 0n);
   });
-  const result = planMatch(m.amountCents, cands, invoiceRefs, fullyPaid);
+  // No invoice numbers but the payer described what it pays (read by Claude): try those invoices first.
+  const hints = readHints(m);
+  let result = planMatch(m.amountCents, cands, invoiceRefs, fullyPaid);
+  if (!invoiceRefs.length && hints && hints.periods.length) {
+    const described = cands.filter((c) => {
+      const inv = ctx.db.invoice.id.find(c.id);
+      return inv && hints.periods.includes(inv.period) && (!hints.products.length || hints.products.includes(inv.product));
+    });
+    const byDescription = planMatch(m.amountCents, described, [], []);
+    if (byDescription.kind === 'plan' && byDescription.plan.method !== 'partial') {
+      byDescription.plan.basis = `Matches what the payer described (${hints.periods.join(', ')} ${hints.products.map((p) => p.toLowerCase()).join(' and ')} fees)`;
+      result = byDescription;
+    }
+  }
+  if (result.kind === 'plan' && result.plan.method === 'short_fee' && m.chargesCents === result.plan.shortCents) {
+    result.plan.basis = `Wire sent ${formatUsd(m.instructedCents ?? 0n)} with ${m.chargeBearer ?? 'SHA'} charges; an intermediary bank deducted ${formatUsd(m.chargesCents)} on the way`;
+  }
 
   if (result.kind === 'duplicate') {
     setMatchStatus(ctx, m.id, 'exception');
@@ -186,7 +202,7 @@ function onOutgoing(ctx: Ctx, m: Movement) {
     if (!original) throw new SenderError(`${m.bankRef} reverses unknown ${m.reverses}`);
     const item = createWorkItem(ctx, {
       kind: 'PAYMENT_REVERSAL', clientId: resolvePayer(ctx, original)?.clientId ?? '', subjectId: m.id,
-      amountCents: m.amountCents, title: `${original.bankRef} returned (${m.memo.split(' | ')[0]}) · invoices reopened`,
+      amountCents: m.amountCents, title: `${original.bankRef} returned (ACH ${m.returnCode ?? 'return'}) · invoices reopened`,
       proposal: { movementId: m.id, reverses: original.id }, policyRef: 'pol-015', confidence: 1,
       reasoning: 'The bank returned this payment after it was applied, so the applications are reversed and the invoices are due again.',
       requiredRole: 'ACCOUNTANT', autoApplied: true,
@@ -204,8 +220,7 @@ function onOutgoing(ctx: Ctx, m: Movement) {
 
   const refunded = m.refs.map((r) => [...ctx.db.cashMovement.bankRef.filter(r)].find((x) => x.direction === 'in')).find(Boolean);
   const loanRef = m.refs.find((r) => r.startsWith('LN-'));
-  const memoType = m.memo.split(' | ')[0];
-  if (memoType === 'BANK FEE') {
+  if (m.category === 'fee') {
     if (!isBooked(ctx, m.bankRef)) queueJournal(ctx, `JE-R-${m.bankRef}`, m.valueOn, m.bankRef, 'Bank fees', [dr(GL.BANK_FEES, m.amountCents), cr(cash, m.amountCents)]);
   } else if (loanRef) {
     if (!isBooked(ctx, m.bankRef)) queueJournal(ctx, `JE-R-${m.bankRef}`, m.valueOn, m.bankRef, `Loan disbursed ${loanRef}`, [dr(GL.LOANS, m.amountCents), cr(cash, m.amountCents)]);
@@ -299,3 +314,17 @@ export const placeHold = spacetimedb.reducer(
   },
 );
 
+interface Hints {
+  periods: string[];
+  products: string[];
+}
+
+function readHints(m: Movement): Hints | undefined {
+  if (!m.hintsJson) return undefined;
+  try {
+    const h = JSON.parse(m.hintsJson) as Partial<Hints>;
+    return { periods: h.periods ?? [], products: h.products ?? [] };
+  } catch {
+    return undefined;
+  }
+}

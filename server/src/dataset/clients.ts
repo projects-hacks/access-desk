@@ -7,7 +7,7 @@ import type { Affiliate, Client } from './types';
  * Every `jan` behavior below is a deliberate part of the demo story; see
  * scenario.ts for the expected outcome of each planted case.
  */
-export const CLIENTS: Client[] = [
+const RAW: (Omit<Client, 'bank'> & { bank?: Client['bank'] })[] = [
   // ── Chronic late payers (restricted or on prepay) ─────────────────────────
   {
     id: 'ORG-90802', name: 'Vantage Loop', legalName: 'Vantage Loop Inc', segment: 'Fintech', tier: 5,
@@ -100,7 +100,7 @@ export const CLIENTS: Client[] = [
     id: 'ORG-90391', name: 'Granite Bay Holdings', legalName: 'Granite Bay Holdings Inc', segment: 'Corporate treasury', tier: 3,
     products: ['CUSTODY', 'API'], termsDays: 25, relationshipManager: 'Priya Nair',
     monthly: { CUSTODY: 32400, API: 25600 }, janOverride: { CUSTODY: 32400, API: 25600 },
-    jan: { kind: 'short_paid', shortCents: 2500, valueDate: '2026-03-03' }, city: 'San Diego', state: 'CA',
+    jan: { kind: 'duplicate_wire', daysFromDue: -7, duplicateAfterDays: 1 }, city: 'San Diego', state: 'CA',
   },
   {
     id: 'ORG-90287', name: 'Tidewater Asset Mgmt', legalName: 'Tidewater Asset Management LLC', segment: 'Hedge fund', tier: 2,
@@ -190,8 +190,9 @@ export const CLIENTS: Client[] = [
   {
     id: 'ORG-90431', name: 'Ostrava Digital Assets', legalName: 'Ostrava Digital Assets LP', segment: 'Hedge fund', tier: 3,
     products: ['CUSTODY', 'TRADING'], termsDays: 15, relationshipManager: 'Jonah Feld',
-    monthly: { CUSTODY: 9100, TRADING: 31000 }, jan: { kind: 'duplicate_wire', daysFromDue: 3, duplicateAfterDays: 1 },
-    city: 'Miami', state: 'FL',
+    monthly: { CUSTODY: 9100, TRADING: 31000 }, janOverride: { CUSTODY: 9100, TRADING: 31420 },
+    jan: { kind: 'short_paid', shortCents: 2500, valueDate: '2026-03-03' },
+    city: 'Miami', state: 'FL', bank: { name: 'CESKA SPORITELNA AS', id: 'GIBACZPX', country: 'CZ' },
   },
   {
     id: 'ORG-90251', name: 'Cinder Peak Partners', legalName: 'Cinder Peak Partners LP', segment: 'Hedge fund', tier: 2,
@@ -201,8 +202,20 @@ export const CLIENTS: Client[] = [
   },
 ];
 
+/** US banks (public routing numbers) assigned to domestic clients. */
+const US_BANKS: Client['bank'][] = [
+  { name: 'JPMORGAN CHASE BANK NA', id: '021000021', country: 'US' },
+  { name: 'BANK OF AMERICA NA', id: '026009593', country: 'US' },
+  { name: 'CITIBANK NA', id: '021000089', country: 'US' },
+  { name: 'WELLS FARGO BANK NA', id: '121000248', country: 'US' },
+  { name: 'THE BANK OF NEW YORK MELLON', id: '021000018', country: 'US' },
+];
+
+export const CLIENTS: Client[] = RAW.map((c, i) => ({ ...c, bank: c.bank ?? US_BANKS[i % US_BANKS.length]! }));
+
 /** Entities that pay on a client's behalf. Mapped to the parent in the CRM, never in the bank. */
 export const AFFILIATES: Affiliate[] = [
-  { key: 'zephyr', legalName: 'Zephyr Capital Mgmt LP', parentId: 'ORG-90412', relation: 'General partner' },
-  { key: 'basalt-feeder', legalName: 'Basalt GM Feeder Ltd', parentId: 'ORG-90244', relation: 'Feeder fund' },
+  { key: 'zephyr', legalName: 'Zephyr Capital Mgmt LP', parentId: 'ORG-90412', relation: 'General partner', bank: { name: 'CITIBANK NA', id: '021000089', country: 'US' } },
+  // Offshore feeder: international wire, charges OUR, so it arrives in full.
+  { key: 'basalt-feeder', legalName: 'Basalt GM Feeder Ltd', parentId: 'ORG-90244', relation: 'Feeder fund', bank: { name: 'BUTTERFIELD BANK (CAYMAN) LTD', id: 'BNTBKYKY', country: 'KY' } },
 ];

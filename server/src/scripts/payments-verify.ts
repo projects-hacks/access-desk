@@ -37,13 +37,14 @@ console.log(`Payment checking on ${simDate}\n`);
 console.log('Overnight payments, applied automatically:');
 const meridian = invoices('ORG-90142', '2026-01');
 check(allPaid(meridian), 'Meridian: January invoices paid', statuses(meridian));
-const granite = invoices('ORG-90391', '2026-01');
-check(allPaid(granite), 'Granite Bay: both invoices paid despite $25 short', statuses(granite));
-const graniteApps = [...db.paymentApplication.iter()].filter((a) => granite.some((i) => i.id === a.invoiceId) && !a.reversed);
-const writeOffs = graniteApps.filter((a) => a.method === 'write_off');
-check(writeOffs.length === 1 && writeOffs[0]!.amountCents === 2500n && writeOffs[0]!.policyRef === 'pol-002'
-  && graniteApps.filter((a) => a.method === 'short_fee').reduce((s, a) => s + a.amountCents, 0n) === 5_797_500n,
-  'Granite Bay: $57,975.00 cash applied, exactly $25.00 written off under pol-002');
+const ostrava = invoices('ORG-90431', '2026-01');
+check(allPaid(ostrava), 'Ostrava: international wire arrived $25 short, both invoices paid', statuses(ostrava));
+const ostravaApps = [...db.paymentApplication.iter()].filter((a) => ostrava.some((i) => i.id === a.invoiceId) && !a.reversed);
+const writeOffs = ostravaApps.filter((a) => a.method === 'write_off');
+check(writeOffs.length === 1 && writeOffs[0]!.amountCents === 2500n && writeOffs[0]!.policyRef === 'pol-002',
+  'Ostrava: exactly $25.00 written off under pol-002');
+const shortItem = items('ORG-90431', 'PAYMENT_MATCH')[0];
+check(!!shortItem?.reasoning.includes('intermediary bank deducted $25.00'), 'Ostrava: the write-off is explained from the wire\'s own charges field', shortItem?.reasoning);
 const fieldstone = invoices('ORG-90229').filter((i) => i.period !== '2026-02');
 check(allPaid(fieldstone) && fieldstone.length === 6, 'Fieldstone: lump sum paid all 6 Dec + Jan invoices', statuses(fieldstone));
 check(invoices('ORG-90229', '2026-02').every((i) => i.status === 'open'), 'Fieldstone: February left open');
@@ -53,7 +54,7 @@ check(allPaid(invoices('ORG-90244', '2026-01')) && basaltItem?.policyRef === 'po
 check(allPaid(invoices('ORG-90176', '2026-01')) && credits('ORG-90176', 'overpayment') === 100_000n, 'Northfold: paid, $1,000.00 held as credit');
 check(allPaid(invoices('ORG-90251', '2026-01')) && invoices('ORG-90251', '2026-02').every((i) => i.status === 'open'),
   "Cinder Peak: wrong references → January paid, February open");
-check(allPaid(invoices('ORG-90612', '2026-01')), 'Saltmarsh: Feb 19 wire found and applied');
+check(allPaid(invoices('ORG-90612', '2026-01')), 'Saltmarsh: Feb 19 wire described in words, found and applied');
 check(allPaid(invoices('ORG-90164', '2026-01')) && cash(`TX-${ds.onchain.find((p) => p.clientId === 'ORG-90164')!.txHash.slice(2, 10)}`)?.matchStatus === 'matched',
   'Silverline: USDC matched by wallet');
 
@@ -61,11 +62,12 @@ console.log('\nTraps:');
 const wren = invoices('ORG-90744', '2026-01')[0];
 check(wren?.status === 'partially_paid' && wren.amountCents - wren.paidCents === 645_000n, 'Wrenfield: half paid, $6,450.00 still due', `${wren?.status} ${wren?.paidCents}`);
 const quillon = invoices('ORG-90689', '2026-01')[0];
-check(quillon?.status === 'open' && quillon.paidCents === 0n, 'Quillon: bounced ACH reversed, invoice reopened', `${quillon?.status} ${quillon?.paidCents}`);
+check(quillon?.status === 'open' && quillon.paidCents === 0n, 'Quillon: ACH auto-debit returned R01, invoice reopened', `${quillon?.status} ${quillon?.paidCents}`);
 check(items('ORG-90689', 'PAYMENT_REVERSAL').length === 1, 'Quillon: reversal recorded as a work item');
-const dup = cash(ref('duplicate-wire') === 'WI-5404' ? 'WI-5407' : ref('duplicate-wire'));
-check(allPaid(invoices('ORG-90431', '2026-01')) && items('ORG-90431', 'REFUND').length === 1, 'Ostrava: second wire flagged, refund proposed to controller');
-check(dup?.matchStatus === 'exception' && credits('ORG-90431', 'unapplied_cash') === 4_052_000n, 'Ostrava: duplicate held as unapplied cash');
+const dupRefs = ds.movements.filter((m) => m.caseId === 'duplicate-wire').map((m) => m.id).sort();
+const dup = cash(dupRefs[1]!);
+check(allPaid(invoices('ORG-90391', '2026-01')) && items('ORG-90391', 'REFUND').length === 1, 'Granite Bay: second wire flagged, refund proposed to controller');
+check(dup?.matchStatus === 'exception' && credits('ORG-90391', 'unapplied_cash') === 5_800_000n, 'Granite Bay: duplicate held as unapplied cash');
 check(cash(ref('in-transit'))?.matchStatus === 'in_transit' && invoices('ORG-90463', '2026-01').every((i) => i.status === 'open'),
   'Ivory Lane: wire in transit, invoices untouched');
 const harbor = items('ORG-90378', 'PAYMENT_MATCH')[0];
@@ -80,6 +82,8 @@ console.log('\nIntegrity:');
 const bad = [...db.invoice.iter()].filter((i) => i.paidCents < 0n || i.paidCents > i.amountCents);
 check(bad.length === 0, 'No invoice paid below zero or above its amount', bad.map((i) => i.id).join(' '));
 const history = ['ORG-90101', 'ORG-90107', 'ORG-90118', 'ORG-90302'];
+const meridianCash = [...db.cashMovement.iter()].find((m) => !m.isHistory && m.origName.startsWith('MERIDIAN'));
+check(!!meridianCash && meridianCash.parseConfidence < 1 && meridianCash.parseNotes.includes('typo'), 'Meridian: typo in invoice number (letter O) repaired and flagged', meridianCash?.remittance);
 check(history.every((c) => allPaid(invoices(c, '2026-01')) && items(c).length === 0),
   'Cash billing had already applied reconciles quietly (no duplicate work)');
 const historyCash = [...db.cashMovement.iter()].filter((m) => m.isHistory);

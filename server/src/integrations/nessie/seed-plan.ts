@@ -1,6 +1,6 @@
 import type { Address } from './client';
-import { formatMemo } from './memo';
-import type { BankMovement, Dataset, Party } from '../../dataset';
+import { achCollection, achReturn, analysisFee, invoiceRemittance, wireIn, wireOut, type RemittanceStyle } from '../bank-text/format';
+import type { BankMovement, Client, Dataset, Party } from '../../dataset';
 
 /**
  * Turns the dataset into the exact Nessie records to create. Account numbers
@@ -118,6 +118,46 @@ function partyName(ds: Dataset, party: Party): string {
   return ds.clients.find((c) => c.id === party.id)?.legalName ?? party.id;
 }
 
+function partyBank(ds: Dataset, party: Party): Client['bank'] {
+  const bank = party.type === 'affiliate'
+    ? ds.affiliates.find((a) => a.key === party.key)?.bank
+    : ds.clients.find((c) => c.id === party.id)?.bank;
+  if (!bank) throw new Error(`no bank for ${JSON.stringify(party)}`);
+  return bank;
+}
+
+/** The platform's own bank (receiving bank on incoming wires). */
+export const PLATFORM_BANK = { name: 'JPMORGAN CHASE BANK NA', id: '021000021' };
+
+const STYLES: RemittanceStyle[] = ['spaced', 'slashed', 'words', 'range'];
+function styleFor(clientId: string): RemittanceStyle {
+  let h = 0;
+  for (const ch of clientId) h = (h * 31 + ch.charCodeAt(0)) % 9973;
+  return STYLES[h % STYLES.length]!;
+}
+
+/** Payers that habitually mistype digits (letters for digits). */
+const TYPO_CLIENTS = new Set(['ORG-90142']);
+
+/** What the payer wrote in the remittance field. */
+function remittanceFor(ds: Dataset, m: BankMovement): string {
+  if (m.remittanceText) return m.remittanceText;
+  const party = m.party;
+  const clientId = party?.type === 'client' ? party.id : party ? ds.affiliates.find((a) => a.key === party.key)?.parentId : undefined;
+  const invoices = m.refs.filter((r) => r.startsWith('INV-'));
+  const loan = m.refs.find((r) => r.startsWith('LN-'));
+  const org = m.refs.find((r) => r.startsWith('ORG-'));
+  if (loan) return `${loan} ${m.direction === 'out' ? 'DRAWDOWN' : 'PRINCIPAL REPAYMENT'}`;
+  if (org && m.caseId === 'lump-sum') return `${org.replace('-', '')} CATCH UP DEC JAN`;
+  if (org) return `REF ${org} PER WIRE INSTRUCTIONS`;
+  if (!invoices.length) return '';
+  const international = party && partyBank(ds, party).country !== 'US';
+  let text = invoiceRemittance(invoices, international ? 'swift' : styleFor(clientId ?? ''), international ? '/RFB/JAN26' : '');
+  // A keying slip in the first invoice number: letter I for 1 (or O for 0).
+  if (clientId && TYPO_CLIENTS.has(clientId)) text = /\d*1\d*/.test(text) ? text.replace(/(\d*?)1/, '$1I') : text.replace(/(\d)0/, '$1O');
+  return text;
+}
+
 function movementTransactions(ds: Dataset, m: BankMovement): TransactionPlan[] {
   const platformAccount = m.platformAccount;
   const legal = ds.platform.legalName;
@@ -126,38 +166,73 @@ function movementTransactions(ds: Dataset, m: BankMovement): TransactionPlan[] {
   if (m.kind === 'bank_fee' || !m.party) {
     return [{
       ...base, key: `${m.id}:platform`, side: 'platform', accountKey: platformAccount, type: 'withdrawal', status: m.status,
-      describe: () => formatMemo('BANK FEE', { DESC: 'INCOMING WIRE FEES', PERIOD: m.refs[0], ID: m.id }),
+      describe: () => analysisFee({ trn: m.id, period: m.refs[0] ?? '', wires: Math.round(m.amountCents / 1500), perWireCents: 1500 }),
     }];
   }
 
   const party = m.party;
   const counterKey = partyAccountKey(party);
-  const name = partyName(ds, party);
+  const name = m.memoName ?? partyName(ds, party);
+  const bank = partyBank(ds, party);
   const counterStatus = m.counterpartyStatus ?? m.status;
+  const remittance = remittanceFor(ds, m);
+  const clientId = party.type === 'client' ? party.id : ds.affiliates.find((a) => a.key === party.key)?.parentId ?? '';
 
   if (m.kind === 'ach_return') {
-    const fields = (acct: (k: AccountKey) => string) => ({ ORIG: name, ORIG_ACCT: acct(counterKey), REF: m.refs, ID: m.id, ORIG_ID: m.reverses });
+    const returned = (acct: (k: AccountKey) => string) =>
+      achReturn({ trace: m.id, originalTrace: m.reverses ?? '', code: 'R01', reason: 'Insufficient funds', company: name, account: acct(counterKey) });
     return [
-      { ...base, key: `${m.id}:platform`, side: 'platform', accountKey: platformAccount, type: 'withdrawal', status: m.status,
-        describe: (acct) => formatMemo('ACH RETURN R01 NSF', fields(acct)) },
+      { ...base, key: `${m.id}:platform`, side: 'platform', accountKey: platformAccount, type: 'withdrawal', status: m.status, describe: returned },
       { ...base, key: `${m.id}:counterparty`, side: 'counterparty', accountKey: counterKey, type: 'deposit', status: counterStatus,
-        describe: (acct) => formatMemo('ACH RETURN R01 NSF', { BENE: legal, BENE_ACCT: acct(platformAccount), REF: m.refs, ID: m.id, ORIG_ID: m.reverses }) },
+        describe: () => `ACH RETURN R01 CREDIT ${legal.toUpperCase()} TRACE:${m.id} ORIG TRACE:${m.reverses ?? ''}` },
+    ];
+  }
+
+  if (m.direction === 'in' && m.rail === 'ACH') {
+    // We pulled this payment from the client's account (auto-debit).
+    return [
+      { ...base, key: `${m.id}:platform`, side: 'platform', accountKey: platformAccount, type: 'deposit', status: m.status,
+        describe: (acct) => achCollection({ trace: m.id, company: name, account: acct(counterKey), individualId: clientId.replace('-', ''), addenda: `${remittance} JAN API USAGE` }) },
+      { ...base, key: `${m.id}:counterparty`, side: 'counterparty', accountKey: counterKey, type: 'withdrawal', status: counterStatus,
+        describe: () => `ACH DEBIT ${legal.toUpperCase()} CCD TRACE:${m.id} ADDENDA:${remittance}` },
     ];
   }
 
   if (m.direction === 'in') {
+    const international = bank.country !== 'US';
+    const affiliateFeeder = party.type === 'affiliate' && international;
     return [
       { ...base, key: `${m.id}:platform`, side: 'platform', accountKey: platformAccount, type: 'deposit', status: m.status,
-        describe: (acct) => formatMemo(`${m.rail} IN`, { ORIG: m.memoName ?? name, ORIG_ACCT: acct(counterKey), REF: m.refs, ID: m.id }) },
+        describe: (acct) => wireIn({
+          trn: m.id, date: m.valueDate, orig: name, origAccount: acct(counterKey), bank, remittance,
+          international: international ? {
+            uetr: uetrFor(m.id),
+            instructedCents: m.instructedCents ?? m.amountCents,
+            chargeBearer: m.chargeBearer ?? (affiliateFeeder ? 'OUR' : 'SHA'),
+            chargesCents: m.chargesCents ?? 0,
+          } : undefined,
+        }) },
       { ...base, key: `${m.id}:counterparty`, side: 'counterparty', accountKey: counterKey, type: 'withdrawal', status: counterStatus,
-        describe: (acct) => formatMemo(`${m.rail} OUT`, { BENE: legal, BENE_ACCT: acct(platformAccount), REF: m.refs, ID: m.id }) },
+        describe: (acct) => wireOut({ trn: m.id, date: m.valueDate, beneficiary: legal, account: acct(platformAccount), bank: PLATFORM_BANK, remittance }) },
     ];
   }
 
   return [
     { ...base, key: `${m.id}:platform`, side: 'platform', accountKey: platformAccount, type: 'withdrawal', status: m.status,
-      describe: (acct) => formatMemo(`${m.rail} OUT`, { BENE: name, BENE_ACCT: acct(counterKey), REF: m.refs, ID: m.id }) },
+      describe: (acct) => wireOut({ trn: m.id, date: m.valueDate, beneficiary: name, account: acct(counterKey), bank, remittance }) },
     { ...base, key: `${m.id}:counterparty`, side: 'counterparty', accountKey: counterKey, type: 'deposit', status: counterStatus,
-      describe: (acct) => formatMemo(`${m.rail} IN`, { ORIG: legal, ORIG_ACCT: acct(platformAccount), REF: m.refs, ID: m.id }) },
+      describe: (acct) => wireIn({ trn: m.id, date: m.valueDate, orig: legal, origAccount: acct(platformAccount), bank: PLATFORM_BANK, remittance }) },
   ];
+}
+
+/** Stable UETR (SWIFT's end-to-end id) per movement. */
+function uetrFor(id: string): string {
+  let h = 2166136261;
+  const hex: string[] = [];
+  for (let i = 0; i < 32; i++) {
+    h = Math.imul(h ^ (id.charCodeAt(i % id.length) + i), 16777619);
+    hex.push(((h >>> 0) % 16).toString(16));
+  }
+  const s = hex.join('');
+  return `${s.slice(0, 8)}-${s.slice(8, 12)}-4${s.slice(13, 16)}-8${s.slice(17, 20)}-${s.slice(20, 32)}`;
 }

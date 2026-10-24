@@ -11,6 +11,7 @@ export function chainRecords(conn: DbConnection, ds: Dataset, simDate: string): 
   return ds.onchain
     .filter((p) => p.valueDate <= simDate)
     .map((p) => {
+      const origName = p.clientId ? ds.clients.find((c) => c.id === p.clientId)?.legalName.toUpperCase() : undefined;
       const row: CashMovement = {
         id: `chain:${p.txHash}`,
         source: 'chain',
@@ -20,12 +21,24 @@ export function chainRecords(conn: DbConnection, ds: Dataset, simDate: string): 
         amountCents: BigInt(p.amountCents),
         valueOn: p.valueDate,
         status: 'posted',
-        memo: `USDC IN | FROM: ${p.wallet} | TX: ${p.txHash}`,
+        // On-chain transfers carry no memo. Travel Rule data names the originator only for known counterparties.
+        memo: `USDC TRANSFER IN NETWORK:BASE TX:${p.txHash} FROM:${p.wallet} TRAVEL RULE ORIG:${origName ?? 'NONE (UNHOSTED WALLET)'}`,
+        category: 'usdc_in',
+        network: 'USDC',
         origName: '',
         origAccount: p.wallet,
+        remittance: '',
         refs: [],
         bankRef: `TX-${p.txHash.slice(2, 10)}`,
         reverses: undefined,
+        instructedCents: undefined,
+        chargesCents: undefined,
+        chargeBearer: undefined,
+        returnCode: undefined,
+        parsedBy: 'rules',
+        parseConfidence: 1,
+        parseNotes: origName ? '' : 'No Travel Rule originator: unhosted wallet',
+        hintsJson: '',
         rawId: `chain:${p.txHash}`,
         matchStatus: 'unmatched',
         isHistory: false,

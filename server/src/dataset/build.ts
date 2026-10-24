@@ -168,6 +168,7 @@ export function buildDataset(platform: Dataset['platform']): Dataset {
         drafts.push({
           kind: 'client_payment', rail: 'WIRE', direction: 'in', platformAccount: 'collections', party: client(c.id),
           amountCents: sum(jan) - b.shortCents, valueDate: b.valueDate, status: 'completed', refs, caseId: 'short-wire',
+          instructedCents: sum(jan), chargesCents: b.shortCents, chargeBearer: 'SHA',
         });
         break;
       case 'lump_sum_no_invoice_refs': {
@@ -186,9 +187,11 @@ export function buildDataset(platform: Dataset['platform']): Dataset {
         });
         break;
       case 'paid_not_applied':
+        // The payer described the payment in words instead of quoting invoice numbers.
         drafts.push({
           kind: 'client_payment', rail: 'WIRE', direction: 'in', platformAccount: 'collections', party: client(c.id),
-          amountCents: sum(jan), valueDate: b.valueDate, status: 'completed', refs, caseId: 'paid-not-applied',
+          amountCents: sum(jan), valueDate: b.valueDate, status: 'completed', refs: [], caseId: 'paid-not-applied',
+          remittanceText: 'JAN 2026 CUSTODY AND TRADING FEES - THANK YOU',
         });
         break;
       case 'partial': {

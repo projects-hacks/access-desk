@@ -11,6 +11,8 @@ const EnvSchema = z.object({
   /** Where the gateway reaches the platform's write APIs. Defaults to this server. */
   PLATFORM_API_URL: z.string().optional(),
   NESSIE_API_KEY: z.string().optional(),
+  /** Enables Claude for free-text remittance; without it, rules only. */
+  ANTHROPIC_API_KEY: z.string().optional(),
   NESSIE_BASE_URL: z.string().default('https://prod-api.nessieisreal.com'),
   /** Which seeded run sync reads (.data/nessie-<run>.json). */
   NESSIE_RUN: z.string().default('dev'),

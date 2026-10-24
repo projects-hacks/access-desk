@@ -54,7 +54,7 @@ const writeOffLines = byJournal('JE-AP-').flatMap((j) => journals.get(j)!).filte
 check(writeOffLines.length === 1 && writeOffLines[0]!.debitCents === 2500n, 'Granite Bay: exactly $25.00 written off to 6850 Bank fees',
   writeOffLines.map((l) => `${l.journalId} ${l.debitCents}`).join(' '));
 const fees = tb.get('6850') ?? 0n;
-const bankFees = [...db.cashMovement.iter()].filter((m) => m.memo.startsWith('BANK FEE')).reduce((s, m) => s + m.amountCents, 0n);
+const bankFees = [...db.cashMovement.iter()].filter((m) => m.category === 'fee').reduce((s, m) => s + m.amountCents, 0n);
 check(fees === bankFees + 2500n, `6850 Bank fees = bank's fee debits + the $25.00 write-off (${usd(fees)})`);
 const ret = [...db.cashMovement.iter()].find((m) => m.reverses);
 const retLines = ret ? lines.filter((l) => l.ref === ret.bankRef) : [];

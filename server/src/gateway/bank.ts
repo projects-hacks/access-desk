@@ -1,6 +1,7 @@
 import type { Dataset } from '../dataset';
 import type { Bank } from '../integrations/nessie/bank';
-import { formatMemo } from '../integrations/nessie/memo';
+import { wireIn, wireOut } from '../integrations/bank-text/format';
+import { PLATFORM_BANK } from '../integrations/nessie/seed-plan';
 
 /**
  * Refunds are real money movements at the bank: a wire out of the platform's
@@ -19,11 +20,11 @@ export async function sendRefund(
   const id = `RF-${commandId}`;
   const out = await bank.api.createWithdrawal(from.id, {
     medium: 'balance', transaction_date: r.on, status: 'completed', amount: r.amountCents,
-    description: formatMemo('WIRE OUT', { BENE: client.legalName, BENE_ACCT: to.number, REF: [r.bankRef], ID: id }),
+    description: wireOut({ trn: id, date: r.on, beneficiary: client.legalName, account: to.number, bank: client.bank, remittance: `REFUND DUPLICATE PMT ${r.bankRef}` }),
   });
   const into = await bank.api.createDeposit(to.id, {
     medium: 'balance', transaction_date: r.on, status: 'completed', amount: r.amountCents,
-    description: formatMemo('WIRE IN', { ORIG: ds.platform.legalName, ORIG_ACCT: from.number, REF: [r.bankRef], ID: id }),
+    description: wireIn({ trn: id, date: r.on, orig: ds.platform.legalName, origAccount: from.number, bank: PLATFORM_BANK, remittance: `REFUND DUPLICATE PMT ${r.bankRef}` }),
   });
   return { platform: out._id, counterparty: into._id };
 }

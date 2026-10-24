@@ -8,6 +8,7 @@ import { chainRecords } from './sources/chain';
 import { glRows } from './sources/gl';
 import { historyRecords } from './sources/history';
 import type { PlatformSimulator } from '../platform/simulator';
+import { RemittanceInterpreter } from '../integrations/bank-text/interpret';
 import { platformRecords } from './sources/platform';
 import { SyncWriter, type SyncRecord } from './writer';
 
@@ -34,6 +35,7 @@ export interface PassResult {
 export class Sync {
   private writer: SyncWriter;
   private ledgerHashes = new Map<string, string>();
+  private interpreter = RemittanceInterpreter.fromEnv(env.ANTHROPIC_API_KEY);
   private running = Promise.resolve();
 
   constructor(
@@ -109,7 +111,7 @@ export class Sync {
     const simDate = this.simDate();
     const results: PassResult[] = [];
     for (const [source, records] of [
-      ['bank', await bankRecords(this.conn, this.bank, simDate)],
+      ['bank', await bankRecords(this.conn, this.bank, simDate, this.interpreter)],
       ['chain', chainRecords(this.conn, this.ds, simDate)],
     ] as const) {
       // Live cash goes in date order, one at a time: which of two identical wires is the duplicate must not depend on timing.
