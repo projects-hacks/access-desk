@@ -3,7 +3,7 @@ import re
 from typing import Literal
 
 import anthropic
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from .config import settings
 
@@ -44,7 +44,7 @@ class Reader:
         if self._client:
             try:
                 return self._ask_claude(note, client_name, today)
-            except anthropic.APIError as e:
+            except (anthropic.APIError, ValidationError) as e:
                 log.warning("Claude could not read the RM note, using keywords: %s", e)
         return by_keywords(note)
 
@@ -76,7 +76,7 @@ EXCEPTION = re.compile(r"\b(don'?t|do not|hold off|grace|extension|exception|pau
 AMOUNT = re.compile(r"\$\s?([\d,]+(?:\.\d{2})?)")
 DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 COUNTERPARTY = re.compile(r"\b(?:acquired by|bought by|merging with|merger with|sold to)\s+([A-Z][\w&.'-]*(?:\s+[A-Z][\w&.'-]*)*)")
-REFERENCE = re.compile(r"\b(?:IMAD|TRN|ref(?:erence)?)\b[:#\s]*([A-Z0-9-]{6,})", re.IGNORECASE)
+REFERENCE = re.compile(r"\b(?:IMAD|TRN|ref(?:erence)?)\b[:#\s]*((?=[A-Z0-9-]*\d)[A-Z0-9-]{6,})", re.IGNORECASE)
 
 
 def by_keywords(note: str) -> RmReading:

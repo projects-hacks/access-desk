@@ -92,7 +92,7 @@ class SpacetimeClient:
 
     def set_deadline(self, client_id: str, kind: str, due_on: str, note: str, work_item_id: int | None = None) -> None:
         """kind: promise_to_pay | follow_up. Resolved automatically when the sim date reaches due_on."""
-        self.call("set_deadline", client_id, kind, due_on, note, work_item_id)
+        self.call("set_deadline", client_id, kind, due_on, note, {"some": work_item_id} if work_item_id is not None else {"none": []})
 
     def record_agent_run(
         self, agent: str, trigger: str, proposed: int, status: str, error: str | None, duration_ms: int,

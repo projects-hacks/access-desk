@@ -47,7 +47,7 @@ async def run_once(agent: Agent, db: SpacetimeClient, trigger: str, log_runs: bo
     except Exception as e:
         status, error = "error", f"{type(e).__name__}: {e}"[:500]
         log.exception("[%s] run failed", agent.name)
-    if not log_runs or (trigger == "interval" and not acted and status == "ok"):
+    if not log_runs or (trigger != "startup" and not acted and status == "ok"):
         return log_runs
     try:
         db.record_agent_run(agent.name, trigger, acted, status, error, int((time.monotonic() - started) * 1000))

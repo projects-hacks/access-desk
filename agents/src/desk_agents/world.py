@@ -51,6 +51,7 @@ class World:
     policies: list[Row] = field(default_factory=list)
     investigated: set[int] = field(default_factory=set)
     last_waits: dict[str, str] = field(default_factory=dict)
+    failed_commands: dict[int, str] = field(default_factory=dict)
 
 
 def load_world(db: SpacetimeClient) -> World:
@@ -90,6 +91,10 @@ def load_world(db: SpacetimeClient) -> World:
         work_items=work_items,
         policies=db.sql("SELECT * FROM policy WHERE status = 'active'"),
         investigated={s["work_item_id"] for s in db.sql("SELECT * FROM investigation_step")},
+        failed_commands={
+            c["work_item_id"]: c["error"] or ""
+            for c in db.sql("SELECT * FROM gateway_command WHERE status = 'failed'") if c["work_item_id"] is not None
+        },
         last_waits={
             e["client_id"]: e["detail"]
             for e in sorted(db.sql("SELECT * FROM audit_event WHERE action = 'AGENT_WAITED'"), key=lambda e: e["id"])

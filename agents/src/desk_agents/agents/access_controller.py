@@ -22,6 +22,9 @@ EXECUTED_KINDS = {"RESTRICTION", "RESTORE", "CUSTODY_DEBIT", "REMINDER"}
 OUR_KINDS = EXECUTED_KINDS | {"NOVEL_CASE"}
 LEARN_FROM = {"RESTRICTION", "CUSTODY_DEBIT", "NOVEL_CASE"}
 NEVER_PROPOSED = {"FEE_DEBIT", "FULL_FREEZE"}
+UNAPPLIED = {"unmatched", "proposed", "exception"}
+BOOKKEEPING = {"record_wait", "upsert_precedent", "record_investigation"}
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DETAIL_STEP = {
     "Prepay required": "REQUIRE_PREPAY",
     "Read-only": "READ_ONLY",
@@ -76,7 +79,8 @@ class AccessController(Agent):
 
     async def run(self) -> list[Proposal]:
         world = self.observe()
-        self.acted = sum(self.execute(move) for move in plan(world))
+        results = [(move, self.execute(move)) for move in plan(world)]
+        self.acted = sum(ok for move, ok in results if move.action not in BOOKKEEPING)
         return []
 
     def observe(self) -> World:
@@ -114,8 +118,12 @@ def plan(world: World, escalation_days: int | None = None) -> list[Move]:
     ladder = ladders(world.capability)
     moves = []
     for view in world.clients.values():
-        moves += precedents_due(view, world) + investigations_due(view, world)
-        decision = next_move(view, world, ladder, days)
+        try:
+            moves += precedents_due(view, world) + investigations_due(view, world)
+            decision = next_move(view, world, ladder, days)
+        except Exception:
+            log.exception("planning failed for %s; skipping it this pass", view.id)
+            continue
         if isinstance(decision, Move):
             moves.append(decision)
         elif isinstance(decision, Wait) and world.last_waits.get(view.id) != decision.reason:
@@ -130,13 +138,13 @@ def next_move(
 ) -> Move | Wait | None:
     today = world.today
     overdue = overdue_invoices(view, today)
-    pending = open_work(view)
-    if pending:
-        return Wait("pending_decision", pending) if overdue else None
-
     reply = rm_reply(view, world)
     if reply:
         return reply
+
+    pending = open_work(view, world)
+    if pending:
+        return pending if overdue else None
 
     notice = notice_owed(view, world)
     if notice:
@@ -156,7 +164,8 @@ def next_move(
             return restored
         grace = view.contract["grace_days"] if view.contract else 0
         return Wait("grace_period", f"{usd(owed(overdue))} overdue on {ids(overdue)} but inside the {grace}-day grace period "
-                                    f"(in default from {add_days(overdue[0]['due_on'], grace + 1)}). {no_debit(view, today)}")
+                                    f"(in default from {add_days(overdue[0]['due_on'], grace + 1)}). "
+                                    f"{no_debit(view, hold_off, debit_rejected)}")
     if hold_off:
         return hold_off
 
@@ -173,23 +182,24 @@ def next_move(
         note = f": \u201c{rejected['detail']}\u201d" if rejected.get("detail") else ""
         return Wait("controller_rejected", f"A controller rejected a restriction on {rejected['sim_date']}{note}. "
                                            "Not escalating again until the client cures.")
-    return restriction(view, today, ladder, escalation_days, only_levers=agreed_levers(view),
+    return restriction(view, today, ladder, escalation_days, only_levers=agreed_levers(view, episode),
                        capability=world.capability, policies=world.policies)
 
 
-def open_work(view: ClientView) -> str | None:
+def open_work(view: ClientView, world: World) -> Wait | None:
     for w in sorted(view.work_item, key=lambda w: w["id"]):
         if w["kind"] not in OUR_KINDS:
             continue
         if w["state"] in OPEN:
-            return f"{w['kind'].replace('_', ' ').lower()} WI-{w['id']} is waiting for a {w['required_role'].lower()}: {w['title']}."
+            return Wait("pending_decision", f"{w['kind'].replace('_', ' ').lower()} WI-{w['id']} is waiting for a "
+                                            f"{w['required_role'].lower()}: {w['title']}.")
         if w["state"] == "APPROVED" and w["kind"] in EXECUTED_KINDS:
-            return f"WI-{w['id']} ({w['title']}) is approved and executing through the gateway."
+            error = world.failed_commands.get(w["id"])
+            if error is not None:
+                return Wait("gateway_failed", f"WI-{w['id']} ({w['title']}) was approved but the gateway could not execute it"
+                                              f"{f': {error}' if error else ''}. A person needs to retry or cancel it.")
+            return Wait("pending_decision", f"WI-{w['id']} ({w['title']}) is approved and executing through the gateway.")
     return None
-
-
-def busy(view: ClientView) -> bool:
-    return open_work(view) is not None
 
 
 def waiting(view: ClientView, today: str, escalation_days: int) -> Wait | None:
@@ -197,6 +207,16 @@ def waiting(view: ClientView, today: str, escalation_days: int) -> Wait | None:
         m = view.in_transit[0]
         return Wait("payment_in_transit", f"{usd(m['amount_cents'])} {m['rail']} {m['bank_ref']} from {m['orig_name']} was sent "
                                           f"{m['value_on']} and has not posted; acting only on posted funds.")
+    unapplied = unapplied_cash(view)
+    if unapplied:
+        m = unapplied[0]
+        return Wait("payment_unapplied", f"{usd(m['amount_cents'])} {m['rail']} {m['bank_ref']} from {m['orig_name']} arrived "
+                                         f"{m['value_on']} and is not applied yet ({m['match_status']}); not collecting or "
+                                         "restricting until it is.")
+    match = next((w for w in view.work_item if w["kind"] == "PAYMENT_MATCH" and w["state"] in OPEN), None)
+    if match:
+        return Wait("payment_unapplied", f"Payment match WI-{match['id']} is waiting for a {match['required_role'].lower()}: "
+                                         f"{match['title']}.")
     promise = next((d for d in view.deadline if d["kind"] == "promise_to_pay" and d["status"] == "open"), None)
     if promise:
         note = f" ({promise['note']})" if promise.get("note") else ""
@@ -207,7 +227,19 @@ def waiting(view: ClientView, today: str, escalation_days: int) -> Wait | None:
     return None
 
 
-def no_debit(view: ClientView, today: str) -> str:
+def unapplied_cash(view: ClientView) -> list[Row]:
+    open_invoices = [i for i in view.invoice if i["paid_cents"] < i["amount_cents"]]
+    since = min((i["issued_on"] for i in open_invoices), default=None)
+    if since is None:
+        return []
+    return [m for m in view.cash if m["status"] == "posted" and m["match_status"] in UNAPPLIED and m["value_on"] >= since]
+
+
+def no_debit(view: ClientView, hold_off: Wait | None = None, debit_rejected: Row | None = None) -> str:
+    if debit_rejected:
+        return f"A controller rejected collecting from custody on {debit_rejected['sim_date']}."
+    if hold_off:
+        return f"Not collecting from custody: {hold_off.reason}"
     if not allowed(view, "debit"):
         return f"Custody can't be debited without the client's consent{cite(view, 'debit')}."
     cash = next((h["value_cents"] for h in view.custody_holding if h["asset"] == "USD"), 0)
@@ -316,6 +348,8 @@ def hedged(view: ClientView) -> bool:
 
 def usable_steps(view: ClientView, lever: str, ladder: dict[str, list[str]]) -> list[str]:
     steps = [s for s in ladder.get(lever, []) if s not in NEVER_PROPOSED]
+    if not allowed(view, "prepay"):
+        steps = [s for s in steps if s != "REQUIRE_PREPAY"]
     if lever == "trading" and hedged(view):
         steps = [s for s in steps if s != "CLOSE_ONLY"]
     return steps
@@ -357,7 +391,9 @@ def restriction(
         candidates.append((group == 2, position, group, name, steps[position]))
 
     if not candidates:
-        if only_levers is not None:
+        if not ladder:
+            why = "the platform's capability table is empty, so no restriction step is known"
+        elif only_levers is not None:
             why = f"the controller-approved plan limits restrictions to {', '.join(sorted(only_levers))}, already in place"
         elif rungs_in_place:
             why = "every step the contract and policy allow is already in place"
@@ -365,14 +401,20 @@ def restriction(
             why = "the contract gives no lever for the unpaid products (no set-off right, no cross-default)"
         return Wait("no_further_step", f"{usd(owed(overdue))} still past due, but {why}; escalating needs a person.")
     defaulted = defaulted_invoices(view, today)
-    ready_on = escalation_clock(view, defaulted)
+    clock = escalation_clock(view, defaulted)
+    ready_on, basis = clock, None
     if rungs_in_place:
         episode = episode_start(view, defaulted)
         approved = [a["sim_date"] for a in view.approvals if a["work_item_kind"] == "RESTRICTION" and a["sim_date"] >= episode]
-        ready_on = add_days(max([ready_on, *approved]), escalation_days)
+        if approved and max(approved) >= clock:
+            basis = f"the last restriction was approved on {max(approved)}"
+        else:
+            basis = (f"the cure period ended on {clock}; the restrictions in place were set before this agent, "
+                     "so when they started is not recorded")
+        ready_on = add_days(max([clock, *approved]), escalation_days)
     if today < ready_on:
         return Wait("escalation_spacing", f"A restriction is in place; the next step waits until {ready_on} "
-                                          f"({escalation_days} days after the last one, giving the client time to pay).")
+                                          f"({escalation_days} days after {basis}), giving the client time to pay.")
 
     *_, lever, step = min(candidates)
     amount = owed(overdue)
@@ -382,7 +424,7 @@ def restriction(
     if cure and cure["status"] == "expired":
         why.append(f"Default notice of {cure['started_on']}; the cure period ended {cure['due_on']} unpaid{cite(view, 'cure')}.")
     if rungs_in_place:
-        why.append(f"The last restriction has been in place {escalation_days}+ days without payment.")
+        why.append(f"Still unpaid {escalation_days}+ days after {basis}.")
     if lever == "withdrawals":
         why.append("Hold only the undisputed amount owed under the set-off clause; the rest of custody stays withdrawable.")
         if flagged:
@@ -538,8 +580,6 @@ def custody_debit(view: ClientView, today: str, auto_limit: int) -> Move | None:
 def restore(view: ClientView) -> Move | None:
     for lever in view.access_lever:
         if lever["state"] in ("limited", "off"):
-            if lever["lever"] == "withdrawals" and any(h["status"] == "active" for h in view.hold):
-                continue
             return Move(
                 action="propose_restore",
                 client_id=view.id,
@@ -552,11 +592,16 @@ def restore(view: ClientView) -> Move | None:
 
 def notice_owed(view: ClientView, world: World) -> Move | None:
     sent = " ".join(w["proposal_json"] for w in view.work_item if w["kind"] == "REMINDER")
+    levers = {lv["lever"]: lv for lv in view.access_lever}
     for item in view.work_item:
         if item["kind"] not in ("RESTRICTION", "RESTORE") or item["state"] != "POSTED":
             continue
         ref = f"(ref WI-{item['id']})"
         if ref in sent:
+            continue
+        lever = levers.get(json.loads(item["proposal_json"]).get("lever", ""))
+        still_restricted = bool(lever and lever["state"] in ("limited", "off"))
+        if item["kind"] == "RESTRICTION" and (not still_restricted or not overdue_invoices(view, world.today)):
             continue
         return Move(
             action="propose_notice",
@@ -572,13 +617,17 @@ def notice_body(view: ClientView, item: Row, world: World, ref: str) -> str:
     p = json.loads(item["proposal_json"])
     lever = p.get("lever", "")
     if item["kind"] == "RESTORE":
-        return f"Payment received: your {lever} access is fully restored. Thank you. {ref}"
+        others = [LEVER_WORDS.get(lv["lever"], lv["lever"]) for lv in view.access_lever
+                  if lv["lever"] != lever and lv["state"] in ("limited", "off")]
+        rest = (f" {listed(others).capitalize()} {'remains' if len(others) == 1 else 'remain'} restricted until the rest "
+                "is paid." if others else " Your account is fully back to normal.")
+        return f"Payment received: your {LEVER_WORDS.get(lever, lever)} access is restored.{rest} Thank you. {ref}"
     overdue = overdue_invoices(view, world.today)
     action = STEP_WORDS.get(p.get("step", ""), f"restricted {lever}")
     return (
         f"We have {action} because {usd(owed(overdue))} is past due ({', '.join(i['id'] for i in overdue)}). "
         "Everything else on your account is unchanged. To restore access, pay the amount past due: "
-        f"{world.platform['wire_instructions']}. Access is restored automatically once payment posts. {ref}"
+        f"{world.platform['wire_instructions']}. We restore access once the payment posts. {ref}"
     )
 
 
@@ -626,7 +675,14 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
             f"We see {usd(m['amount_cents'])} {m['rail']} {m['bank_ref']} from {m['orig_name']} sent {m['value_on']}, "
             f"not yet posted. No further restriction while it is in transit; access is restored automatically when it posts."
         )
-    elif unmatched := [m for m in recent if m["status"] == "posted" and m["match_status"] not in ("matched", "in_transit")]:
+    elif returned := [m for m in recent if m["match_status"] == "reversed"]:
+        m = returned[0]
+        code = f" ({m['return_code']})" if m.get("return_code") else ""
+        finding = (
+            f"{usd(m['amount_cents'])} {m['bank_ref']} from {m['orig_name']} arrived {m['value_on']} but was returned by the "
+            f"bank{code}; {usd(owing)} is still past due. Please ask the client to resend."
+        )
+    elif unmatched := [m for m in recent if m["status"] == "posted" and m["match_status"] in UNAPPLIED]:
         m = unmatched[0]
         finding = (
             f"{usd(m['amount_cents'])} {m['bank_ref']} from {m['orig_name']} arrived {m['value_on']} but could not be matched "
@@ -699,7 +755,6 @@ def material_event_case(view: ClientView, note: Row, reading: RmReading, world: 
     custody = sum(h["value_cents"] for h in view.custody_holding)
     coc, set_off, debit = clause(view, "change_of_control"), clause(view, "set_off"), clause(view, "debit")
     cure = latest_deadline(view, "cure_period")
-    since = min((i["due_on"] for i in defaulted), default=today)
     withdrawn = sum(r["allowed_cents"] for r in view.access_request if r["action"] == "withdraw" and r["decision"] != "denied")
     flagged = [f for f in view.exploit_flag if f["status"] == "open"]
     covering = [p["policy_id"] for p in world.policies if re.search(r"change of control|acqui|merger|insolv", p["title"] + p["rule_json"], re.IGNORECASE)]
@@ -716,8 +771,9 @@ def material_event_case(view: ClientView, note: Row, reading: RmReading, world: 
         ])) + "."),
         ("exposure", (f"{usd(in_default)} in default, {usd(total_open)} open in total; custody holds {usd(usd_cash)} USD "
                      f"of {usd(custody)} overall.")),
-        ("custody_activity", (f"{usd(withdrawn)} withdrawn from custody" if withdrawn else "No withdrawals")
-         + f" since {since}" + (f"; open flags: {', '.join(f['pattern'] for f in flagged)}" if flagged else "") + "."),
+        ("custody_activity", (f"{usd(withdrawn)} withdrawn from custody through the platform" if withdrawn
+                              else "No withdrawals through the platform")
+         + (f"; open flags: {', '.join(f['pattern'] for f in flagged)}" if flagged else "") + "."),
     ]
     past = [p for p in view.precedent if p["decision"]]
     if past:
@@ -728,7 +784,7 @@ def material_event_case(view: ClientView, note: Row, reading: RmReading, world: 
         plan_steps.append(f"Invoke §{coc['clause']}: all {usd(total_open)} open becomes payable at closing"
                           f"{f' on {when}' if when else ''}; send the acquirer a payoff statement.")
     if cure and cure["status"] == "open":
-        plan_steps.append(f"No restriction before the cure period ends {cure['due_on']} (§{clause(view, 'cure')['clause']}).")
+        plan_steps.append(f"No restriction before the cure period ends {cure['due_on']}{cite(view, 'cure')}.")
     running = [{"api": "API access"}.get(lever["lever"], lever["lever"]) for lever in view.access_lever if lever["lever"] != "withdrawals" and lever["state"] != "not_used"]
     if set_off and set_off["allowed"] and in_default:
         plan_steps.append(f"If still unpaid then, hold {usd(in_default)} of withdrawals under §{set_off['clause']}; "
@@ -756,13 +812,17 @@ def material_event_case(view: ClientView, note: Row, reading: RmReading, world: 
     return Move(action="propose", client_id=view.id, args={"p": proposal}, summary=proposal.title)
 
 
-def agreed_levers(view: ClientView) -> set[str] | None:
-    approved = {a["work_item_id"] for a in view.approvals}
+def agreed_levers(view: ClientView, since: str) -> set[str] | None:
+    approved = {a["work_item_id"] for a in view.approvals if a["sim_date"] >= since}
+    in_use = {lv["lever"] for lv in view.access_lever if lv["state"] != "not_used"}
     for item in view.work_item:
         if item["kind"] == "NOVEL_CASE" and item["id"] in approved:
-            levers = json.loads(item["proposal_json"]).get("onlyLevers")
-            if levers is not None:
-                return set(levers)
+            levers = set(json.loads(item["proposal_json"]).get("onlyLevers") or [])
+            if "withdrawals" in levers and not allowed(view, "set_off"):
+                levers.discard("withdrawals")
+            levers &= in_use
+            if levers:
+                return levers
     return None
 
 
@@ -785,7 +845,11 @@ def grace_until(view: ClientView, today: str, escalation_days: int) -> str | Non
     for item in view.work_item:
         if item["kind"] != "NOVEL_CASE" or not item["subject_id"].startswith("rm_note:") or item["id"] not in approved_on:
             continue
-        until = json.loads(item["proposal_json"]).get("graceUntil") or add_days(approved_on[item["id"]], escalation_days)
+        proposal = json.loads(item["proposal_json"])
+        if proposal.get("event"):
+            continue
+        asked = proposal.get("graceUntil")
+        until = asked if isinstance(asked, str) and ISO_DATE.match(asked) else add_days(approved_on[item["id"]], escalation_days)
         if until >= today:
             return until
     return None
@@ -801,11 +865,11 @@ def precedents_due(view: ClientView, world: World) -> list[Move]:
             continue
         if item["kind"] != "NOVEL_CASE" and event["to_state"] == "APPROVED":
             continue
-        pid = f"PRC-L-{item['id']}"
+        pid = f"PRC-L{item['id']}"
         existing = known.get(pid)
-        if existing and (existing["outcome"] != "pending" or in_default):
+        if existing and (existing["outcome"] or in_default):
             continue
-        outcome = "pending" if in_default else f"Cured by {world.today}"
+        outcome = "" if in_default else f"Cured by {world.today}"
         decision = "Approved" if event["to_state"] == "APPROVED" else "Rejected"
         row = {
             "id": pid, "client_id": view.id, "work_item_id": {"some": item["id"]}, "decided_on": event["sim_date"],

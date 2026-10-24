@@ -55,10 +55,16 @@ def run_loop(db, agent, interval=1000.0):
 
 class Loop(unittest.TestCase):
     def test_runs_on_startup_and_on_each_change_only(self):
-        db, agent = FakeDb([(1, "d"), (1, "d"), (2, "d"), (2, "d"), (2, "e")]), FakeAgent()
+        db, agent = FakeDb([(1, "d"), (1, "d"), (2, "d"), (2, "d"), (2, "e")]), FakeAgent(acts=1)
         run_loop(db, agent)
         self.assertEqual(agent.calls, 3)
         self.assertEqual([r[1] for r in db.runs], ["startup", "change · audit #2 · d", "change · audit #2 · e"])
+
+    def test_runs_that_do_nothing_are_not_recorded(self):
+        db, agent = FakeDb([(1, "d"), (2, "d"), (3, "d")]), FakeAgent()
+        run_loop(db, agent)
+        self.assertEqual(agent.calls, 3)
+        self.assertEqual([r[1] for r in db.runs], ["startup"])
 
     def test_idle_runs_are_not_recorded_unless_they_act(self):
         db, agent = FakeDb([(1, "d"), (1, "d"), (1, "d")]), FakeAgent()

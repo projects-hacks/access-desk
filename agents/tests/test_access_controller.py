@@ -29,7 +29,8 @@ def view(products=("TRADING", "CUSTODY"), owed=(("INV-1", "TRADING", 50_000_00),
                 "relationship_manager": "Priya Nair"},
         contract={"grace_days": 10, "cure_days": 15, "cross_default": False},
         invoice=[
-            {"id": i, "product": p, "due_on": "2026-02-01", "amount_cents": amt, "paid_cents": 0, "status": "open"}
+            {"id": i, "product": p, "issued_on": "2026-01-15", "due_on": "2026-02-01", "amount_cents": amt, "paid_cents": 0,
+             "status": "open"}
             for i, p, amt in owed
         ],
         contract_clause=[
@@ -178,11 +179,19 @@ class AccessControllerPlan(unittest.TestCase):
 
     def test_tells_client_after_restriction_posts(self):
         posted = item(9, "RESTRICTION", "POSTED", {"lever": "trading", "step": "PAUSE_OTC"})
-        m = only(view(work_item=[posted]))
+        levers = [{"lever": "trading", "state": "limited", "detail": "OTC paused", "work_item_id": 9}]
+        m = only(view(work_item=[posted], levers=levers))
         self.assertEqual(m.action, "propose_notice")
         self.assertIn("(ref WI-9)", m.args["body"])
+        self.assertIn("We restore access once the payment posts", m.args["body"])
         sent = item(10, "REMINDER", "POSTED", {"body": m.args["body"]})
-        self.assertNotEqual(only(view(work_item=[posted, sent])).action, "propose_notice")
+        self.assertNotEqual(only(view(work_item=[posted, sent], levers=levers)).action, "propose_notice")
+
+    def test_no_restriction_notice_once_paid(self):
+        posted = item(9, "RESTRICTION", "POSTED", {"lever": "trading", "step": "PAUSE_OTC"})
+        levers = [{"lever": "trading", "state": "limited", "detail": "OTC paused", "work_item_id": 9}]
+        m = only(view(work_item=[posted], levers=levers, owed=()))
+        self.assertEqual((m.action, m.args["lever"]), ("propose_restore", "trading"))
 
 
 NOTE = {"id": 4, "client_id": "ORG-1", "author": "Priya Nair", "text": "...", "work_item_id": None}
@@ -247,7 +256,7 @@ class Precedents(unittest.TestCase):
         rows = [m.args["row"] for m in moves(v) if m.action == "upsert_precedent"]
         self.assertEqual(len(rows), 1)
         self.assertEqual((rows[0]["id"], rows[0]["decision"], rows[0]["override_reason"], rows[0]["outcome"], rows[0]["source"]),
-                         ("PRC-L-7", "Rejected", "Too strict for this tier", "pending", "live"))
+                         ("PRC-L7", "Rejected", "Too strict for this tier", "", "live"))
 
     def test_routine_approval_is_not_a_precedent(self):
         approved = item(7, "RESTRICTION", "POSTED")
@@ -256,7 +265,7 @@ class Precedents(unittest.TestCase):
 
     def test_precedent_outcome_recorded_once_cured(self):
         rejected = item(7, "RESTRICTION", "REJECTED")
-        existing = {"id": "PRC-L-7", "client_id": "ORG-1", "work_item_id": 7, "decision": "Rejected", "outcome": "pending"}
+        existing = {"id": "PRC-L7", "client_id": "ORG-1", "work_item_id": 7, "decision": "Rejected", "outcome": ""}
         v = view(owed=(), work_item=[rejected], precedent=[existing],
                  rejections=[event("REJECTED", "2026-03-10", 7)])
         rows = [m.args["row"] for m in moves(v) if m.action == "upsert_precedent"]
@@ -427,6 +436,91 @@ class CutoffComparison(unittest.TestCase):
         m = only(self.v)
         self.assertEqual(m.fallback.action, "propose_restriction")
         self.assertNotIn("boundaries_json", m.fallback.args)
+
+
+class ReviewFindings(unittest.TestCase):
+    def test_hold_is_restored_when_default_ends_without_a_matched_payment(self):
+        levers = [{"lever": "withdrawals", "state": "limited", "detail": "$500.00 held", "work_item_id": None}]
+        v = view(levers=levers, owed=(), hold=[{"status": "active", "amount_cents": 500_00}])
+        m = only(v)
+        self.assertEqual((m.action, m.args["lever"]), ("propose_restore", "withdrawals"))
+
+    def test_unapplied_cash_stops_collection_and_restriction(self):
+        cash = [wire(match="proposed", value_on="2026-03-18")]
+        self.assertIsNone(only(view(debit=True, usd=1_000_000_00, cash=cash)))
+        self.assertEqual(waited(view(cash=cash))[0], "payment_unapplied")
+
+    def test_old_unapplied_cash_does_not_block(self):
+        self.assertIsNotNone(only(view(cash=[wire(match="exception", value_on="2025-11-01")])))
+
+    def test_open_payment_match_stops_restriction(self):
+        match = item(30, "PAYMENT_MATCH", "PROPOSED", required_role="ACCOUNTANT")
+        self.assertEqual(waited(view(work_item=[match]))[0], "payment_unapplied")
+
+    def test_returned_payment_is_reported_as_returned(self):
+        m = only(view(rm_note=[NOTE], cash=[wire(match="reversed")]), readings={4: PAID})
+        self.assertIn("returned by the bank", m.args["body"])
+
+    def test_rm_note_answered_while_a_proposal_waits(self):
+        pending = item(9, "RESTRICTION", "PROPOSED")
+        m = only(view(rm_note=[NOTE], work_item=[pending]), readings={4: PAID})
+        self.assertEqual((m.action, m.args["channel"]), ("propose_notice", "rm"))
+
+    def test_failed_gateway_command_is_called_out(self):
+        stuck = item(9, "RESTRICTION", "APPROVED")
+        w = world(view(work_item=[stuck]))
+        w.failed_commands = {9: "admin API timeout"}
+        waits = [m.args for m in plan(w, escalation_days=7) if m.action == "record_wait"]
+        self.assertEqual(waits[0]["code"], "gateway_failed")
+        self.assertIn("admin API timeout", waits[0]["reason"])
+
+    def test_preexisting_restrictions_are_described_honestly(self):
+        restricted = [{"lever": "withdrawals", "state": "active", "detail": "Normal", "work_item_id": None},
+                      {"lever": "trading", "state": "limited", "detail": "OTC paused", "work_item_id": None}]
+        reason = waited(view(levers=restricted, cure_due="2026-03-15"))[1]
+        self.assertIn("set before this agent", reason)
+        m = only(view(levers=restricted, cure_due="2026-03-01"))
+        self.assertNotIn("The last restriction has been in place", m.args["reasoning"])
+        self.assertIn("set before this agent", m.args["reasoning"])
+
+    def test_agreed_plan_from_an_earlier_default_does_not_apply(self):
+        case = item(20, "NOVEL_CASE", "APPROVED", {"onlyLevers": ["withdrawals"], "event": "acquisition"}, subject="rm_note:4")
+        v = view(work_item=[case], approvals=[event("APPROVED", "2025-10-01", 20, kind="NOVEL_CASE")])
+        self.assertEqual(only(v).args["lever"], "trading")
+
+    def test_material_event_approval_is_not_a_grace_period(self):
+        case = item(20, "NOVEL_CASE", "APPROVED", {"onlyLevers": ["withdrawals"], "event": "acquisition"}, subject="rm_note:4")
+        v = view(work_item=[case], approvals=[event("APPROVED", "2026-03-18", 20, kind="NOVEL_CASE")])
+        self.assertEqual((only(v).args["lever"], only(v).args["step"]), ("withdrawals", "HOLD_AMOUNT_OWED"))
+
+    def test_unparseable_grace_date_falls_back_to_spacing(self):
+        case = item(12, "NOVEL_CASE", "APPROVED", {"graceUntil": "end of month"}, subject="rm_note:4")
+        approvals = [event("APPROVED", "2026-03-01", 12, kind="NOVEL_CASE")]
+        self.assertEqual(only(view(work_item=[case], approvals=approvals)).action, RESTRICT)
+
+    def test_grace_wait_names_the_real_reason_debit_was_skipped(self):
+        v = view(debit=True, usd=1_000_000_00, owed=(("INV-1", "TRADING", 50_000_00),),
+                 rejections=[event("REJECTED", "2026-03-17", 6, kind="CUSTODY_DEBIT")])
+        v.invoice[0]["due_on"] = "2026-03-15"
+        self.assertIn("A controller rejected collecting from custody on 2026-03-17", waited(v)[1])
+
+    def test_prepay_only_where_the_contract_allows_it(self):
+        api_only = {"products": ("API",), "owed": (("INV-1", "API", 50_000_00),)}
+        self.assertEqual(only(view(**api_only)).args["step"], "RATE_LIMIT")
+        v = view(**api_only)
+        v.contract_clause.append({"kind": "prepay", "clause": "9.3", "allowed": True, "text": "..."})
+        self.assertEqual(only(v).args["step"], "REQUIRE_PREPAY")
+
+    def test_one_bad_client_does_not_stop_the_others(self):
+        good, bad = view(), view()
+        bad.client = {**bad.client, "id": "ORG-2"}
+        del bad.invoice[0]["issued_on"]
+        bad.cash = [wire()]
+        w = world(good)
+        w.clients["ORG-2"] = bad
+        with self.assertLogs("desk_agents.access_controller", level="ERROR"):
+            found = [m for m in plan(w, escalation_days=7) if m.action == RESTRICT]
+        self.assertEqual([m.client_id for m in found], ["ORG-1"])
 
 
 if __name__ == "__main__":
