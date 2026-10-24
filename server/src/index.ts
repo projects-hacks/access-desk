@@ -1,6 +1,6 @@
 import { env } from './lib/env';
 import { buildApp } from './app';
-import { connectStdb } from './lib/stdb';
+import { connectStdb, connections, downFor } from './lib/stdb';
 import { loadDataset } from './dataset';
 import { openBank } from './integrations/nessie/bank';
 import { Gateway } from './gateway/executor';
@@ -20,7 +20,7 @@ const ds = loadDataset();
 const bank = await openBank();
 
 // Sync and the gateway each act under their own identity and role.
-const { conn: syncConn } = await connectStdb(env.STDB_TOKEN);
+const { conn: syncConn } = await connectStdb(env.STDB_TOKEN, 'sync');
 const platform = await openPlatform(syncConn, ds);
 const app = buildApp(platform);
 const log = (msg: string) => app.log.info(msg);
@@ -37,7 +37,7 @@ app.post('/sync/now', async () => {
 let gateway: Gateway | undefined;
 if (env.DEMO_CONTROLS) {
   if (!env.STDB_DEMO_TOKEN) throw new Error('DEMO_CONTROLS=true needs STDB_DEMO_TOKEN (role DEMO)');
-  const { conn: demoConn } = await connectStdb(env.STDB_DEMO_TOKEN);
+  const { conn: demoConn } = await connectStdb(env.STDB_DEMO_TOKEN, 'demo');
   await app.register(demoRoutes, { conn: demoConn, sync, gateway: () => gateway, bank, plan: buildSeedPlan(ds), ds, platform });
 }
 
@@ -45,7 +45,7 @@ if (env.DEMO_CONTROLS) {
 await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
 if (env.STDB_GATEWAY_TOKEN) {
-  const { conn: gatewayConn } = await connectStdb(env.STDB_GATEWAY_TOKEN);
+  const { conn: gatewayConn } = await connectStdb(env.STDB_GATEWAY_TOKEN, 'gateway');
   gateway = new Gateway(gatewayConn, new PlatformClient(env.PLATFORM_API_URL ?? `http://127.0.0.1:${env.PORT}/platform`), bank, ds, (accounts) => sync.cash(accounts), log);
   await gateway.ready();
   gateway.start();
@@ -53,3 +53,14 @@ if (env.STDB_GATEWAY_TOKEN) {
   app.log.warn('STDB_GATEWAY_TOKEN not set: gateway disabled, commands will queue');
 }
 sync.start();
+
+// Reconnects are automatic. A connection down for two minutes means something is wrong
+// that a fresh process fixes (the platform replays from the database on boot): exit and
+// let the host restart us.
+setInterval(() => {
+  const stuck = downFor(120_000);
+  if (stuck.length) {
+    app.log.error(`SpacetimeDB down for 2 minutes (${stuck.map((c) => c.name).join(', ')}): exiting so the host restarts the server`);
+    process.exit(1);
+  }
+}, 15_000);
