@@ -363,9 +363,10 @@ def main() -> int:
     result = run_cases(root)
     for case in result["cases"]:
         f = case["facts"]
+        renewal = "none" if f["renewal_in_days"] is None else f"{f['renewal_in_days']}d"
         print(f"{'PASS' if case['ok'] else 'FAIL'} {case['precedentId']} ({case['kind']}): "
               f"proposed {case['proposed']} -> rule {case['got']} · decided {case['expected']} · "
-              f"late {f['days_late']}d, renewal in {f['renewal_in_days']}d, tier {f['tier']}, hedged {f['hedged']}")
+              f"late {f['days_late']}d, renewal {renewal}, tier {f['tier']}, hedged {f['hedged']}")
     for failure in result["failures"]:
         print(f"ERROR {failure}")
     print(f"{result['passed']}/{result['total']} cases pass" + ("" if result["ok"] else " · FAILED"))

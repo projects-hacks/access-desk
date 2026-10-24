@@ -115,7 +115,9 @@ class PolicyDrafter(Agent):
         """Waits for running drafts and files them. For tests and one-off runs."""
         if self.running:
             await asyncio.gather(*self.running.values(), return_exceptions=True)
-        return self.collect()
+        filed = self.collect()
+        self.acted += filed
+        return filed
 
     # ── Is anything due? ───────────────────────────────────────────────────
 
