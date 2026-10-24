@@ -41,6 +41,11 @@ class Job:
         return f"policy_draft:{self.family.name}:{self.policy_id}@{self.version}:r{self.revision}"
 
     @property
+    def policy_key(self) -> str:
+        """The `policy` row's key; activating the approved work item looks the draft up by it."""
+        return f"{self.policy_id}@{self.version}"
+
+    @property
     def key(self) -> tuple:
         return self.family.name, self.revision, tuple(self.overrides)
 
@@ -172,6 +177,7 @@ class PolicyDrafter(Agent):
         return self.versioned(job, proposals.values())
 
     def versioned(self, job: Job, proposals) -> Job | None:
+        """Always one past every version seen, so a rejected or active row is never overwritten."""
         if job.key in self.failed:
             return None
         pid = job.policy_id.replace("'", "''")
@@ -312,7 +318,8 @@ class PolicyDrafter(Agent):
                   + (f" (revision {job.revision})" if job.revision > 1 else ""),
             amount_cents=0,
             proposal={
-                "family": job.family.name, "policyId": job.policy_id, "version": job.version,
+                "policy_key": job.policy_key, "family": job.family.name, "policyId": job.policy_id,
+                "version": job.version,
                 "revision": job.revision, "revisedFrom": job.revised_from, "rejectionNote": job.note or None,
                 "ruleBefore": base, "ruleAfter": rule_json, "diff": diff,
                 "precedentIds": job.overrides, "controlPrecedentIds": job.controls,

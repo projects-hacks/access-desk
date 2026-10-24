@@ -171,6 +171,57 @@ class DrafterTest(unittest.TestCase):
         self.assertEqual(self.cycle(drafter), 0)
         self.assertEqual(len(db.proposals()), 1)
 
+    # ── Compatibility with activatePolicyDraft (origin/aryan) ──────────────
+
+    def test_policy_key_matches_the_saved_row_and_a_revision_bumps_the_version(self):
+        db = FakeDb(history())
+        drafter = self.drafter(db, claude=scripted())
+        self.cycle(drafter)
+        first = db.proposals()[0].proposal
+        self.assertEqual(first["policy_key"], "pol-014@1")
+        saved = [p for p in db.tables["policy"] if p["policy_id"] == "pol-014"]
+        self.assertEqual([(p["key"], p["status"]) for p in saved], [("pol-014@1", "draft")])
+
+        db.decide(db.tables["work_item"][0]["id"], "REJECTED", NOTE)
+        self.assertEqual(self.cycle(drafter), 3)
+        second = db.proposals()[1].proposal
+        self.assertEqual((second["policy_key"], second["version"]), ("pol-014@2", 2))
+        rows = {p["key"]: p["status"] for p in db.tables["policy"] if p["policy_id"] == "pol-014"}
+        self.assertEqual(rows, {"pol-014@1": "rejected", "pol-014@2": "draft"})
+        self.assertEqual([a[:3] for a in db.reducer("upsert_policy")], [("pol-014", 1, "draft"), ("pol-014", 2, "draft")])
+
+    def test_a_new_draft_after_activation_never_overwrites_the_active_row(self):
+        tables = history()
+        tables["policy"].append({"key": "pol-014@1", "policy_id": "pol-014", "version": 1, "status": "active",
+                                 "title": "older", "rule_json": "{}", "learned_from": "", "approved_by": "ctl"})
+        db = FakeDb(tables)
+        self.assertEqual(self.cycle(self.drafter(db, claude=scripted())), 3)
+        self.assertEqual(db.proposals()[0].proposal["policy_key"], "pol-014@2")
+        self.assertEqual(next(p for p in db.tables["policy"] if p["key"] == "pol-014@1")["status"], "active")
+
+    def test_draft_policy_ids_are_platform_wide(self):
+        from desk_agents.policy_drafter.families import FAMILIES
+
+        self.assertTrue(all(":" not in f.draft_policy_id for f in FAMILIES))
+        db = FakeDb(history())
+        self.cycle(self.drafter(db, claude=scripted()))
+        self.assertEqual(db.proposals()[0].client_id, "")
+
+    def test_credit_precedents_are_not_in_any_family(self):
+        tables = history(live_override=False)
+        for n, ref in enumerate(("pol-020", "pol-021", "pol-022", "pol-020")):
+            tables["precedent"].append({
+                "id": f"PRC-L{200 + n}", "client_id": "ORG-90412", "work_item_id": 200 + n, "decided_on": "2026-03-05",
+                "situation": "tier review", "proposed": "Orchard Treasury: tier 3 → 5", "decision": "Rejected",
+                "override_reason": "no", "outcome": "", "policy_ref": ref, "source": "live",
+            })
+        groups = group(tables["precedent"])
+        self.assertEqual(len(groups["restriction_ladder"]["overrides"]), 3)
+        self.assertEqual(list(groups), ["restriction_ladder"])
+        db = FakeDb(tables)
+        self.assertEqual(self.cycle(self.drafter(db, claude=scripted())), 0)
+        self.assertEqual(db.proposals(), [])
+
     # ── Runners ────────────────────────────────────────────────────────────
 
     def test_a_failed_droid_run_falls_back_to_claude(self):

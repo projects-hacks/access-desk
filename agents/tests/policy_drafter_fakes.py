@@ -8,6 +8,7 @@ import httpx
 from desk_agents.policy_drafter import snapshot
 from desk_agents.policy_drafter.families import group
 from desk_agents.policy_drafter.sandbox import Sandbox, Workspace
+from desk_agents.stdb import ReducerError
 
 FIXTURE = Path(__file__).parent / "fixtures" / "policy_history.json"
 QUERY = re.compile(r"^SELECT \* FROM (\w+)(?: WHERE (\w+) = ('(?:[^']|'')*'|\d+))?$")
@@ -54,7 +55,21 @@ class FakeDb:
         if reducer in self.missing:
             request = httpx.Request("POST", f"http://db/call/{reducer}")
             raise httpx.HTTPStatusError("not found", request=request, response=httpx.Response(404, request=request))
+        if reducer == "upsert_policy":
+            self.upsert_policy(*args)
         self.calls.append((reducer, args))
+
+    def upsert_policy(self, policy_id, version, status, title, rule_json, learned_from, approved_by) -> None:
+        """As an AGENT on origin/aryan: drafts only, never over a version that is past draft."""
+        key = f"{policy_id}@{version}"
+        before = next((p for p in self.tables["policy"] if p["key"] == key), None)
+        if status != "draft":
+            raise ReducerError("agents may only save drafts; a controller activates them")
+        if before and before["status"] != "draft":
+            raise ReducerError(f"{key} is {before['status']}; draft a new version")
+        row = {"key": key, "policy_id": policy_id, "version": version, "status": status, "title": title,
+               "rule_json": rule_json, "learned_from": learned_from, "approved_by": None}
+        self.tables["policy"] = [p for p in self.tables["policy"] if p["key"] != key] + [row]
 
     def propose(self, p) -> None:
         self.calls.append(("propose_work_item", p))
@@ -71,6 +86,10 @@ class FakeDb:
     def decide(self, work_item_id: int, state: str, note: str = "") -> None:
         item = next(w for w in self.tables["work_item"] if w["id"] == work_item_id)
         item["state"] = state
+        key = json.loads(item["proposal_json"]).get("policy_key")
+        draft = next((p for p in self.tables["policy"] if p["key"] == key and p["status"] == "draft"), None)
+        if draft and state in ("APPROVED", "REJECTED"):
+            draft["status"] = "active" if state == "APPROVED" else "rejected"
         self.tables["audit_event"].append({
             "id": len(self.tables["audit_event"]) + 1, "work_item_id": work_item_id, "to_state": state,
             "allowed": True, "detail": note,

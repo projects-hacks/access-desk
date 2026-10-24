@@ -23,6 +23,10 @@ FAMILIES = (
            base_policy_id="pol-006"),
 )
 
+# A ':' marks a client-specific policy (`<base>:<client_id>`); drafts here are platform-wide.
+if any(":" in f.draft_policy_id for f in FAMILIES):
+    raise ValueError("platform-wide policy ids must not contain ':'")
+
 # Decisions that close a proposal without a person overriding it.
 NOT_OVERRIDES = {"Approved", "Withdrawn", ""}
 

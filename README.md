@@ -37,6 +37,14 @@ With `DEMO_CONTROLS=true` the server exposes `POST /demo/inject`, `/demo/settle`
 
 `agents/src/desk_agents/policy_drafter/`. When at least `POLICY_DRAFT_THRESHOLD` (default 4) overrides of one policy family pile up that no draft covers yet, the agent drafts a policy change. pol-003 and pol-006 count as one family, the restriction ladder (`FAMILIES` in `families.py`). An override is a precedent whose decision differs from the proposed restriction, or one that was `Rejected`. In the demo, PRC-0001..0003 plus the live Kestrel rejection produce pol-014: near renewal, hold only the amount owed. The agent only drafts. It saves the policy with status `draft` (`upsert_policy`) and files a `POLICY_DRAFT` work item for a controller. The proposal carries the rule before and after, a diff, the precedent ids, the test results and the backtest. If the controller rejects it with a note, the agent drafts once more with the note added; a second rejection stops drafting for that family.
 
+The drafts are built to work with `applyPolicyDraft` → `activatePolicyDraft` on `aryan`:
+
+- The proposal JSON carries `policy_key` (`pol-014@<version>`), the key of the `draft` row saved with `upsert_policy`. On approval, that row becomes active and the previous active version is superseded. On rejection, it is marked `rejected`.
+- A revision or a later draft is always saved as the next version (one past every version seen), so the agent never overwrites a rejected or active row.
+- Draft policy ids are platform-wide and contain no `:`. A `<base>:<client_id>` id means a company-specific policy.
+- The `POLICY_DRAFT` item uses `client_id=""`.
+- Credit precedents (pol-020..022) are in no family, so they never trigger a draft.
+
 **Where it runs.** Each run gets a fresh temp directory, never the repo:
 
 - `policies/`: the only writable area. It holds `rules/<policy_id>.json` and one `cases/<precedent_id>.json` per precedent.
