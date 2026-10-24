@@ -89,5 +89,34 @@ class Loop(unittest.TestCase):
         self.assertEqual(len([m for m in logs.output if "not published" in m]), 1)
 
 
+class RmNoteCommand(unittest.TestCase):
+    class Db:
+        def __init__(self, status=None):
+            self.calls, self.status = [], status
+
+        def call(self, reducer, *args):
+            if self.status:
+                response = httpx.Response(self.status, request=httpx.Request("POST", "http://db/call/" + reducer))
+                raise httpx.HTTPStatusError("error", request=response.request, response=response)
+            self.calls.append((reducer, *args))
+
+    def test_records_the_note_as_written(self):
+        db = self.Db()
+        self.assertEqual(main.rm_note(db, "ORG-90412", "They already paid", "Priya Nair", None), 0)
+        self.assertEqual(db.calls, [("add_rm_note", "ORG-90412", "Priya Nair", "They already paid", {"none": []})])
+        main.rm_note(db, "ORG-90412", "About WI-7", "", 7)
+        self.assertEqual(db.calls[-1][-1], {"some": 7})
+
+    def test_unpublished_reducer_is_explained(self):
+        with mock.patch("builtins.print") as printed:
+            self.assertEqual(main.rm_note(self.Db(status=404), "ORG-90412", "x", "", None), 1)
+        self.assertIn("not published", printed.call_args[0][0])
+
+    def test_cli_arguments(self):
+        args = main.parse_args(["rm-note", "ORG-90412", "Wire sent Monday", "--author", "Priya Nair", "--work-item", "12"])
+        self.assertEqual((args.command, args.client_id, args.text, args.author, args.work_item),
+                         ("rm-note", "ORG-90412", "Wire sent Monday", "Priya Nair", 12))
+
+
 if __name__ == "__main__":
     unittest.main()

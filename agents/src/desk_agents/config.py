@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     stdb_http_url: str = "https://maincloud.spacetimedb.com"
     stdb_database: str = "access-desk-calhacks13"
     stdb_agent_token: str | None = None
+    stdb_demo_token: str | None = None
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-opus-5-5"
     factory_api_key: str | None = None
