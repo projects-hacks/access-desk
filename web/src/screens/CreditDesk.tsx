@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useReducer, useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { config } from '../lib/config';
 import { reducers, tables } from '../module_bindings';
@@ -82,6 +82,11 @@ export function CreditDesk() {
   const [selected, setSelected] = useState<string>();
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>();
+  const [expandAll, setExpandAll] = useState(false);
+  // Opening a client (from the table or a card) brings its trace into view.
+  useEffect(() => {
+    if (selected) document.getElementById(`client-${selected}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [selected]);
 
   const profileOf = useMemo(() => new Map(profiles.map((p) => [p.clientId, p])), [profiles]);
   const flagsOf = useMemo(() => {
@@ -114,7 +119,6 @@ export function CreditDesk() {
     }
   };
 
-  const client = clients.find((c) => c.id === selected);
   return (
     <section className="credit">
       <header className="credit-head">
@@ -175,7 +179,10 @@ export function CreditDesk() {
         </div>
 
         <div>
-          <h3>Clients</h3>
+          <div className="clients-head">
+            <h3>Clients <span className="muted">click a client to see how it was scored and decided</span></h3>
+            <label><input type="checkbox" checked={expandAll} onChange={(e) => setExpandAll(e.target.checked)} /> Show every client's trace</label>
+          </div>
           <table>
             <thead>
               <tr><th>Client</th><th>Tier</th><th>Reliability</th><th>Value</th><th>Coverage</th><th>Settles</th><th>Flags</th></tr>
@@ -185,80 +192,87 @@ export function CreditDesk() {
                 const p = profileOf.get(c.id);
                 const review = openReviewOf(c.id);
                 const proposal = review && parse<ReviewProposal>(review.proposalJson);
+                const open = expandAll || c.id === selected;
                 return (
-                  <tr key={c.id} className={c.id === selected ? 'selected' : ''} onClick={() => setSelected(c.id)}>
-                    <td>{c.name}{c.strategic && <span className="pill strategic">strategic</span>}</td>
-                    <td className="tier">
-                      {c.tier}
-                      {proposal?.action === 'tier_change' && <span className={proposal.to_tier < c.tier ? 'up' : 'down'}> → {proposal.to_tier}</span>}
-                      {proposal?.action === 'review' && <span className="down"> review</span>}
-                    </td>
-                    <td><Bar value={p?.reliabilityScore} /></td>
-                    <td><Bar value={p?.valueScore} /></td>
-                    <td className="num">{p ? `${p.coverageRatio.toFixed(2)}×` : '–'}</td>
-                    <td className="num">{p?.expectedSettleOn ?? '–'}</td>
-                    <td>{(flagsOf.get(c.id) ?? []).map((f) => <span key={f.id} className={`pill ${f.status}`}>{f.pattern}</span>)}</td>
-                  </tr>
+                  <Fragment key={c.id}>
+                    <tr id={`client-${c.id}`} className={open ? 'selected' : ''} onClick={() => setSelected(c.id === selected ? undefined : c.id)}>
+                      <td><span className="caret">{open ? '▾' : '▸'}</span>{c.name}{c.strategic && <span className="pill strategic">strategic</span>}</td>
+                      <td className="tier">
+                        {c.tier}
+                        {proposal?.action === 'tier_change' && <span className={proposal.to_tier < c.tier ? 'up' : 'down'}> → {proposal.to_tier}</span>}
+                        {proposal?.action === 'review' && <span className="down"> review</span>}
+                      </td>
+                      <td><Bar value={p?.reliabilityScore} /></td>
+                      <td><Bar value={p?.valueScore} /></td>
+                      <td className="num">{p ? `${p.coverageRatio.toFixed(2)}×` : '–'}</td>
+                      <td className="num">{p?.expectedSettleOn ?? '–'}</td>
+                      <td>{(flagsOf.get(c.id) ?? []).map((f) => <span key={f.id} className={`pill ${f.status}`}>{f.pattern}</span>)}</td>
+                    </tr>
+                    {open && (
+                      <tr className="trace-row">
+                        <td colSpan={7}>
+                          <div className="detail">
+                            <h3>{c.name} <span className="muted">{c.id} · {c.segment} · tier {c.tier}</span></h3>
+                            <p>{profileOf.get(c.id)?.coverageDetail ?? 'Not scored yet.'}</p>
+                            {(() => {
+                              const own = policies.filter((p) => p.policyId.endsWith(`:${c.id}`)).sort((a, b) => a.key.localeCompare(b.key));
+                              if (!own.length) return null;
+                              return (
+                                <div className="evidence">
+                                  <h4>Company policies</h4>
+                                  <table>
+                                    <thead><tr><th>Version</th><th>Status</th><th>Title</th><th>Effective</th><th>Outcome</th></tr></thead>
+                                    <tbody>
+                                      {own.map((p) => {
+                                        const rule = parse<{ effective_on?: string; work_item_id?: number }>(p.ruleJson);
+                                        const outcome = rule?.work_item_id ? precedents.find((x) => x.id === `PRC-L${rule.work_item_id}`)?.outcome : '';
+                                        return (
+                                          <tr key={p.key}>
+                                            <td>{p.key}</td><td><span className={`pill ${p.status}`}>{p.status}</span></td><td>{p.title}</td>
+                                            <td>{rule?.effective_on ?? '–'}</td><td>{outcome || '–'}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              );
+                            })()}
+                            <Trace
+                              client={c}
+                              profile={profileOf.get(c.id)}
+                              flags={flagsOf.get(c.id) ?? []}
+                              item={credit.filter((w) => w.clientId === c.id && w.kind !== 'EXPLOIT_FLAG').at(-1)}
+                              review={credit.filter((w) => w.clientId === c.id && w.kind === 'CREDIT_REVIEW').at(-1)}
+                              note={(id) => audit.filter((a) => a.workItemId === id && a.action === 'TRANSITION' && a.allowed).at(-1)?.detail ?? ''}
+                            />
+                            {(flagsOf.get(c.id) ?? []).map((f) => {
+                              const evidence = parse<Evidence[]>(f.evidenceJson) ?? [];
+                              return (
+                                <div key={f.id} className="evidence">
+                                  <h4>{f.pattern} <span className="muted">{f.status} · {f.months} months · score {f.score.toFixed(2)}</span></h4>
+                                  <p className="muted">Fix: {f.proposedFix}</p>
+                                  <table>
+                                    <thead><tr><th>Invoice</th><th>Due</th><th>Paid</th><th>DPD</th><th>Note</th></tr></thead>
+                                    <tbody>
+                                      {evidence.map((e, i) => (
+                                        <tr key={`${e.invoice_id}-${i}`}><td>{e.invoice_id}</td><td>{e.due_on}</td><td>{e.paid_on ?? '–'}</td><td className="num">{e.dpd}</td><td>{e.note}</td></tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </tbody>
           </table>
 
-          {client && (
-            <div className="detail">
-              <h3>{client.name} <span className="muted">{client.id} · {client.segment} · tier {client.tier}</span></h3>
-              <p>{profileOf.get(client.id)?.coverageDetail ?? 'Not scored yet.'}</p>
-              {(() => {
-                const own = policies.filter((p) => p.policyId.endsWith(`:${client.id}`)).sort((a, b) => a.key.localeCompare(b.key));
-                if (!own.length) return null;
-                return (
-                  <div className="evidence">
-                    <h4>Company policies</h4>
-                    <table>
-                      <thead><tr><th>Version</th><th>Status</th><th>Title</th><th>Effective</th><th>Outcome</th></tr></thead>
-                      <tbody>
-                        {own.map((p) => {
-                          const rule = parse<{ effective_on?: string; work_item_id?: number }>(p.ruleJson);
-                          const outcome = rule?.work_item_id ? precedents.find((x) => x.id === `PRC-L${rule.work_item_id}`)?.outcome : '';
-                          return (
-                            <tr key={p.key}>
-                              <td>{p.key}</td><td><span className={`pill ${p.status}`}>{p.status}</span></td><td>{p.title}</td>
-                              <td>{rule?.effective_on ?? '–'}</td><td>{outcome || '–'}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-              <Trace
-                client={client}
-                profile={profileOf.get(client.id)}
-                flags={flagsOf.get(client.id) ?? []}
-                item={credit.filter((w) => w.clientId === client.id && w.kind !== 'EXPLOIT_FLAG').at(-1)}
-                review={credit.filter((w) => w.clientId === client.id && w.kind === 'CREDIT_REVIEW').at(-1)}
-                note={(id) => audit.filter((a) => a.workItemId === id && a.action === 'TRANSITION' && a.allowed).at(-1)?.detail ?? ''}
-              />
-              {(flagsOf.get(client.id) ?? []).map((f) => {
-                const evidence = parse<Evidence[]>(f.evidenceJson) ?? [];
-                return (
-                  <div key={f.id} className="evidence">
-                    <h4>{f.pattern} <span className="muted">{f.status} · {f.months} months · score {f.score.toFixed(2)}</span></h4>
-                    <p className="muted">Fix: {f.proposedFix}</p>
-                    <table>
-                      <thead><tr><th>Invoice</th><th>Due</th><th>Paid</th><th>DPD</th><th>Note</th></tr></thead>
-                      <tbody>
-                        {evidence.map((e, i) => (
-                          <tr key={`${e.invoice_id}-${i}`}><td>{e.invoice_id}</td><td>{e.due_on}</td><td>{e.paid_on ?? '–'}</td><td className="num">{e.dpd}</td><td>{e.note}</td></tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })}
-            </div>
-          )}
 
           <h3>Audit trail</h3>
           <ul className="audit">
