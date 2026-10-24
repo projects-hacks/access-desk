@@ -12,3 +12,4 @@ export * from './reducers/gateway';
 export * from './reducers/books';
 export { upsertPolicy } from './reducers/policies';
 export { addRmNote, recordInvestigation } from './reducers/notes';
+export { recordAgentRun } from './reducers/runs';

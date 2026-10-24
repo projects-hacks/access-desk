@@ -87,6 +87,11 @@ class SpacetimeClient:
         """kind: promise_to_pay | follow_up. Resolved automatically when the sim date reaches due_on."""
         self.call("set_deadline", client_id, kind, due_on, note, work_item_id)
 
+    def record_agent_run(
+        self, agent: str, trigger: str, proposed: int, status: str, error: str | None, duration_ms: int,
+    ) -> None:
+        self.call("record_agent_run", agent, trigger, proposed, status, {"some": error} if error else {"none": []}, duration_ms)
+
     def record_investigation(self, work_item_id: int, steps: list[dict[str, str]]) -> None:
         """Steps are {tool, summary, status}, in the order the agent took them."""
         self.call("record_investigation", work_item_id, steps)
@@ -100,6 +105,11 @@ class SpacetimeClient:
         self.call("transition_work_item", work_item_id, to_state, note)
 
     # ── Reads ──────────────────────────────────────────────────────────────
+
+    def fingerprint(self) -> tuple[int, str]:
+        """Changes whenever anything is audited or the sim date moves: the cue for agents to look again."""
+        audited = self.sql("SELECT COUNT(*) AS n FROM audit_event")[0]["n"]
+        return audited, self.sql("SELECT * FROM clock")[0]["sim_date"]
 
     def open_work(self) -> list[dict[str, Any]]:
         """Work waiting on a person or an agent."""

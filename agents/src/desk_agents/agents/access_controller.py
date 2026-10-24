@@ -63,11 +63,11 @@ class AccessController(Agent):
         self.reader = reader or Reader()
         self.readings: dict[int, RmReading] = {}
         self.unavailable: set[str] = set()
+        self.acted = 0
 
     async def run(self) -> list[Proposal]:
         world = self.observe()
-        for move in plan(world):
-            self.execute(move)
+        self.acted = sum(self.execute(move) for move in plan(world))
         return []
 
     def observe(self) -> World:
@@ -79,12 +79,13 @@ class AccessController(Agent):
         world.readings = self.readings
         return world
 
-    def execute(self, move: Move) -> None:
+    def execute(self, move: Move) -> bool:
         if move.action in self.unavailable:
-            return
+            return False
         try:
             getattr(self.db, move.action)(**move.args)
             log.info("[%s] %s %s: %s", self.name, move.action, move.client_id, move.summary)
+            return True
         except ReducerError as e:
             log.warning("[%s] %s %s refused: %s", self.name, move.action, move.client_id, e)
         except httpx.HTTPStatusError as e:
@@ -93,6 +94,7 @@ class AccessController(Agent):
                 log.warning("[%s] %s is not published in this database yet; skipping it", self.name, move.action)
             else:
                 log.warning("[%s] %s %s failed: %s", self.name, move.action, move.client_id, e)
+        return False
 
 
 def plan(world: World, escalation_days: int | None = None) -> list[Move]:
