@@ -1,4 +1,4 @@
-// SpacetimeDB connection for the server (gateway, sync and agents each use it).
+// SpacetimeDB connection for the server (gateway and sync).
 // After `pnpm stdb:generate`, connect with the generated bindings:
 //
 //   import { DbConnection } from '../module_bindings';
