@@ -4,7 +4,7 @@ import { CAN_SYNC } from '../roles';
 import { spacetimedb } from '../schema';
 import { accessLever, capability, client, contract, contractClause, payerIdentity } from '../tables/clients';
 import { assetPrice, custodyHolding, loan, owedToClient, position } from '../tables/assets';
-import { cashMovement, dispute, invoice } from '../tables/money';
+import { cashMovement, dispute, invoice, ledgerEntry } from '../tables/money';
 import { rawRecord, syncSource } from '../tables/sync';
 import { metricSnapshot, precedent } from '../tables/learning';
 import { recomputeInvoice } from '../payments/apply';
@@ -134,6 +134,15 @@ export const upsertLoan = spacetimedb.reducer({ row: loan.rowType }, (ctx, { row
   const existing = ctx.db.loan.id.find(row.id);
   if (existing) ctx.db.loan.id.update({ ...row, borrowingAllowed: existing.borrowingAllowed });
   else ctx.db.loan.insert(row);
+});
+
+/** General ledger lines, in batches (thousands of lines; one call each would be slow). */
+export const upsertLedgerEntries = spacetimedb.reducer({ rows: t.array(ledgerEntry.rowType) }, (ctx, { rows }) => {
+  requireRole(ctx, CAN_SYNC);
+  for (const row of rows) {
+    if (ctx.db.ledgerEntry.id.find(row.id)) ctx.db.ledgerEntry.id.update(row);
+    else ctx.db.ledgerEntry.insert(row);
+  }
 });
 
 /** Past decisions (history import) and live ones written by agents. */

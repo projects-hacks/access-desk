@@ -20,7 +20,7 @@ Pending wires are marked `in_transit`: nobody is restricted while their payment 
 ## Data
 
 - `invoice.source_paid_cents`: billing's figure. `paid_cents` and `status` are recomputed from it plus our applications.
-- `payment_application.method`: `referenced | exact | split | short_fee | overpaid | partial | prior | reversal`.
+- `payment_application.method`: `referenced | exact | split | short_fee | overpaid | partial` for cash, `write_off` for the short amount (pol-002), `prior` for cash billing applied before us. `posted` / `reversal_posted` record what billing has confirmed.
 - `client_credit.kind`: `overpayment | unapplied_cash`.
 - Approving a `PAYMENT_MATCH` work item (`transition_work_item` → `APPROVED` by ACCOUNTANT or CONTROLLER) applies it, and adds a new bank account to the CRM if one was proposed.
 

@@ -6,6 +6,7 @@ export type Role = (typeof ROLES)[number];
 
 export const CAN_APPROVE: readonly Role[] = ['ACCOUNTANT', 'CONTROLLER'];
 export const CAN_POST: readonly Role[] = ['GATEWAY'];
+export const CAN_EXECUTE: readonly Role[] = ['GATEWAY'];
 export const CAN_SYNC: readonly Role[] = ['SYNC', 'ADMIN'];
 export const CAN_MOVE_CLOCK: readonly Role[] = ['CONTROLLER', 'ADMIN'];
 

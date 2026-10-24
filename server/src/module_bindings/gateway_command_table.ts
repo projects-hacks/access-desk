@@ -12,10 +12,15 @@ import {
 
 export default __t.row({
   id: __t.u64().primaryKey(),
-  workItemId: __t.u64().name("work_item_id"),
+  key: __t.string(),
+  type: __t.string(),
+  workItemId: __t.option(__t.u64()).name("work_item_id"),
   actionJson: __t.string().name("action_json"),
   status: __t.string(),
+  resultJson: __t.option(__t.string()).name("result_json"),
   externalRef: __t.option(__t.string()).name("external_ref"),
   attempts: __t.u16(),
   error: __t.option(__t.string()),
+  createdAt: __t.timestamp().name("created_at"),
+  updatedAt: __t.timestamp().name("updated_at"),
 });

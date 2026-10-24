@@ -19,4 +19,6 @@ export default __t.row({
   policyRef: __t.string().name("policy_ref"),
   workItemId: __t.option(__t.u64()).name("work_item_id"),
   reversed: __t.bool(),
+  posted: __t.bool(),
+  reversalPosted: __t.bool().name("reversal_posted"),
 });

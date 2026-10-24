@@ -5,7 +5,9 @@ import type { Bank } from '../integrations/nessie/bank';
 import { env } from '../lib/env';
 import { bankRecords } from './sources/bank';
 import { chainRecords } from './sources/chain';
+import { glRows } from './sources/gl';
 import { historyRecords } from './sources/history';
+import type { PlatformSimulator } from '../platform/simulator';
 import { platformRecords } from './sources/platform';
 import { SyncWriter, type SyncRecord } from './writer';
 
@@ -15,6 +17,7 @@ const LABELS: Record<string, string> = {
   platform_admin: 'Platform admin',
   custody: 'Custody',
   positions: 'Positions & financing',
+  gl: 'General ledger',
   history: 'History (12 months)',
   bank: 'Bank feed (Nessie)',
   chain: 'On-chain wallet',
@@ -30,12 +33,14 @@ export interface PassResult {
 /** Pulls every system of record into SpacetimeDB. One instance per database. */
 export class Sync {
   private writer: SyncWriter;
+  private ledgerHashes = new Map<string, string>();
   private running = Promise.resolve();
 
   constructor(
     private readonly conn: DbConnection,
     private readonly bank: Bank,
     private readonly ds: Dataset,
+    private readonly platform: PlatformSimulator,
     private readonly log: (msg: string) => void = console.log,
   ) {
     this.writer = new SyncWriter(conn);
@@ -59,9 +64,11 @@ export class Sync {
     return this.serialize(async () => {
       await this.syncPlatformRow();
       const results: PassResult[] = [];
-      for (const [source, records] of Object.entries(platformRecords(this.conn, this.ds, this.bank.map))) {
+      for (const [source, records] of Object.entries(platformRecords(this.conn, this.ds, this.bank.map, this.platform))) {
         results.push(await this.runSource(source, records));
       }
+      // The ledger before cash: payment checking asks it whether treasury already booked a receipt.
+      results.push(await this.syncLedger());
       // After billing (it claims billing-applied cash), before live cash.
       results.push(await this.runSource('history', historyRecords(this.conn, this.ds, this.bank.map)));
       results.push(...(await this.cashOnly()));
@@ -141,6 +148,29 @@ export class Sync {
     return { source, records: records.length, written, errors };
   }
 
+  /** Ledger lines in batches; unchanged lines are skipped. */
+  private async syncLedger(): Promise<PassResult> {
+    const rows = glRows(this.platform);
+    const changed = rows.filter((r) => this.ledgerHashes.get(r.id) !== ledgerHash(r));
+    const errors: string[] = [];
+    for (let i = 0; i < changed.length; i += 250) {
+      const batch = changed.slice(i, i + 250);
+      try {
+        await this.conn.reducers.upsertLedgerEntries({ rows: batch });
+        for (const r of batch) this.ledgerHashes.set(r.id, ledgerHash(r));
+      } catch (err) {
+        errors.push(`ledger batch ${i / 250}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    await this.conn.reducers.setSyncStatus({
+      row: {
+        source: 'gl', label: LABELS.gl!, status: errors.length ? 'error' : 'synced', recordCount: rows.length,
+        cursor: new Date().toISOString(), lastSyncAt: Timestamp.now(), error: errors.length ? errors.join('; ') : undefined,
+      },
+    });
+    return { source: 'gl', records: rows.length, written: errors.length ? 0 : changed.length, errors };
+  }
+
   private async syncPlatformRow() {
     const collections = this.bank.map.accounts.collections;
     if (!collections) throw new Error('collections account missing from seed map');
@@ -158,3 +188,6 @@ export class Sync {
     return next;
   }
 }
+
+const ledgerHash = (r: { journalId: string; accountCode: string; debitCents: bigint; creditCents: bigint; postedOn: string }) =>
+  `${r.journalId}|${r.accountCode}|${r.debitCents}|${r.creditCents}|${r.postedOn}`;

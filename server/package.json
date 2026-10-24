@@ -14,7 +14,8 @@
     "sync": "tsx --env-file-if-exists=../.env src/scripts/sync-once.ts",
     "sync:verify": "tsx --env-file-if-exists=../.env src/scripts/sync-verify.ts",
     "stdb:roles": "tsx --env-file-if-exists=../.env src/scripts/assign-roles.ts",
-    "payments:verify": "tsx --env-file-if-exists=../.env src/scripts/payments-verify.ts"
+    "payments:verify": "tsx --env-file-if-exists=../.env src/scripts/payments-verify.ts",
+    "ledger:verify": "tsx --env-file-if-exists=../.env src/scripts/ledger-verify.ts"
   },
   "dependencies": {
     "fastify": "^5.12.7",

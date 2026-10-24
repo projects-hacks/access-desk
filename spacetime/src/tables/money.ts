@@ -70,6 +70,10 @@ export const paymentApplication = table(
     policyRef: t.string(),
     workItemId: t.u64().optional(),
     reversed: t.bool(),
+    /** Billing has confirmed this application (gateway APPLY_PAYMENT done). Always true for `prior`. */
+    posted: t.bool(),
+    /** Billing has confirmed the reversal (gateway REVERSE_PAYMENT done). */
+    reversalPosted: t.bool(),
   },
 );
 
@@ -84,16 +88,22 @@ export const clientCredit = table(
   },
 );
 
+/** General ledger lines, synced from the GL and written through when our journals post. */
 export const ledgerEntry = table(
   { public: true },
   {
-    id: t.u64().primaryKey().autoInc(),
+    /** `<journalId>:<line>` */
+    id: t.string().primaryKey(),
     journalId: t.string().index('btree'),
     postedOn: t.string(),
-    accountCode: t.string(),
+    accountCode: t.string().index('btree'),
     debitCents: t.i64(),
     creditCents: t.i64(),
-    ref: t.string(),
+    /** Source document: invoice id or bank reference. */
+    ref: t.string().index('btree'),
+    memo: t.string(),
+    /** billing | treasury | access-desk */
+    source: t.string(),
     workItemId: t.u64().optional(),
   },
 );

@@ -36,6 +36,9 @@ import {
 // Import all reducer arg schemas
 import AdvanceClockReducer from "./advance_clock_reducer";
 import AssignRoleReducer from "./assign_role_reducer";
+import ClaimGatewayCommandReducer from "./claim_gateway_command_reducer";
+import CompleteGatewayCommandReducer from "./complete_gateway_command_reducer";
+import FailGatewayCommandReducer from "./fail_gateway_command_reducer";
 import PlaceHoldReducer from "./place_hold_reducer";
 import ProposeWorkItemReducer from "./propose_work_item_reducer";
 import RecordSyncErrorReducer from "./record_sync_error_reducer";
@@ -54,6 +57,7 @@ import UpsertContractClauseReducer from "./upsert_contract_clause_reducer";
 import UpsertCustodyHoldingReducer from "./upsert_custody_holding_reducer";
 import UpsertDisputeReducer from "./upsert_dispute_reducer";
 import UpsertInvoiceReducer from "./upsert_invoice_reducer";
+import UpsertLedgerEntriesReducer from "./upsert_ledger_entries_reducer";
 import UpsertLoanReducer from "./upsert_loan_reducer";
 import UpsertMetricSnapshotReducer from "./upsert_metric_snapshot_reducer";
 import UpsertOwedToClientReducer from "./upsert_owed_to_client_reducer";
@@ -360,8 +364,14 @@ const tablesSchema = __schema({
       { accessor: 'id', name: 'gateway_command_id_idx_btree', algorithm: 'btree', columns: [
         'id',
       ] },
-      { accessor: 'workItemId', name: 'gateway_command_work_item_id_idx_btree', algorithm: 'btree', columns: [
-        'workItemId',
+      { accessor: 'key', name: 'gateway_command_key_idx_btree', algorithm: 'btree', columns: [
+        'key',
+      ] },
+      { accessor: 'status', name: 'gateway_command_status_idx_btree', algorithm: 'btree', columns: [
+        'status',
+      ] },
+      { accessor: 'type', name: 'gateway_command_type_idx_btree', algorithm: 'btree', columns: [
+        'type',
       ] },
     ],
     constraints: [
@@ -413,11 +423,17 @@ const tablesSchema = __schema({
   ledgerEntry: __table({
     name: 'ledger_entry',
     indexes: [
+      { accessor: 'accountCode', name: 'ledger_entry_account_code_idx_btree', algorithm: 'btree', columns: [
+        'accountCode',
+      ] },
       { accessor: 'id', name: 'ledger_entry_id_idx_btree', algorithm: 'btree', columns: [
         'id',
       ] },
       { accessor: 'journalId', name: 'ledger_entry_journal_id_idx_btree', algorithm: 'btree', columns: [
         'journalId',
+      ] },
+      { accessor: 'ref', name: 'ledger_entry_ref_idx_btree', algorithm: 'btree', columns: [
+        'ref',
       ] },
     ],
     constraints: [
@@ -626,6 +642,9 @@ const tablesSchema = __schema({
 const reducersSchema = __reducers(
   __reducerSchema("advance_clock", AdvanceClockReducer),
   __reducerSchema("assign_role", AssignRoleReducer),
+  __reducerSchema("claim_gateway_command", ClaimGatewayCommandReducer),
+  __reducerSchema("complete_gateway_command", CompleteGatewayCommandReducer),
+  __reducerSchema("fail_gateway_command", FailGatewayCommandReducer),
   __reducerSchema("place_hold", PlaceHoldReducer),
   __reducerSchema("propose_work_item", ProposeWorkItemReducer),
   __reducerSchema("record_sync_error", RecordSyncErrorReducer),
@@ -644,6 +663,7 @@ const reducersSchema = __reducers(
   __reducerSchema("upsert_custody_holding", UpsertCustodyHoldingReducer),
   __reducerSchema("upsert_dispute", UpsertDisputeReducer),
   __reducerSchema("upsert_invoice", UpsertInvoiceReducer),
+  __reducerSchema("upsert_ledger_entries", UpsertLedgerEntriesReducer),
   __reducerSchema("upsert_loan", UpsertLoanReducer),
   __reducerSchema("upsert_metric_snapshot", UpsertMetricSnapshotReducer),
   __reducerSchema("upsert_owed_to_client", UpsertOwedToClientReducer),

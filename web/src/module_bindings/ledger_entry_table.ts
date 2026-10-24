@@ -11,12 +11,14 @@ import {
 } from "spacetimedb";
 
 export default __t.row({
-  id: __t.u64().primaryKey(),
+  id: __t.string().primaryKey(),
   journalId: __t.string().name("journal_id"),
   postedOn: __t.string().name("posted_on"),
   accountCode: __t.string().name("account_code"),
   debitCents: __t.i64().name("debit_cents"),
   creditCents: __t.i64().name("credit_cents"),
   ref: __t.string(),
+  memo: __t.string(),
+  source: __t.string(),
   workItemId: __t.option(__t.u64()).name("work_item_id"),
 });

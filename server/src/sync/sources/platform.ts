@@ -5,17 +5,18 @@ import type {
 } from '../../module_bindings/types';
 import type { Dataset } from '../../dataset';
 import {
-  PRICES, capabilities, clausesFor, clientStatus, contractFor, disputes, holdingsFor, leversFor, owedToClient,
-  positionsFor, renewalOn,
+  PRICES, capabilities, clausesFor, clientStatus, contractFor, disputes, owedToClient, positionsFor, renewalOn,
 } from '../../dataset/platform-data';
 import type { SeedMap } from '../../integrations/nessie/seed-map';
+import type { PlatformSimulator } from '../../platform/simulator';
 import type { SyncRecord } from '../writer';
 
 /**
- * The simulated platform's systems of record (billing, CRM, admin console,
- * custody, positions), read from the dataset. Grouped by source system.
+ * The platform's systems of record (billing, CRM, admin console, custody,
+ * positions). Changing state (invoices, levers, custody) is read from the live
+ * platform; reference data from the dataset. Grouped by source system.
  */
-export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap): Record<string, SyncRecord<unknown>[]> {
+export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap, sim: PlatformSimulator): Record<string, SyncRecord<unknown>[]> {
   const r = conn.reducers;
   const rec = <Row>(table: string, id: string, row: Row, upsert: (row: Row) => Promise<void>): SyncRecord<unknown> =>
     ({ table, id, row, upsert } as SyncRecord<unknown>);
@@ -62,7 +63,7 @@ export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap):
   }
 
   const billing: SyncRecord<unknown>[] = [];
-  for (const i of ds.invoices) {
+  for (const i of sim.invoices.values()) {
     const status = i.status === 'open' && i.paidCents > 0 ? 'partially_paid' : i.status;
     const invoice: Invoice = {
       id: i.id, clientId: i.clientId, product: i.product, label: i.label, period: i.period, issuedOn: i.issuedOn,
@@ -81,8 +82,8 @@ export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap):
     const row: Capability = cap;
     admin.push(rec('capability', cap.id, row, (x) => r.upsertCapability({ row: x })));
   }
-  for (const c of ds.clients) {
-    for (const l of leversFor(c)) {
+  for (const l of sim.levers.values()) {
+    {
       const row: AccessLever = { ...l, workItemId: undefined };
       admin.push(rec('access_lever', l.id, row, (x) => r.upsertAccessLever({ row: x })));
     }
@@ -93,8 +94,8 @@ export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap):
     const row: AssetPrice = { asset, priceCents: BigInt(cents), asOf: ds.simDate };
     custody.push(rec('asset_price', asset, row, (x) => r.upsertAssetPrice({ row: x })));
   }
-  for (const c of ds.clients) {
-    for (const h of holdingsFor(c)) {
+  for (const h of sim.holdings.values()) {
+    {
       const row: CustodyHolding = { ...h, valueCents: BigInt(h.valueCents) };
       custody.push(rec('custody_holding', h.id, row, (x) => r.upsertCustodyHolding({ row: x })));
     }

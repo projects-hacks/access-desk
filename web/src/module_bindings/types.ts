@@ -231,12 +231,17 @@ export type ExploitFlag = __Infer<typeof ExploitFlag>;
 
 export const GatewayCommand = __t.object("GatewayCommand", {
   id: __t.u64(),
-  workItemId: __t.u64(),
+  key: __t.string(),
+  type: __t.string(),
+  workItemId: __t.option(__t.u64()),
   actionJson: __t.string(),
   status: __t.string(),
+  resultJson: __t.option(__t.string()),
   externalRef: __t.option(__t.string()),
   attempts: __t.u16(),
   error: __t.option(__t.string()),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
 });
 export type GatewayCommand = __Infer<typeof GatewayCommand>;
 
@@ -281,13 +286,15 @@ export const Invoice = __t.object("Invoice", {
 export type Invoice = __Infer<typeof Invoice>;
 
 export const LedgerEntry = __t.object("LedgerEntry", {
-  id: __t.u64(),
+  id: __t.string(),
   journalId: __t.string(),
   postedOn: __t.string(),
   accountCode: __t.string(),
   debitCents: __t.i64(),
   creditCents: __t.i64(),
   ref: __t.string(),
+  memo: __t.string(),
+  source: __t.string(),
   workItemId: __t.option(__t.u64()),
 });
 export type LedgerEntry = __Infer<typeof LedgerEntry>;
@@ -350,6 +357,8 @@ export const PaymentApplication = __t.object("PaymentApplication", {
   policyRef: __t.string(),
   workItemId: __t.option(__t.u64()),
   reversed: __t.bool(),
+  posted: __t.bool(),
+  reversalPosted: __t.bool(),
 });
 export type PaymentApplication = __Infer<typeof PaymentApplication>;
 

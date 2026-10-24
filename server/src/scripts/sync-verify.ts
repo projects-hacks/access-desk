@@ -175,7 +175,7 @@ pattern(overrides.length === 3, `${overrides.length} past overrides of pol-003 a
 
 // 8. Every source reported a clean pass, and the platform row follows configuration.
 for (const s of db.syncSource.iter()) check(s.status === 'synced', `source ${s.source}: ${s.status} ${s.error ?? ''}`);
-check([...db.syncSource.iter()].length === 8, `expected 8 sync sources, found ${[...db.syncSource.iter()].length}`);
+check([...db.syncSource.iter()].length === 9, `expected 9 sync sources, found ${[...db.syncSource.iter()].length}`);
 check(db.platform.id.find(1)?.name === env.PLATFORM_NAME, 'platform name does not match PLATFORM_NAME');
 
 conn.disconnect();

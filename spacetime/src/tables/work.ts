@@ -79,17 +79,26 @@ export const notice = table(
   },
 );
 
-/** Outbox: approved actions waiting for the gateway to execute against external systems. */
+/**
+ * Outbox: actions waiting for the gateway to execute against the platform's
+ * systems of record. Executed in id order; `key` makes queueing idempotent.
+ */
 export const gatewayCommand = table(
   { public: true },
   {
     id: t.u64().primaryKey().autoInc(),
-    workItemId: t.u64().index('btree'),
+    key: t.string().index('btree'),
+    type: t.string().index('btree'),
+    workItemId: t.u64().optional(),
     actionJson: t.string(),
-    status: t.string(),
+    /** queued → executing → done | failed */
+    status: t.string().index('btree'),
+    resultJson: t.string().optional(),
     externalRef: t.string().optional(),
     attempts: t.u16(),
     error: t.string().optional(),
+    createdAt: t.timestamp(),
+    updatedAt: t.timestamp(),
   },
 );
 

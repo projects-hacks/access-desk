@@ -1,9 +1,10 @@
 import { SenderError, t } from 'spacetimedb/server';
 import { audit, requireRole, simDate, type Ctx } from '../context';
 import {
-  applyPlan, candidates, createWorkItem, releaseHoldsIfCured, resolvePayer, reverseApplications, setMatchStatus,
-  toJson, withdrawStaleProposals, type Movement, type Payer,
+  applyPlan, bookReceipt, candidates, createWorkItem, releaseHoldsIfCured, resolvePayer, reverseApplications,
+  setMatchStatus, withdrawStaleProposals, type Movement, type Payer,
 } from '../payments/apply';
+import { GL, cashAccount, cr, dr, isBooked, queueCommand, queueJournal } from '../payments/gateway';
 import { formatUsd, planMatch, type MatchPlan } from '../payments/match';
 import { spacetimedb } from '../schema';
 
@@ -18,7 +19,13 @@ export function onCashMovement(ctx: Ctx, m: Movement, previous: Movement | undef
 
 /** Cash removed from the source: undo whatever it did. */
 export function onCashRemoved(ctx: Ctx, m: Movement) {
-  const undone = reverseApplications(ctx, m.id);
+  const today = ctx.db.clock.id.find(1)?.simDate ?? m.valueOn;
+  const undone = reverseApplications(ctx, m.id, today);
+  if ([...ctx.db.ledgerEntry.journalId.filter(`JE-R-${m.bankRef}`)].length || isBooked(ctx, m.bankRef, `JE-R-${m.bankRef}`)) {
+    const cash = cashAccount(m.platformAccount);
+    const lines = m.direction === 'in' ? [dr(GL.UNAPPLIED_CASH, m.amountCents), cr(cash, m.amountCents)] : [dr(cash, m.amountCents), cr(GL.UNAPPLIED_CASH, m.amountCents)];
+    queueJournal(ctx, `JE-RVR-${m.bankRef}`, today, `${m.bankRef}:removed`, 'Receipt reversed: removed from bank', lines);
+  }
   if (undone !== 0n) {
     audit(ctx, { action: 'APPLICATIONS_REVERSED', subjectType: 'cash_movement', subjectId: m.id, detail: `${m.bankRef} removed from source` });
   }
@@ -46,10 +53,14 @@ function onIncoming(ctx: Ctx, m: Movement, previous: Movement | undefined) {
   // Loan repayments settle against the loan book, not invoices.
   const loanRef = m.refs.find((r) => r.startsWith('LN-'));
   if (loanRef && ctx.db.loan.id.find(loanRef)) {
+    bookReceipt(ctx, m, GL.LOANS);
     setMatchStatus(ctx, m.id, 'matched');
     audit(ctx, { action: 'CASH_RECONCILED', subjectType: 'cash_movement', subjectId: m.id, clientId: payer?.clientId, detail: `Loan repayment ${loanRef} · ${formatUsd(m.amountCents)}` });
     return;
   }
+
+  // Cash in the bank is on the books first (unapplied), whatever happens next.
+  bookReceipt(ctx, m, GL.UNAPPLIED_CASH);
 
   if (!payer) {
     setMatchStatus(ctx, m.id, 'exception');
@@ -169,6 +180,7 @@ function matchTitle(m: Movement, plan: MatchPlan, payer: Payer): string {
 
 function onOutgoing(ctx: Ctx, m: Movement) {
   if (m.matchStatus !== 'unmatched' || m.status !== 'posted') return;
+  const cash = cashAccount(m.platformAccount);
   if (m.reverses) {
     const original = [...ctx.db.cashMovement.bankRef.filter(m.reverses)][0];
     if (!original) throw new SenderError(`${m.bankRef} reverses unknown ${m.reverses}`);
@@ -179,12 +191,41 @@ function onOutgoing(ctx: Ctx, m: Movement) {
       reasoning: 'The bank returned this payment after it was applied, so the applications are reversed and the invoices are due again.',
       requiredRole: 'ACCOUNTANT', autoApplied: true,
     });
-    reverseApplications(ctx, original.id, item.id);
+    reverseApplications(ctx, original.id, m.valueOn, item.id);
+    // Cash left the bank and the invoices are owed again.
+    if (!isBooked(ctx, m.bankRef)) {
+      queueJournal(ctx, `JE-R-${m.bankRef}`, m.valueOn, m.bankRef, `Returned payment ${original.bankRef}`,
+        [dr(GL.RECEIVABLES, m.amountCents), cr(cash, m.amountCents)], item.id);
+    }
     setMatchStatus(ctx, original.id, 'reversed');
     setMatchStatus(ctx, m.id, 'matched');
     return;
   }
-  // Bank fees and loan disbursements are the platform's own outflows.
+
+  const refunded = m.refs.map((r) => [...ctx.db.cashMovement.bankRef.filter(r)].find((x) => x.direction === 'in')).find(Boolean);
+  const loanRef = m.refs.find((r) => r.startsWith('LN-'));
+  const memoType = m.memo.split(' | ')[0];
+  if (memoType === 'BANK FEE') {
+    if (!isBooked(ctx, m.bankRef)) queueJournal(ctx, `JE-R-${m.bankRef}`, m.valueOn, m.bankRef, 'Bank fees', [dr(GL.BANK_FEES, m.amountCents), cr(cash, m.amountCents)]);
+  } else if (loanRef) {
+    if (!isBooked(ctx, m.bankRef)) queueJournal(ctx, `JE-R-${m.bankRef}`, m.valueOn, m.bankRef, `Loan disbursed ${loanRef}`, [dr(GL.LOANS, m.amountCents), cr(cash, m.amountCents)]);
+  } else if (refunded) {
+    // Refund of unapplied cash (e.g. a duplicate wire).
+    if (!isBooked(ctx, m.bankRef)) queueJournal(ctx, `JE-R-${m.bankRef}`, m.valueOn, m.bankRef, `Refund of ${refunded.bankRef}`, [dr(GL.UNAPPLIED_CASH, m.amountCents), cr(cash, m.amountCents)]);
+    for (const c of [...ctx.db.clientCredit.iter()].filter((x) => x.movementId === refunded.id && x.kind === 'unapplied_cash')) {
+      ctx.db.clientCredit.id.delete(c.id);
+    }
+    setMatchStatus(ctx, refunded.id, 'refunded');
+  } else {
+    setMatchStatus(ctx, m.id, 'exception');
+    createWorkItem(ctx, {
+      kind: 'UNIDENTIFIED_CASH', clientId: '', subjectId: m.id, amountCents: m.amountCents,
+      title: `Unexplained ${formatUsd(m.amountCents)} leaving ${m.platformAccount}`,
+      proposal: { movementId: m.id }, reasoning: 'Money left a platform account with no matching instruction.',
+      policyRef: '', confidence: 0, requiredRole: 'CONTROLLER', autoApplied: false,
+    });
+    return;
+  }
   setMatchStatus(ctx, m.id, 'matched');
 }
 
@@ -193,6 +234,17 @@ function onOutgoing(ctx: Ctx, m: Movement) {
 /** Called when a payment work item is approved: apply the proposed match. */
 export function onPaymentApproved(ctx: Ctx, workItemId: bigint) {
   const item = ctx.db.workItem.id.find(workItemId);
+  if (item?.kind === 'REFUND') {
+    const p = JSON.parse(item.proposalJson) as { movementId: string; refundCents: string };
+    const original = ctx.db.cashMovement.id.find(p.movementId);
+    if (!original) throw new SenderError(`movement ${p.movementId} no longer exists`);
+    const today = ctx.db.clock.id.find(1)?.simDate ?? original.valueOn;
+    queueCommand(ctx, `REFUND:${p.movementId}`, {
+      type: 'REFUND', clientId: item.clientId, movementId: p.movementId, bankRef: original.bankRef,
+      amountCents: BigInt(p.refundCents), on: today,
+    }, item.id);
+    return;
+  }
   if (!item || item.kind !== 'PAYMENT_MATCH') return;
   const proposal = JSON.parse(item.proposalJson) as {
     movementId: string;
@@ -235,6 +287,9 @@ export const placeHold = spacetimedb.reducer(
       .map((i) => i.id);
     const hold = ctx.db.hold.insert({
       id: 0n, ...args, invoiceIds, workItemId: undefined, status: 'active', createdAt: ctx.timestamp, releasedAt: undefined,
+    });
+    queueCommand(ctx, `PLACE_HOLD:${hold.id}`, {
+      type: 'PLACE_HOLD', clientId: args.clientId, holdId: String(hold.id), amountCents: args.amountCents, clause: args.clause,
     });
     const lever = ctx.db.accessLever.id.find(`${args.clientId}:withdrawals`);
     if (lever) ctx.db.accessLever.id.update({ ...lever, state: 'limited', detail: `${formatUsd(args.amountCents)} held (§${args.clause})` });

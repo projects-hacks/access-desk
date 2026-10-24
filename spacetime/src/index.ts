@@ -7,4 +7,5 @@ export * from './reducers/world';
 export * from './reducers/sync';
 export * from './reducers/work';
 export { placeHold } from './reducers/payments';
+export * from './reducers/gateway';
 export { upsertPolicy } from './reducers/policies';

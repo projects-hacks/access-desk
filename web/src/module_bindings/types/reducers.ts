@@ -8,6 +8,9 @@ import { type Infer as __Infer } from "spacetimedb";
 // Import all reducer arg schemas
 import AdvanceClockReducer from "../advance_clock_reducer";
 import AssignRoleReducer from "../assign_role_reducer";
+import ClaimGatewayCommandReducer from "../claim_gateway_command_reducer";
+import CompleteGatewayCommandReducer from "../complete_gateway_command_reducer";
+import FailGatewayCommandReducer from "../fail_gateway_command_reducer";
 import PlaceHoldReducer from "../place_hold_reducer";
 import ProposeWorkItemReducer from "../propose_work_item_reducer";
 import RecordSyncErrorReducer from "../record_sync_error_reducer";
@@ -26,6 +29,7 @@ import UpsertContractClauseReducer from "../upsert_contract_clause_reducer";
 import UpsertCustodyHoldingReducer from "../upsert_custody_holding_reducer";
 import UpsertDisputeReducer from "../upsert_dispute_reducer";
 import UpsertInvoiceReducer from "../upsert_invoice_reducer";
+import UpsertLedgerEntriesReducer from "../upsert_ledger_entries_reducer";
 import UpsertLoanReducer from "../upsert_loan_reducer";
 import UpsertMetricSnapshotReducer from "../upsert_metric_snapshot_reducer";
 import UpsertOwedToClientReducer from "../upsert_owed_to_client_reducer";
@@ -37,6 +41,9 @@ import UpsertRawRecordReducer from "../upsert_raw_record_reducer";
 
 export type AdvanceClockParams = __Infer<typeof AdvanceClockReducer>;
 export type AssignRoleParams = __Infer<typeof AssignRoleReducer>;
+export type ClaimGatewayCommandParams = __Infer<typeof ClaimGatewayCommandReducer>;
+export type CompleteGatewayCommandParams = __Infer<typeof CompleteGatewayCommandReducer>;
+export type FailGatewayCommandParams = __Infer<typeof FailGatewayCommandReducer>;
 export type PlaceHoldParams = __Infer<typeof PlaceHoldReducer>;
 export type ProposeWorkItemParams = __Infer<typeof ProposeWorkItemReducer>;
 export type RecordSyncErrorParams = __Infer<typeof RecordSyncErrorReducer>;
@@ -55,6 +62,7 @@ export type UpsertContractClauseParams = __Infer<typeof UpsertContractClauseRedu
 export type UpsertCustodyHoldingParams = __Infer<typeof UpsertCustodyHoldingReducer>;
 export type UpsertDisputeParams = __Infer<typeof UpsertDisputeReducer>;
 export type UpsertInvoiceParams = __Infer<typeof UpsertInvoiceReducer>;
+export type UpsertLedgerEntriesParams = __Infer<typeof UpsertLedgerEntriesReducer>;
 export type UpsertLoanParams = __Infer<typeof UpsertLoanReducer>;
 export type UpsertMetricSnapshotParams = __Infer<typeof UpsertMetricSnapshotReducer>;
 export type UpsertOwedToClientParams = __Infer<typeof UpsertOwedToClientReducer>;

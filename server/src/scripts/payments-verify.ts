@@ -39,8 +39,11 @@ const meridian = invoices('ORG-90142', '2026-01');
 check(allPaid(meridian), 'Meridian: January invoices paid', statuses(meridian));
 const granite = invoices('ORG-90391', '2026-01');
 check(allPaid(granite), 'Granite Bay: both invoices paid despite $25 short', statuses(granite));
-check([...db.paymentApplication.iter()].some((a) => a.method === 'short_fee' && a.amountCents === 2500n && a.policyRef === 'pol-002'),
-  'Granite Bay: $25.00 written off to bank fees under pol-002');
+const graniteApps = [...db.paymentApplication.iter()].filter((a) => granite.some((i) => i.id === a.invoiceId) && !a.reversed);
+const writeOffs = graniteApps.filter((a) => a.method === 'write_off');
+check(writeOffs.length === 1 && writeOffs[0]!.amountCents === 2500n && writeOffs[0]!.policyRef === 'pol-002'
+  && graniteApps.filter((a) => a.method === 'short_fee').reduce((s, a) => s + a.amountCents, 0n) === 5_797_500n,
+  'Granite Bay: $57,975.00 cash applied, exactly $25.00 written off under pol-002');
 const fieldstone = invoices('ORG-90229').filter((i) => i.period !== '2026-02');
 check(allPaid(fieldstone) && fieldstone.length === 6, 'Fieldstone: lump sum paid all 6 Dec + Jan invoices', statuses(fieldstone));
 check(invoices('ORG-90229', '2026-02').every((i) => i.status === 'open'), 'Fieldstone: February left open');
