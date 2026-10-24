@@ -91,6 +91,28 @@ class SpacetimeClient:
         """APPROVED | REJECTED | NEEDS_INFO | WITHDRAWN. Denied attempts are audited, not raised."""
         self.call("transition_work_item", work_item_id, to_state, note)
 
+    # ── Credit analyst (seat 1) ────────────────────────────────────────────
+
+    def upsert_credit_profile(
+        self, client_id: str, value_score: int, reliability_score: int, coverage_ratio: float,
+        coverage_detail: str, expected_settle_on: str | None,
+    ) -> None:
+        """Scores 0-100. Audited (CREDIT_SCORED) only when a score moves."""
+        self.call(
+            "upsert_credit_profile", client_id, value_score, reliability_score, coverage_ratio,
+            coverage_detail, _option(expected_settle_on),
+        )
+
+    def upsert_exploit_flag(
+        self, id: str, client_id: str, pattern: str, score: float, status: str, months: int,
+        evidence_json: str, proposed_fix: str,
+    ) -> None:
+        """id = `<pattern>:<client_id>`. A row a controller set to `cleared` stays cleared."""
+        self.call(
+            "upsert_exploit_flag", id, client_id, pattern, score, status, months, evidence_json,
+            proposed_fix,
+        )
+
     # ── Reads ──────────────────────────────────────────────────────────────
 
     def open_work(self) -> list[dict[str, Any]]:
@@ -113,6 +135,11 @@ class SpacetimeClient:
 
     def close(self) -> None:
         self._http.close()
+
+
+def _option(value: Any) -> dict[str, Any]:
+    """SATS-JSON for option<T>."""
+    return {"none": []} if value is None else {"some": value}
 
 
 class ReducerError(Exception):
