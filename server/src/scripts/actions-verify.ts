@@ -48,10 +48,13 @@ execFileSync('spacetime', ['call', '-s', 'maincloud', env.STDB_DATABASE, 'assign
 const subscribe = (conn: DbConnection) => new Promise<void>((resolve) => conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([
   tables.workItem, tables.invoice, tables.paymentApplication, tables.ledgerEntry, tables.custodyHolding, tables.hold,
   tables.accessLever, tables.accessRequest, tables.cashMovement, tables.notice, tables.tieOutRun, tables.auditEvent,
-  tables.clock, tables.deadline, tables.bankAccount, tables.exploitFlag, tables.gatewayCommand,
+  tables.bankAccount, tables.exploitFlag, tables.gatewayCommand,
 ]));
 await subscribe(controller);
 const db = controller.db;
+// Time on its own small subscription: a big one can lag behind fast clock ticks.
+await new Promise<void>((resolve) => demo.subscriptionBuilder().onApplied(() => resolve()).subscribe([tables.clock, tables.deadline]));
+const timeDb = demo.db;
 
 let failed = 0;
 const check = (ok: boolean, label: string, detail = '') => {
@@ -113,7 +116,7 @@ r = await refused(agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 
 check(r === true, 'Close-only on Kestrel refused (hedged book)', String(r));
 r = await refused(agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 'financing', step: 'NO_NEW_BORROWING', reasoning: reason, policyRef: 'pol-006', confidence: 0.9 }), /contract/);
 check(r === true, 'Financing refused: not in Kestrel\'s contract', String(r));
-const cure = () => [...db.deadline.iter()].find((d) => d.clientId === KESTREL && d.kind === 'cure_period');
+const cure = () => [...timeDb.deadline.iter()].find((d) => d.clientId === KESTREL && d.kind === 'cure_period');
 check(cure()?.status === 'open' && cure()?.dueOn === '2026-03-06', 'Kestrel notified Feb 19: cure period (§9.1) runs to Mar 6', `${cure()?.status} ${cure()?.dueOn}`);
 r = await refused(agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 'withdrawals', step: 'HOLD_AMOUNT_OWED', reasoning: reason, policyRef: 'pol-006', confidence: 0.9 }), /9\.1/);
 check(r === true, 'Hold refused while the cure period runs', String(r));
@@ -134,12 +137,12 @@ console.log('\nTime (scheduled reducer)');
 await agent.reducers.setDeadline({ clientId: KESTREL, kind: 'promise_to_pay', dueOn: '2026-03-05', note: 'CFO promised a wire by Thursday', workItemId: undefined });
 await demo.reducers.setClockSpeed({ secondsPerDay: 1, runUntil: '2026-03-06' });
 // Ticks are once a second, so three sim days take three to six seconds.
-for (let t = 0; t < 80 && db.clock.id.find(1)?.secondsPerDay; t++) await wait(250);
+for (let t = 0; t < 80 && timeDb.clock.id.find(1)?.secondsPerDay; t++) await wait(250);
 await wait(500);
-const clock = db.clock.id.find(1);
+const clock = timeDb.clock.id.find(1);
 check(clock?.simDate === '2026-03-06' && clock.secondsPerDay === 0, 'Clock ran on its own to Mar 6 and paused', `${clock?.simDate} ${clock?.secondsPerDay}`);
 check(cure()?.status === 'expired', 'Cure period expired unpaid', cure()?.status);
-const promise = [...db.deadline.iter()].find((d) => d.clientId === KESTREL && d.kind === 'promise_to_pay');
+const promise = [...timeDb.deadline.iter()].find((d) => d.clientId === KESTREL && d.kind === 'promise_to_pay');
 check(promise?.status === 'broken', 'Promise to pay marked broken', promise?.status);
 await settle();
 
