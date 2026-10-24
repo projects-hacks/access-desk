@@ -2,9 +2,9 @@ import { tables, type DbConnection } from '../module_bindings';
 import type { GatewayCommand } from '../module_bindings/types';
 import type { Dataset } from '../dataset';
 import type { Bank } from '../integrations/nessie/bank';
-import { GatewayActionSchema, type GatewayResult } from '../platform/commands';
+import { GatewayActionSchema, type GatewayResult, type InvoiceState } from '../platform/commands';
 import { PermanentError, type PlatformApi } from '../platform/client';
-import { sendRefund } from './bank';
+import { sendCustodyWithdrawal, sendRefund, syncBills } from './bank';
 
 /**
  * The gateway: the only writer to systems of record. Executes queued commands
@@ -15,6 +15,8 @@ import { sendRefund } from './bank';
 export class Gateway {
   private draining = false;
   private again = false;
+  /** Bill updates run in order, off the critical path. */
+  private bills: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly conn: DbConnection,
@@ -76,6 +78,17 @@ export class Gateway {
     return next;
   }
 
+  private updateBills(invoices: InvoiceState[]) {
+    this.bills = this.bills
+      .then(() => syncBills(this.bank, this.ds, invoices))
+      .catch((e) => this.log(`[gateway] bill status update failed: ${e instanceof Error ? e.message : e}`));
+  }
+
+  /** Bill updates still in flight (scripts wait for these before exiting). */
+  settled(): Promise<void> {
+    return this.bills;
+  }
+
   /** Returns false when the command must be retried later. */
   private async run(cmd: GatewayCommand): Promise<boolean> {
     try {
@@ -91,11 +104,18 @@ export class Gateway {
         const nessie = await sendRefund(this.bank, this.ds, String(cmd.id), action);
         result = { type: 'REFUND', nessie };
         externalRef = nessie.platform;
+      } else if (action.type === 'CUSTODY_WITHDRAWAL') {
+        // Custody releases the cash first; then the wire goes out.
+        const custody = await this.platform.execute(String(cmd.id), action);
+        const nessie = await sendCustodyWithdrawal(this.bank, this.ds, action);
+        result = { ...custody, type: 'CUSTODY_WITHDRAWAL', nessie } as GatewayResult;
+        externalRef = nessie.platform;
       } else {
         result = await this.platform.execute(String(cmd.id), action);
       }
       await this.conn.reducers.completeGatewayCommand({ id: cmd.id, resultJson: JSON.stringify(result), externalRef });
-      if (action.type === 'REFUND') await this.onBankWrite();
+      if (action.type === 'REFUND' || action.type === 'CUSTODY_WITHDRAWAL') await this.onBankWrite();
+      if ('invoices' in result) this.updateBills(result.invoices);
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

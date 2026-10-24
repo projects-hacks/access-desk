@@ -6,6 +6,7 @@ export default spacetimedb;
 export * from './reducers/world';
 export * from './reducers/sync';
 export * from './reducers/work';
+export { proposeCustodyDebit, proposeRestriction, proposeRestore, proposeNotice, requestCustodyWithdrawal } from './reducers/actions';
 export { placeHold } from './reducers/payments';
 export * from './reducers/gateway';
 export * from './reducers/books';

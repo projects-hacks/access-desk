@@ -3,6 +3,7 @@ import { actorOf, audit, requireRole } from '../context';
 import { CAN_APPROVE, CAN_POST, type Role } from '../roles';
 import { spacetimedb } from '../schema';
 import { canTransition, type WorkItemState } from '../workflow';
+import { executeApproved } from './actions';
 import { onPaymentApproved } from './payments';
 
 export const proposeWorkItem = spacetimedb.reducer(
@@ -59,6 +60,7 @@ export const transitionWorkItem = spacetimedb.reducer(
     if (!role) denial = 'caller has no registered role';
     else if (!canTransition(from, to)) denial = `illegal transition ${from} -> ${to}`;
     else if (to === 'APPROVED' && !CAN_APPROVE.includes(role)) denial = `${role} cannot approve`;
+    else if (to === 'APPROVED' && item.requiredRole === 'CONTROLLER' && role !== 'CONTROLLER') denial = 'needs a controller';
     else if (to === 'APPROVED' && item.proposedBy.isEqual(ctx.sender)) denial = 'no self-approval';
     else if (to === 'POSTED' && !CAN_POST.includes(role)) denial = 'only the gateway posts';
 
@@ -70,6 +72,9 @@ export const transitionWorkItem = spacetimedb.reducer(
     // Denied attempts return instead of throwing so the audit row still commits.
     if (denial) return;
     ctx.db.workItem.id.update({ ...item, state: to, updatedAt: ctx.timestamp });
-    if (to === 'APPROVED') onPaymentApproved(ctx, item.id);
+    if (to === 'APPROVED') {
+      onPaymentApproved(ctx, item.id);
+      executeApproved(ctx, item.id);
+    }
   },
 );

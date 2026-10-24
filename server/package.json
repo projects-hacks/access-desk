@@ -16,7 +16,8 @@
     "stdb:roles": "tsx --env-file-if-exists=../.env src/scripts/assign-roles.ts",
     "payments:verify": "tsx --env-file-if-exists=../.env src/scripts/payments-verify.ts",
     "ledger:verify": "tsx --env-file-if-exists=../.env src/scripts/ledger-verify.ts",
-    "tieout:verify": "tsx --env-file-if-exists=../.env src/scripts/tieout-verify.ts"
+    "tieout:verify": "tsx --env-file-if-exists=../.env src/scripts/tieout-verify.ts",
+    "actions:verify": "tsx --env-file-if-exists=../.env src/scripts/actions-verify.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

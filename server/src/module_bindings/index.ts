@@ -40,9 +40,14 @@ import ClaimGatewayCommandReducer from "./claim_gateway_command_reducer";
 import CompleteGatewayCommandReducer from "./complete_gateway_command_reducer";
 import FailGatewayCommandReducer from "./fail_gateway_command_reducer";
 import PlaceHoldReducer from "./place_hold_reducer";
+import ProposeCustodyDebitReducer from "./propose_custody_debit_reducer";
+import ProposeNoticeReducer from "./propose_notice_reducer";
+import ProposeRestoreReducer from "./propose_restore_reducer";
+import ProposeRestrictionReducer from "./propose_restriction_reducer";
 import ProposeWorkItemReducer from "./propose_work_item_reducer";
 import RecordSyncErrorReducer from "./record_sync_error_reducer";
 import RemoveCashMovementReducer from "./remove_cash_movement_reducer";
+import RequestCustodyWithdrawalReducer from "./request_custody_withdrawal_reducer";
 import ResetWorldReducer from "./reset_world_reducer";
 import SetClockReducer from "./set_clock_reducer";
 import SetPlatformReducer from "./set_platform_reducer";
@@ -675,9 +680,14 @@ const reducersSchema = __reducers(
   __reducerSchema("complete_gateway_command", CompleteGatewayCommandReducer),
   __reducerSchema("fail_gateway_command", FailGatewayCommandReducer),
   __reducerSchema("place_hold", PlaceHoldReducer),
+  __reducerSchema("propose_custody_debit", ProposeCustodyDebitReducer),
+  __reducerSchema("propose_notice", ProposeNoticeReducer),
+  __reducerSchema("propose_restore", ProposeRestoreReducer),
+  __reducerSchema("propose_restriction", ProposeRestrictionReducer),
   __reducerSchema("propose_work_item", ProposeWorkItemReducer),
   __reducerSchema("record_sync_error", RecordSyncErrorReducer),
   __reducerSchema("remove_cash_movement", RemoveCashMovementReducer),
+  __reducerSchema("request_custody_withdrawal", RequestCustodyWithdrawalReducer),
   __reducerSchema("reset_world", ResetWorldReducer),
   __reducerSchema("set_clock", SetClockReducer),
   __reducerSchema("set_platform", SetPlatformReducer),

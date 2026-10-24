@@ -45,6 +45,66 @@ class SpacetimeClient:
             p.required_role.value,
         )
 
+    # ── Actions ────────────────────────────────────────────────────────────
+    # Each reducer checks the contract, capabilities and policy before a work
+    # item exists, and raises ReducerError with the reason when it refuses.
+    # Approved (or auto-approved by policy) actions run through the gateway.
+
+    def propose_custody_debit(
+        self, client_id: str, invoice_ids: list[str], reasoning: str, policy_ref: str = "pol-005",
+        confidence: float = 0.9,
+    ) -> None:
+        """Collect overdue invoices from custody cash. Empty invoice_ids = every overdue invoice."""
+        self.call("propose_custody_debit", client_id, invoice_ids, reasoning, policy_ref, confidence)
+
+    def propose_restriction(
+        self, client_id: str, lever: str, step: str, reasoning: str, policy_ref: str, confidence: float = 0.9,
+    ) -> None:
+        """
+        One step on one lever: withdrawals HOLD_AMOUNT_OWED, trading NO_NEW_POSITIONS,
+        api RATE_LIMIT, financing NO_NEW_BORROWING, ... (see the capability table).
+        Always needs a controller.
+        """
+        self.call("propose_restriction", client_id, lever, step, reasoning, policy_ref, confidence)
+
+    def propose_restore(
+        self, client_id: str, lever: str, reasoning: str, policy_ref: str = "pol-011", confidence: float = 0.9,
+    ) -> None:
+        self.call("propose_restore", client_id, lever, reasoning, policy_ref, confidence)
+
+    def propose_notice(
+        self, client_id: str, channel: str, body: str, reasoning: str, policy_ref: str = "pol-007",
+        confidence: float = 0.9,
+    ) -> None:
+        """channel: email | portal | rm"""
+        self.call("propose_notice", client_id, channel, body, reasoning, policy_ref, confidence)
+
+    def request_withdrawal(self, client_id: str, amount_cents: int) -> None:
+        """A client withdrawal request (CLIENT for their own account, DEMO, CONTROLLER)."""
+        self.call("request_custody_withdrawal", client_id, amount_cents)
+
+    def decide(self, work_item_id: int, to_state: str, note: str = "") -> None:
+        """APPROVED | REJECTED | NEEDS_INFO | WITHDRAWN. Denied attempts are audited, not raised."""
+        self.call("transition_work_item", work_item_id, to_state, note)
+
+    # ── Reads ──────────────────────────────────────────────────────────────
+
+    def open_work(self) -> list[dict[str, Any]]:
+        """Work waiting on a person or an agent."""
+        return self.sql("SELECT * FROM work_item WHERE state = 'PROPOSED' OR state = 'NEEDS_INFO'")
+
+    def client_snapshot(self, client_id: str) -> dict[str, Any]:
+        """Everything an agent needs to reason about one client."""
+        cid = client_id.replace("'", "''")
+        tables = [
+            "invoice", "dispute", "contract", "contract_clause", "access_lever", "hold", "custody_holding",
+            "position", "loan", "client_credit", "payer_identity", "credit_profile", "work_item", "access_request",
+        ]
+        snap: dict[str, Any] = {"client": next(iter(self.sql(f"SELECT * FROM client WHERE id = '{cid}'")), None)}
+        for table in tables:
+            snap[table] = self.sql(f"SELECT * FROM {table} WHERE client_id = '{cid}'")
+        return snap
+
     def close(self) -> None:
         self._http.close()
 

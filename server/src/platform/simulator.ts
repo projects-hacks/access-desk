@@ -102,6 +102,15 @@ export class PlatformSimulator {
           holdings: [{ id: usd.id, quantity: usd.quantity, valueCents: usd.valueCents }],
         };
       }
+      case 'CUSTODY_WITHDRAWAL': {
+        const usd = this.holdings.get(`${a.clientId}:USD`);
+        if (!usd) throw new PlatformError(`${a.clientId} has no USD custody balance`);
+        const held = [...this.holds.values()].filter((h) => h.clientId === a.clientId && h.status === 'active').reduce((s, h) => s + h.amountCents, 0);
+        if (usd.valueCents - held < a.amountCents) throw new PlatformError(`${a.clientId} can withdraw ${usd.valueCents - held}, asked ${a.amountCents}`);
+        usd.valueCents -= a.amountCents;
+        usd.quantity = usd.valueCents / PRICES.USD;
+        return { type: 'CUSTODY_WITHDRAWAL', holdings: [{ id: usd.id, quantity: usd.quantity, valueCents: usd.valueCents }] };
+      }
       case 'SEND_NOTICE': {
         const messageId = `MSG-${String(this.notices.length + 1).padStart(5, '0')}`;
         this.notices.push({ messageId, clientId: a.clientId, channel: a.channel, body: a.body });

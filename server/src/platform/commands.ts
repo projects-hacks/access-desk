@@ -22,9 +22,13 @@ export const GatewayActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('PLACE_HOLD'), clientId: z.string(), holdId: z.string(), amountCents: cents, clause: z.string() }),
   z.object({ type: z.literal('RELEASE_HOLD'), clientId: z.string(), holdId: z.string() }),
   z.object({ type: z.literal('SET_LEVER'), clientId: z.string(), lever: z.enum(['withdrawals', 'trading', 'api', 'financing']), state: z.string(), detail: z.string() }),
-  z.object({ type: z.literal('CUSTODY_DEBIT'), clientId: z.string(), amountCents: cents, on: date, invoiceIds: z.array(z.string()).min(1) }),
+  z.object({
+    type: z.literal('CUSTODY_DEBIT'), clientId: z.string(), amountCents: cents, on: date, invoiceIds: z.array(z.string()).min(1),
+    applications: z.array(applicationLine).default([]),
+  }),
+  z.object({ type: z.literal('CUSTODY_WITHDRAWAL'), clientId: z.string(), withdrawalId: z.string(), amountCents: cents, on: date }),
   z.object({ type: z.literal('REFUND'), clientId: z.string(), movementId: z.string(), bankRef: z.string(), amountCents: cents, on: date }),
-  z.object({ type: z.literal('SEND_NOTICE'), clientId: z.string(), channel: z.enum(['email', 'portal', 'rm']), body: z.string() }),
+  z.object({ type: z.literal('SEND_NOTICE'), clientId: z.string(), channel: z.enum(['email', 'portal', 'rm']), body: z.string(), noticeId: z.string().optional() }),
 ]);
 
 export type GatewayAction = z.infer<typeof GatewayActionSchema>;
@@ -33,11 +37,14 @@ export type ActionType = GatewayAction['type'];
 /** What a system of record reports back after a write; the module applies it to the golden copy. */
 export interface InvoiceState { id: string; paidCents: number; paidOn: string | null }
 export interface LeverState { id: string; state: string; detail: string }
+export interface HoldingState { id: string; quantity: number; valueCents: number }
+export interface BankRefs { platform: string; counterparty: string }
 
 export type GatewayResult =
   | { type: 'APPLY_PAYMENT' | 'REVERSE_PAYMENT'; invoices: InvoiceState[] }
   | { type: 'POST_JOURNAL'; journalId: string }
   | { type: 'PLACE_HOLD' | 'RELEASE_HOLD' | 'SET_LEVER'; lever: LeverState }
-  | { type: 'CUSTODY_DEBIT'; invoices: InvoiceState[]; holdings: { id: string; quantity: number; valueCents: number }[] }
-  | { type: 'REFUND'; nessie: { platform: string; counterparty: string } }
+  | { type: 'CUSTODY_DEBIT'; invoices: InvoiceState[]; holdings: HoldingState[] }
+  | { type: 'CUSTODY_WITHDRAWAL'; holdings: HoldingState[]; nessie?: BankRefs }
+  | { type: 'REFUND'; nessie: BankRefs }
   | { type: 'SEND_NOTICE'; messageId: string };

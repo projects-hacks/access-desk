@@ -13,12 +13,15 @@ reducer → gateway_command (queued) → gateway claims → platform API / bank 
 | `APPLY_PAYMENT`, `REVERSE_PAYMENT` | Billing (`/platform/billing/...`) | Invoice paid amounts and dates |
 | `POST_JOURNAL` | General ledger (`/platform/gl/journals`) | Journal id; lines written to `ledger_entry` |
 | `PLACE_HOLD`, `RELEASE_HOLD`, `SET_LEVER` | Admin console (`/platform/admin/...`) | Lever state |
-| `CUSTODY_DEBIT` | Custody (`/platform/custody/debits`) | Balances and invoices |
+| `CUSTODY_DEBIT` | Custody (`/platform/custody/debits`) | Balances and invoices; applications marked posted |
+| `CUSTODY_WITHDRAWAL` | Custody (`/platform/custody/withdrawals`), then a Nessie wire `CW-nnnn` | Balances, Nessie ids |
 | `REFUND` | Bank (Nessie: withdrawal + client deposit) | Nessie ids |
 | `SEND_NOTICE` | Messaging (`/platform/notices`) | Message id |
 
 - Code: `server/src/gateway/executor.ts`, contract in `server/src/platform/commands.ts` (zod), module side in `spacetime/src/reducers/gateway.ts`.
 - Identity: its own token (`STDB_GATEWAY_TOKEN`, role GATEWAY). Claiming makes double execution impossible.
+- Bills: after any command that changes invoices, the matching Nessie bill is set to `completed` (paid) or back to `pending` (reversed). Best effort, off the critical path.
+- A work item moves APPROVED → POSTED once every command it queued is done.
 - Failures: platform refusals (422) are permanent → `failed` + a `SYSTEM_EXCEPTION` work item for the controller. Network errors retry with backoff (5 attempts), blocking later commands so order holds.
 - Billing vs us: `payment_application.posted` / `reversal_posted` record what billing confirmed; invoice paid = billing's figure + Σ(what we count − what billing counts). Correct at every moment, including mid-flight.
 
@@ -38,7 +41,7 @@ reducer → gateway_command (queued) → gateway claims → platform API / bank 
 | 4100–4400 | Revenue: custody, trading, financing, API |
 | 6850 | Bank fees |
 
-Baseline (`server/src/dataset/gl.ts`): billing booked invoices and the cash it applied; treasury booked receipts that posted before our system ran. Our system books, through the gateway: receipts it is first to see (Dr cash / Cr 2300), applications (Dr 2300 / Cr 1200), write-offs (Dr 6850 / Cr 1200), returns (Dr 1200 / Cr cash), bank fees, loan movements, refunds (Dr 2300 / Cr cash). A journal is never posted for a source document the ledger already has.
+Baseline (`server/src/dataset/gl.ts`): billing booked invoices and the cash it applied; treasury booked receipts that posted before our system ran. Our system books, through the gateway: receipts it is first to see (Dr cash / Cr 2300), applications (Dr 2300 / Cr 1200), write-offs (Dr 6850 / Cr 1200), returns (Dr 1200 / Cr cash), bank fees, loan movements, refunds (Dr 2300 / Cr cash), custody debits (Dr 2100 / Cr 1200), custody withdrawals (Dr 2100 / Cr 1011). A journal is never posted for a source document the ledger already has.
 
 ## Tie-out
 

@@ -7,6 +7,7 @@ import {
 import { GL, cashAccount, cr, dr, isBooked, queueCommand, queueJournal } from '../payments/gateway';
 import { formatUsd, planMatch, type MatchPlan } from '../payments/match';
 import { spacetimedb } from '../schema';
+import { placeHoldFor } from './actions';
 
 /**
  * Payment checking. Runs in the same transaction as the cash being recorded,
@@ -224,10 +225,14 @@ function onOutgoing(ctx: Ctx, m: Movement) {
 
   const refunded = m.refs.map((r) => [...ctx.db.cashMovement.bankRef.filter(r)].find((x) => x.direction === 'in')).find(Boolean);
   const loanRef = m.refs.find((r) => r.startsWith('LN-'));
+  const withdrawal = withdrawalFor(ctx, m);
   if (m.category === 'fee') {
     if (!isBooked(ctx, m.bankRef)) queueJournal(ctx, `JE-R-${m.bankRef}`, m.valueOn, m.bankRef, 'Bank fees', [dr(GL.BANK_FEES, m.amountCents), cr(cash, m.amountCents)]);
   } else if (loanRef) {
     if (!isBooked(ctx, m.bankRef)) queueJournal(ctx, `JE-R-${m.bankRef}`, m.valueOn, m.bankRef, `Loan disbursed ${loanRef}`, [dr(GL.LOANS, m.amountCents), cr(cash, m.amountCents)]);
+  } else if (withdrawal) {
+    // Client's own money leaving custody (request_custody_withdrawal).
+    if (!isBooked(ctx, m.bankRef)) queueJournal(ctx, `JE-R-${m.bankRef}`, m.valueOn, m.bankRef, `Custody withdrawal CW-${String(withdrawal.id).padStart(4, '0')}`, [dr(GL.CLIENT_FUNDS, m.amountCents), cr(cash, m.amountCents)]);
   } else if (refunded) {
     // Refund of unapplied cash (e.g. a duplicate wire).
     if (!isBooked(ctx, m.bankRef)) queueJournal(ctx, `JE-R-${m.bankRef}`, m.valueOn, m.bankRef, `Refund of ${refunded.bankRef}`, [dr(GL.UNAPPLIED_CASH, m.amountCents), cr(cash, m.amountCents)]);
@@ -246,6 +251,14 @@ function onOutgoing(ctx: Ctx, m: Movement) {
     return;
   }
   setMatchStatus(ctx, m.id, 'matched');
+}
+
+/** The approved withdrawal a wire out pays, if its CW reference, amount and client agree. */
+function withdrawalFor(ctx: Ctx, m: Movement) {
+  const ref = m.refs.find((r) => r.startsWith('CW-'));
+  const request = ref ? ctx.db.accessRequest.id.find(BigInt(ref.slice(3))) : undefined;
+  if (!request || request.allowedCents !== m.amountCents) return undefined;
+  return resolvePayer(ctx, m)?.clientId === request.clientId ? request : undefined;
 }
 
 // ── Decisions on payment work items ─────────────────────────────────────────
@@ -291,9 +304,9 @@ export function onPaymentApproved(ctx: Ctx, workItemId: bigint) {
   }
 }
 
-// ── Admin tool until the gateway's hold flow exists ─────────────────────────
+// ── Admin tool ──────────────────────────────────────────────────────────────
 
-/** Places a hold the way an approved restriction would. ADMIN only; for setup and tests. */
+/** Places a hold directly, skipping the proposal. ADMIN only; for setup and tests. */
 export const placeHold = spacetimedb.reducer(
   { clientId: t.string(), amountCents: t.i64(), reason: t.string(), clause: t.string() },
   (ctx, args) => {
@@ -304,17 +317,7 @@ export const placeHold = spacetimedb.reducer(
     const invoiceIds = [...ctx.db.invoice.clientId.filter(args.clientId)]
       .filter((i) => i.dueOn < today && i.status !== 'disputed' && i.paidCents < i.amountCents)
       .map((i) => i.id);
-    const hold = ctx.db.hold.insert({
-      id: 0n, ...args, invoiceIds, workItemId: undefined, status: 'active', createdAt: ctx.timestamp, releasedAt: undefined,
-    });
-    queueCommand(ctx, `PLACE_HOLD:${hold.id}`, {
-      type: 'PLACE_HOLD', clientId: args.clientId, holdId: String(hold.id), amountCents: args.amountCents, clause: args.clause,
-    });
-    const lever = ctx.db.accessLever.id.find(`${args.clientId}:withdrawals`);
-    if (lever) ctx.db.accessLever.id.update({ ...lever, state: 'limited', detail: `${formatUsd(args.amountCents)} held (§${args.clause})` });
-    const client = ctx.db.client.id.find(args.clientId);
-    if (client) ctx.db.client.id.update({ ...client, status: 'held' });
-    audit(ctx, { action: 'HOLD_PLACED', subjectType: 'hold', subjectId: String(hold.id), clientId: args.clientId, toState: 'active', detail: `${formatUsd(args.amountCents)} · ${args.reason} · secures ${invoiceIds.join(', ')}` });
+    placeHoldFor(ctx, args.clientId, args.amountCents, invoiceIds, args.clause, args.reason);
   },
 );
 

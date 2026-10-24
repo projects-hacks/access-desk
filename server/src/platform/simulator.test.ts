@@ -52,8 +52,18 @@ test('custody debit must match what is owed and fit the cash balance', () => {
   const bluefin = ds.invoices.filter((i) => i.clientId === 'ORG-90233' && i.period === '2026-01');
   const owed = bluefin.reduce((s, i) => s + i.amountCents, 0);
   const before = sim.holdings.get('ORG-90233:USD')!.valueCents;
-  sim.apply('d1', { type: 'CUSTODY_DEBIT', clientId: 'ORG-90233', amountCents: owed, on: '2026-03-03', invoiceIds: bluefin.map((i) => i.id) });
+  sim.apply('d1', { type: 'CUSTODY_DEBIT', clientId: 'ORG-90233', amountCents: owed, on: '2026-03-03', invoiceIds: bluefin.map((i) => i.id), applications: [] });
   assert.equal(sim.holdings.get('ORG-90233:USD')!.valueCents, before - owed);
   assert.ok(bluefin.every((i) => sim.invoices.get(i.id)!.status === 'paid'));
-  assert.throws(() => sim.apply('d2', { type: 'CUSTODY_DEBIT', clientId: 'ORG-90233', amountCents: 1, on: '2026-03-03', invoiceIds: bluefin.map((i) => i.id) }), PlatformError);
+  assert.throws(() => sim.apply('d2', { type: 'CUSTODY_DEBIT', clientId: 'ORG-90233', amountCents: 1, on: '2026-03-03', invoiceIds: bluefin.map((i) => i.id), applications: [] }), PlatformError);
+});
+
+test('custody withdrawal never touches held cash', () => {
+  const sim = new PlatformSimulator(ds);
+  const usd = sim.holdings.get('ORG-90412:USD')!;
+  const before = usd.valueCents;
+  sim.apply('h1', { type: 'PLACE_HOLD', clientId: 'ORG-90412', holdId: '1', amountCents: before - 1_000_00, clause: '7.2' });
+  assert.throws(() => sim.apply('w1', { type: 'CUSTODY_WITHDRAWAL', clientId: 'ORG-90412', withdrawalId: '1', amountCents: 1_000_01, on: '2026-03-03' }), PlatformError);
+  sim.apply('w2', { type: 'CUSTODY_WITHDRAWAL', clientId: 'ORG-90412', withdrawalId: '2', amountCents: 1_000_00, on: '2026-03-03' });
+  assert.equal(sim.holdings.get('ORG-90412:USD')!.valueCents, before - 1_000_00);
 });

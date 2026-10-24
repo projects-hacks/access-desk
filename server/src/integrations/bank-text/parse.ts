@@ -53,7 +53,7 @@ const cents = (s: string | undefined) => {
 /** Repairs OCR-style slips inside numbers: letter O → 0, I/L → 1. */
 const digits = (s: string) => s.replace(/O/g, '0').replace(/[IL]/g, '1');
 
-/** Invoice, client, loan and payment references, normalized (INV-1050, ORG-90412, LN-2201, WI-5404). */
+/** Invoice, client, loan, payment and custody withdrawal references, normalized (INV-1050, ORG-90412, LN-2201, WI-5404, CW-0001). */
 export function extractRefs(remittance: string): { refs: string[]; repaired: boolean } {
   const text = ` ${remittance.toUpperCase().replace(/\/INV\//g, ' INV ').replace(/\bINVOICES?\b/g, 'INV')} `;
   const refs = new Set<string>();
@@ -70,7 +70,7 @@ export function extractRefs(remittance: string): { refs: string[]; repaired: boo
   }
   for (const m of text.matchAll(/\bORG[-\s]?(\d{5})\b/g)) refs.add(`ORG-${m[1]}`);
   for (const m of text.matchAll(/\bLN[-\s]?(\d{4})\b/g)) refs.add(`LN-${m[1]}`);
-  for (const m of text.matchAll(/\b(WI|AC|TX)-(\d{4})\b/g)) refs.add(`${m[1]}-${m[2]}`);
+  for (const m of text.matchAll(/\b(WI|AC|TX|CW)-(\d{4})\b/g)) refs.add(`${m[1]}-${m[2]}`);
   return { refs: [...refs], repaired };
 }
 

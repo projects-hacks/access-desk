@@ -24,7 +24,8 @@
     "payments:verify": "pnpm --filter @access-desk/server payments:verify",
     "demo:reset": "pnpm bank reset && pnpm stdb:publish:reset && pnpm stdb:roles && pnpm sync",
     "ledger:verify": "pnpm --filter @access-desk/server ledger:verify",
-    "tieout:verify": "pnpm --filter @access-desk/server tieout:verify"
+    "tieout:verify": "pnpm --filter @access-desk/server tieout:verify",
+    "actions:verify": "pnpm --filter @access-desk/server actions:verify"
   },
   "devDependencies": {
     "prettier": "^3.9.10",

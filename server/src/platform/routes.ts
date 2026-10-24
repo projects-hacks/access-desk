@@ -11,6 +11,7 @@ export const ROUTES: Record<Exclude<ActionType, 'REFUND'>, string> = {
   RELEASE_HOLD: '/admin/holds/release',
   SET_LEVER: '/admin/levers',
   CUSTODY_DEBIT: '/custody/debits',
+  CUSTODY_WITHDRAWAL: '/custody/withdrawals',
   SEND_NOTICE: '/notices',
 };
 

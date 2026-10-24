@@ -43,11 +43,15 @@ export const completeGatewayCommand = spacetimedb.reducer(
         applyInvoiceStates(ctx, result.invoices);
         break;
       case 'CUSTODY_DEBIT':
-        applyInvoiceStates(ctx, result.invoices);
-        for (const h of result.holdings as { id: string; quantity: number; valueCents: number }[]) {
-          const row = ctx.db.custodyHolding.id.find(h.id);
-          if (row) ctx.db.custodyHolding.id.update({ ...row, quantity: h.quantity, valueCents: BigInt(h.valueCents) });
+        for (const line of (action.applications ?? []) as { applicationId: string }[]) {
+          const app = ctx.db.paymentApplication.id.find(BigInt(line.applicationId));
+          if (app) ctx.db.paymentApplication.id.update({ ...app, posted: true });
         }
+        applyInvoiceStates(ctx, result.invoices);
+        applyHoldings(ctx, result.holdings);
+        break;
+      case 'CUSTODY_WITHDRAWAL':
+        applyHoldings(ctx, result.holdings);
         break;
       case 'POST_JOURNAL': {
         const j = action.journal as { journalId: string; postedOn: string; ref: string; memo: string; lines: { account: string; debitCents: string; creditCents: string }[] };
@@ -70,8 +74,12 @@ export const completeGatewayCommand = spacetimedb.reducer(
         if (row) ctx.db.accessLever.id.update({ ...row, state: lever.state, detail: lever.detail });
         break;
       }
+      case 'SEND_NOTICE': {
+        const notice = action.noticeId ? ctx.db.notice.id.find(BigInt(action.noticeId)) : undefined;
+        if (notice) ctx.db.notice.id.update({ ...notice, status: 'sent', sentAt: ctx.timestamp });
+        break;
+      }
       case 'REFUND':
-      case 'SEND_NOTICE':
         break;
       default:
         throw new SenderError(`unknown command type ${cmd.type}`);
@@ -82,8 +90,23 @@ export const completeGatewayCommand = spacetimedb.reducer(
       action: 'COMMAND_DONE', subjectType: 'gateway_command', subjectId: String(id), workItemId: cmd.workItemId,
       fromState: 'executing', toState: 'done', detail: `${cmd.type} ${cmd.key}${externalRef ? ` → ${externalRef}` : ''}`,
     });
+    if (cmd.workItemId !== undefined) postWhenComplete(ctx, cmd.workItemId);
   },
 );
+
+/** An approved work item is POSTED once every command it queued is done. */
+function postWhenComplete(ctx: Ctx, workItemId: bigint) {
+  const item = ctx.db.workItem.id.find(workItemId);
+  if (!item || item.state !== 'APPROVED') return;
+  const open = ['queued', 'executing', 'failed'].some((status) =>
+    [...ctx.db.gatewayCommand.status.filter(status)].some((c) => c.workItemId === workItemId));
+  if (open) return;
+  ctx.db.workItem.id.update({ ...item, state: 'POSTED', updatedAt: ctx.timestamp });
+  audit(ctx, {
+    action: 'TRANSITION', subjectType: 'work_item', subjectId: String(item.id), clientId: item.clientId, workItemId: item.id,
+    fromState: 'APPROVED', toState: 'POSTED', detail: 'Every gateway command confirmed', policyRef: item.policyRef,
+  });
+}
 
 /** The write failed. Retryable failures go back in the queue; permanent ones are escalated to the controller. */
 export const failGatewayCommand = spacetimedb.reducer(
@@ -110,6 +133,13 @@ export const failGatewayCommand = spacetimedb.reducer(
     }
   },
 );
+
+function applyHoldings(ctx: Ctx, holdings: { id: string; quantity: number; valueCents: number }[]) {
+  for (const h of holdings) {
+    const row = ctx.db.custodyHolding.id.find(h.id);
+    if (row) ctx.db.custodyHolding.id.update({ ...row, quantity: h.quantity, valueCents: BigInt(h.valueCents) });
+  }
+}
 
 function applyInvoiceStates(ctx: Ctx, states: InvoiceState[]) {
   for (const s of states) {

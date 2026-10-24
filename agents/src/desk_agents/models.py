@@ -15,6 +15,11 @@ class WorkItemKind(StrEnum):
     NOVEL_CASE = "NOVEL_CASE"
     EXPLOIT_FLAG = "EXPLOIT_FLAG"
     POLICY_DRAFT = "POLICY_DRAFT"
+    # Raised by the system itself, never proposed by agents.
+    PAYMENT_REVERSAL = "PAYMENT_REVERSAL"
+    UNIDENTIFIED_CASH = "UNIDENTIFIED_CASH"
+    BOOKS_BREAK = "BOOKS_BREAK"
+    SYSTEM_EXCEPTION = "SYSTEM_EXCEPTION"
 
 
 class Role(StrEnum):
