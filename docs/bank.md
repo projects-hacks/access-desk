@@ -21,7 +21,7 @@ pnpm bank reset                       # back to exactly as seeded; deletes anyth
 pnpm test                             # includes the in-memory fake bank
 ```
 
-Add `--run demo` to `bank` commands to target the demo run. Created Nessie ids live in `.data/nessie-<run>.json` (gitignored). Sync and reset read that file.
+Add `--run demo` to `bank` commands to target the demo run. Created Nessie ids live in `.data/nessie-<run>.json`, committed so the whole team shares one bank. Sync and reset read that file. After seeding a new run, commit its file.
 
 ## Rules
 

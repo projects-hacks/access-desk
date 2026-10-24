@@ -1,0 +1,380 @@
+{
+  "run": "dev",
+  "startedAt": "2026-10-24T08:58:57.316Z",
+  "baseUrl": "https://prod-api.nessieisreal.com",
+  "customers": {
+    "platform": "a5c10b72-38b6-42e2-8c48-813225448e98",
+    "ORG-90744": "d1343ec3-54fa-4f43-aaaf-6ffe3dfb4274",
+    "ORG-90455": "c8aed7dd-1fdc-4aee-9698-2780ee5549e2",
+    "ORG-90731": "27db42f4-480d-4639-ae17-b5a7deb92856",
+    "ORG-90463": "fb4e3ed3-c2d4-4993-a092-bf9d5b3485e1",
+    "ORG-90518": "fd238c99-2f22-4ea8-a029-ee760423657e",
+    "ORG-90677": "44825ec2-b1cf-4e72-9688-92cb28753a2b",
+    "ORG-90612": "14deb02d-2834-4110-a028-7b5ee21a61b8",
+    "ORG-90816": "1613107e-b9fc-482f-8338-105264b8c76f",
+    "ORG-90802": "b0e2d660-cb1c-4586-8293-bace73f3afb5",
+    "ORG-90355": "b9f8d593-e614-4edb-9c80-c02e95aa4d42",
+    "ORG-90412": "2d9d9865-e79d-41d9-a031-fa90f472879d",
+    "ORG-90758": "de87a569-0854-49b9-ae66-3a27c5767d2e",
+    "ORG-90233": "c485c874-2aa6-4145-b328-4d7a7db05b62",
+    "ORG-90391": "02df72f6-56c3-47cf-8e4e-7e0cd68410e4",
+    "ORG-90399": "1f5ed441-fa0b-4bd9-91c7-5297e0ee0f99",
+    "ORG-90287": "1ced0b7f-7318-429d-a4aa-5631833e8905",
+    "ORG-90142": "6e666780-ec6c-4621-a5fc-646c1cdde573",
+    "ORG-90118": "606c5620-114e-48bf-9323-e05ad9734629",
+    "ORG-90101": "07238cf0-935f-4d1c-a346-0aba2fe303d4",
+    "ORG-90164": "6e19e694-3a08-4200-a328-c415e5ae231c",
+    "ORG-90689": "3a45276f-df76-4396-9dc8-60762c8bd6f7",
+    "ORG-90302": "afd61d15-14f2-422f-8150-43328c62e0af",
+    "ORG-90176": "9c36d26c-9da5-46c8-a875-2d859ca56f5c",
+    "ORG-90366": "bbb1ae69-ddbf-4d87-adf7-4da8919ec32d",
+    "ORG-90229": "4c64994c-3355-4aeb-a0e7-d50c54efee2d",
+    "ORG-90378": "cfe296a8-d04c-456c-98d6-398c5811ef6f",
+    "ORG-90107": "223417a8-89e1-447d-8a3e-b8e59917ee82",
+    "ORG-90244": "02ab105a-7b86-4f4f-9888-2e125330c33e",
+    "ORG-90251": "f37ff22d-b539-4e54-913c-c9994e36aadd",
+    "ORG-90431": "a1613519-ed67-4501-aea0-97a003b40192",
+    "aff:zephyr": "0b83439e-25e9-4d78-881c-1db1eba1c93e",
+    "aff:basalt-feeder": "38174cae-2103-4c48-91ec-9150c1d2ed04"
+  },
+  "accounts": {
+    "collections": {
+      "id": "d6536b4e-aaef-4adb-a3c3-4a3a527ad29e",
+      "number": "7821647696349255"
+    },
+    "ORG-90744": {
+      "id": "e10cc4bb-b982-4967-8015-94d133a18749",
+      "number": "7881701053258058"
+    },
+    "disbursements": {
+      "id": "b03eb15c-f102-481a-856a-8a9e50a4f49b",
+      "number": "7937678949002590"
+    },
+    "ORG-90758": {
+      "id": "5455080a-8019-4640-9033-3991f1a441e9",
+      "number": "5785466447033166"
+    },
+    "ORG-90731": {
+      "id": "330b5622-9cfa-4bd0-b00c-f9b505f6a877",
+      "number": "2125010770643959"
+    },
+    "ORG-90455": {
+      "id": "d7d5b102-95e4-46f3-b37e-5083366d1069",
+      "number": "0145187421421149"
+    },
+    "ORG-90412": {
+      "id": "cc2a1fc9-2813-4e85-bbd1-da345f693600",
+      "number": "7504562803528081"
+    },
+    "ORG-90463": {
+      "id": "6cb8d311-9b8d-435d-8cc6-6a9d9c0fcaaa",
+      "number": "5906852238392479"
+    },
+    "ORG-90518": {
+      "id": "5d5d838a-f0cf-408a-abe7-2e50ede9db9e",
+      "number": "5298489234434661"
+    },
+    "ORG-90677": {
+      "id": "2f1c8994-65f0-4228-b48c-515b5f845085",
+      "number": "5532691145874544"
+    },
+    "ORG-90612": {
+      "id": "0cd8814b-34b9-447c-a64b-9ba3a68243ac",
+      "number": "3579086538200085"
+    },
+    "ORG-90355": {
+      "id": "09935d85-595b-48a4-82a6-c50b5665d288",
+      "number": "9444219277267204"
+    },
+    "ORG-90233": {
+      "id": "4131689f-86b9-4230-a92b-1aeaad7b938f",
+      "number": "7823558484460831"
+    },
+    "ORG-90391": {
+      "id": "80932382-755e-4dc5-8925-0b1a5a2ee667",
+      "number": "7999884381845054"
+    },
+    "ORG-90287": {
+      "id": "c8e0adc1-38a5-40ac-a6b9-611841bb4e28",
+      "number": "3632597770828280"
+    },
+    "ORG-90689": {
+      "id": "0dfd4bad-82d6-45d6-a1af-d1cc2b8e1f6b",
+      "number": "4863170854495523"
+    },
+    "ORG-90399": {
+      "id": "fa4fce9c-8c67-4473-8236-0e317cd9631f",
+      "number": "4702285811289524"
+    },
+    "ORG-90101": {
+      "id": "90c90f55-ce26-4c4d-9df2-670513366045",
+      "number": "9717246068177532"
+    },
+    "ORG-90142": {
+      "id": "4bfcad50-8ce7-4b9e-861b-6ec3c2549ca6",
+      "number": "5024543000011214"
+    },
+    "ORG-90118": {
+      "id": "aeca69bb-8999-4b35-ba98-493729469fa6",
+      "number": "5318604651586721"
+    },
+    "ORG-90164": {
+      "id": "3d236a6a-e386-4240-b076-2b82b26b039e",
+      "number": "5900314411765065"
+    },
+    "ORG-90302": {
+      "id": "e9b4ffc5-2ec3-4483-ba5d-1e4ec8f8639a",
+      "number": "8449885299075002"
+    },
+    "ORG-90176": {
+      "id": "c6cd4ab2-93a6-4f09-b28a-85d924bd7da3",
+      "number": "3470403845517843"
+    },
+    "ORG-90366": {
+      "id": "59f3c605-65cc-47cc-963f-e1d5931e4c53",
+      "number": "1973360422601241"
+    },
+    "ORG-90229": {
+      "id": "0b6e12e3-0600-4139-8c85-9422bd439c54",
+      "number": "4666422252467739"
+    },
+    "ORG-90378": {
+      "id": "0a0026f8-60db-4675-8740-7cf25b0a2c2b",
+      "number": "6080481428538680"
+    },
+    "ORG-90107": {
+      "id": "8cc2d69e-1785-44b1-a516-772959adfd70",
+      "number": "0047093178886222"
+    },
+    "ORG-90802": {
+      "id": "282151d2-882b-45f5-b73a-03ba13bcd147",
+      "number": "5280125148682723"
+    },
+    "ORG-90244": {
+      "id": "8148b3f7-b222-451d-97bd-4bd44ad312b2",
+      "number": "8157677007999748"
+    },
+    "ORG-90816": {
+      "id": "374cdeb8-96bc-4ae9-9173-10ed1c9b9f5c",
+      "number": "4734310094278370"
+    },
+    "ORG-90431": {
+      "id": "dcd9c6cc-8d36-4704-9641-84280dc3a2fd",
+      "number": "1471621270210247"
+    },
+    "ORG-90251": {
+      "id": "02ffeeec-fefc-4476-b7f0-b61846447944",
+      "number": "4210178090422096"
+    },
+    "ORG-90378:secondary": {
+      "id": "29b70f59-d1f7-4a80-bb1b-c106b74e397c",
+      "number": "3977809525816092"
+    },
+    "aff:zephyr": {
+      "id": "9a7b2100-017c-4398-abdd-406e99566057",
+      "number": "6193323375486968"
+    },
+    "aff:basalt-feeder": {
+      "id": "aa43ea20-c501-4cb0-9f00-ee5cac545259",
+      "number": "7855415843272252"
+    }
+  },
+  "bills": {
+    "INV-1004": "7f70b3fd-2572-4d65-a572-d297db6ae9a2",
+    "INV-1005": "060e8c24-db58-4ad8-b039-e1a8690d1b9f",
+    "INV-1002": "5388bd35-a5a1-41dc-b083-3588af677397",
+    "INV-1007": "82e3c06f-4258-4e18-b219-564bf067cfe1",
+    "INV-1008": "13303f65-1610-4b01-bc57-0daf51069053",
+    "INV-1009": "38cd9e8f-f526-4458-ac88-7baecca727ae",
+    "INV-1010": "d6a1d590-bf0d-4c1f-8e4d-4a98f507fba5",
+    "INV-1011": "22b30a42-bcdb-4af8-ae3d-98197b7b5af0",
+    "INV-1012": "e6e00d1d-f123-4802-bb99-9953646d991e",
+    "INV-1013": "3c8b7515-f556-4854-ad7a-72cf217bdaaa",
+    "INV-1014": "44a4f608-0906-4ce9-9653-bb66fb4b05ca",
+    "INV-1015": "41d1c397-123b-4d5f-b17f-8aa98a33732a",
+    "INV-1016": "556a6a61-74a6-4cab-9160-fb7ef9ed8ea9",
+    "INV-1017": "f095cc2c-cefe-4279-92eb-fe8e41902a9c",
+    "INV-1018": "b7034547-e038-4b35-b48b-1dcf036d5b48",
+    "INV-1019": "4491fd7b-b4e2-43d2-9861-bd4066c77abd",
+    "INV-1020": "79e1296f-e4e3-46e6-bff6-768520fc8c96",
+    "INV-1001": "001561eb-9943-4889-a095-c9286c375bb9",
+    "INV-1006": "3700bf2f-76ff-47b4-ba4a-3b5acaf72a6d",
+    "INV-1003": "c5843447-9371-41c2-989b-5165a129f622",
+    "INV-1021": "31c5c7a4-6ce9-4340-8e5c-82b1109a9308",
+    "INV-1023": "9cdfe051-aa58-460e-9d11-e7d232bed13b",
+    "INV-1022": "dba6be58-4912-4414-b998-fc708c56d3cb",
+    "INV-1024": "239ca675-70f1-4920-83d3-f335c36ec43c",
+    "INV-1025": "3254eb00-bee6-4247-bfeb-ac544a13b051",
+    "INV-1026": "73e8cc5e-1303-44bb-8772-2db6531ff3ad",
+    "INV-1028": "e28b8b4b-b0c4-44cf-8677-8fcc0f569fae",
+    "INV-1027": "93463be4-278f-4ca5-9970-1a2e3df15e3f",
+    "INV-1029": "12e5de62-2fd8-4fc1-b66e-2e2f4f566714",
+    "INV-1031": "3a2523a7-5b47-498a-bf2e-82d8c1ab0988",
+    "INV-1030": "0bc9bc3b-e0d4-4130-904c-e196e17c2f0f",
+    "INV-1032": "21e8c9b2-2eb9-4428-bdf2-52290ec5b8ec",
+    "INV-1033": "f578a3d2-c7a3-4b59-aef5-871f59622a3a",
+    "INV-1034": "f8f3b051-79fc-4208-b7fa-230eef851265",
+    "INV-1035": "53b8eb97-375d-4807-968a-a52b3d4bb386",
+    "INV-1036": "ff0ea143-91be-4b14-87bd-b3f1c7e57461",
+    "INV-1037": "a6ebed9d-72ed-4845-af8b-0fe1057c1395",
+    "INV-1038": "3664ecf4-f04c-4158-87a8-0e6f0bfdaa40",
+    "INV-1040": "dbdac4b7-c21f-48a3-94da-c6f988c9009b",
+    "INV-1041": "5bb0b0dc-4c44-48e2-ad22-28e3d02703ae",
+    "INV-1039": "5a34a1b9-84f2-41cc-875b-adad04730efb",
+    "INV-1042": "3c4d45ba-0b65-4cb4-a85f-bb86b6f4431c",
+    "INV-1043": "05478b99-8201-45ff-b4f5-45d3bf91b604",
+    "INV-1044": "b100d0d6-0810-4dbe-bb8e-5c7f80243127",
+    "INV-1045": "f148abcb-b6b9-44c9-9d33-4e0dbce9f425",
+    "INV-1046": "96a8bc97-6a23-49d0-aede-6481417023f2",
+    "INV-1047": "9a4e763c-400f-465e-b35c-73fa6e27f13b",
+    "INV-1048": "5bc5a211-12f0-4063-a204-2971ec69038e",
+    "INV-1050": "f7d878c3-8dc5-4ccd-a7ec-9699c14296cd",
+    "INV-1051": "5d3429ef-11dd-4537-80f9-fd060d719f94",
+    "INV-1049": "4627777f-075f-4b39-892b-74e65a6260a9",
+    "INV-1053": "19402843-f1be-4609-954f-4af579acbdbe",
+    "INV-1052": "81c608eb-0dac-42ef-9bd3-3328fcbcdd92",
+    "INV-1056": "4782682b-8809-4d94-972d-61e8927967dd",
+    "INV-1054": "d24a21ec-2b6d-455f-aa9d-1e2c90936182",
+    "INV-1055": "d1b3bf0d-fccc-43e8-9b16-57024ca5f30b",
+    "INV-1057": "73157aae-74fb-46dd-b54d-9c25e092202f",
+    "INV-1058": "11359cd8-24f9-4b30-b24c-78c466a787f7",
+    "INV-1060": "29667d64-cca0-46ee-9b99-e3cad4ae822c",
+    "INV-1059": "672348c8-af0d-484b-8019-671d17f647f4",
+    "INV-1062": "46c6f687-e9a5-446e-b8ac-f5d71ad48269",
+    "INV-1063": "c99a5601-12f6-406b-96c5-fdfda2e94212",
+    "INV-1065": "6027a434-f96e-4060-a74f-fe5c026ba36d",
+    "INV-1061": "127d78b2-3eef-440c-b984-41eef9e3de3a",
+    "INV-1067": "358e4733-7ff7-4bcf-b8ee-3160f0a6d84e",
+    "INV-1066": "85cf06c7-c4cb-4e10-a4c1-eecc6958683a",
+    "INV-1064": "edac0bc4-c54a-4463-87ab-8e718b31718f",
+    "INV-1068": "7daaa3d6-02e6-404f-b565-bfc2b8ebeaa8",
+    "INV-1069": "3d68ef11-f1f0-4715-b48c-2b0f57f48593",
+    "INV-1070": "c19f4fda-98d8-4be3-9f68-5a418543e355",
+    "INV-1071": "d5b53abe-e849-45b1-ac72-9d45814cb85c",
+    "INV-1072": "b049eef7-2581-49b4-9cab-e7a7c70bd627",
+    "INV-1073": "d0202ac7-16d0-40a7-ac97-ca02a6e3ef5b",
+    "INV-1074": "21f8f1b8-0287-43f6-bd81-5a4dfae86c8e",
+    "INV-1075": "91507432-fe8e-49f8-9335-37a1593c58ad",
+    "INV-1076": "f642354c-6415-4e43-aff6-41f148320fdf",
+    "INV-1077": "00c2ee8a-1b93-4056-b52c-1e357269f6f7",
+    "INV-1078": "7b96c59f-70d3-473e-a773-0bce7465bceb",
+    "INV-1079": "40c68ebf-409b-4f55-b60e-70f538e5803e",
+    "INV-1080": "e38b2d96-1fda-4e43-9c3d-aff4bcef95fa",
+    "INV-1081": "3a7911ff-59ad-4196-b353-db8028186cec",
+    "INV-1082": "e7899c76-3a2f-45d2-bfc9-12558a7ed0c5",
+    "INV-1083": "ae623989-2e84-46d2-bc1a-a24421017ac2",
+    "INV-1084": "95d2c36a-3de6-4446-8fff-23bf7929c8f9",
+    "INV-1085": "cce6acc9-2c6a-4198-a4e9-f69805c09d47",
+    "INV-1086": "6218f540-bbac-49ee-9770-c6fba6de2f50",
+    "INV-1087": "b6511b26-00b7-4d0f-8480-30582bb3b464",
+    "INV-1088": "f28ccd26-21d1-4075-9444-d2cc29791b6b",
+    "INV-1089": "625c5952-c68c-4abc-800c-ab6f517310d8",
+    "INV-1090": "50a82999-6bc1-4734-9024-296b2651e0e1",
+    "INV-1091": "f9eff2f6-ea90-4a90-a931-3400d5d38b26",
+    "INV-1092": "6589835a-428b-4407-86e1-ac22e5b71e04",
+    "INV-1093": "0906b53f-196f-4120-9485-dd092ff440a8",
+    "INV-1094": "49d4d2f6-db92-4254-9106-31c73abb127f",
+    "INV-1095": "2820727c-1e8e-4690-9416-c3cbbcb70982",
+    "INV-1096": "49ef6b52-0c37-4918-8acf-f5d2ce70a252",
+    "INV-1097": "b1902fdb-fa5b-4359-ad9d-909e83285aac",
+    "INV-1098": "d22a3724-b75f-4ed2-be31-306b2f3390df",
+    "INV-1099": "4fa41966-ad27-4045-be0d-8756cc146371",
+    "INV-1101": "c4d2fa39-bfd7-46e9-a547-bed84b9b4c44",
+    "INV-1100": "9b6d2f08-e712-41aa-bc95-b4f45d41c6b0",
+    "INV-1103": "f41839d2-88b9-4071-bbb1-25e1b9883bdd",
+    "INV-1102": "3090e4a0-6928-40fd-8644-2b7e52d2657d",
+    "INV-1104": "8a4aeeb4-5325-4da6-a5e9-a9fde12c09b9",
+    "INV-1105": "0b267f6d-1076-4dd0-bb21-769a7a118b93",
+    "INV-1106": "11697d56-6cf3-4fa6-8c73-062525f7eb70",
+    "INV-1108": "15fb73d3-48da-4ce3-be80-06130315649c",
+    "INV-1107": "f14204e8-54f2-4594-80ee-e8fc8a952666",
+    "INV-1109": "6e812e99-4a26-4cd2-8311-2df21b863f3c",
+    "INV-1110": "cb9fce6c-e369-48c6-aa8c-397e45814b7c",
+    "INV-1111": "c46183bd-75cf-411b-8e5b-992e9536d33b",
+    "INV-1113": "767bc979-aace-4883-8654-aa22f4537d02",
+    "INV-1112": "b7b0e563-d06f-4fd8-bef5-e7c1c34bc5c0",
+    "INV-1114": "ef615c4d-556f-4ede-9949-5eccdc74675e",
+    "INV-1115": "60065dca-8e5f-4b73-a21b-17ab5408926a",
+    "INV-1116": "2078091b-9b9b-4e79-8fe4-b6959d12a172",
+    "INV-1118": "b628b995-fb41-40e8-bd36-78c6f01594b4",
+    "INV-1119": "4b24eac7-60bc-430f-8ff2-ab84d29a561c",
+    "INV-1117": "7203bb42-653d-4cab-a326-75a080982475",
+    "INV-1120": "a32be670-8bd9-488d-bd49-a8ca119bf0bc",
+    "INV-1121": "7d8382ed-392a-47ec-8e48-2416a1b5b569",
+    "INV-1122": "6ac41179-c7ce-4f2a-a7c2-f313fba68522",
+    "INV-1123": "111f4411-7ca7-453c-9e8f-9f3214c94962",
+    "INV-1124": "6163d9f3-ca38-4e36-8fd3-38d1f930a089",
+    "INV-1125": "8eef110b-1eff-4857-9a81-db5a24a5b862",
+    "INV-1126": "8a6ea408-6e6d-42f3-a7b1-6dabd804b487",
+    "INV-1127": "8ac865f0-fdc8-4df2-8b4a-0349a1363581",
+    "INV-1129": "1f11caa6-eb8c-41e8-935b-86511e715972",
+    "INV-1128": "f0319e6c-4108-40cd-81a0-27e246a797e2",
+    "INV-1130": "eabed3b4-9760-4793-aa78-8f143a2dc9e3",
+    "INV-1131": "d460efe8-2c52-42c2-b763-8f8cef8fd962",
+    "INV-1133": "a28e5495-6aeb-4a37-a341-5616aa81e417",
+    "INV-1132": "00876d92-49f6-4e74-a8a8-0ebca6760294",
+    "INV-1134": "383d9b53-7d91-47e1-a950-70c406d7ba8c",
+    "INV-1135": "765daf38-d876-4fe3-b727-de689f0b0ad0",
+    "INV-1136": "44acea96-5604-4e54-99ce-baeb8450291a",
+    "INV-1138": "8eca107a-54fe-49fd-9d08-d681abe7e0cc",
+    "INV-1139": "e084d568-57cd-4a21-a245-01720969868a",
+    "INV-1137": "d9c422dc-9227-4770-a880-954db587fa21",
+    "INV-1140": "62835ff2-c83d-4d98-b764-07243cb67e6a",
+    "INV-1141": "a1ae6638-16b9-477b-a46e-c11f3881cb8a",
+    "INV-1142": "2dd062db-e0d5-471c-aca3-bf6ffd99d45f",
+    "INV-1144": "d5ecbc6d-9be7-480b-821f-1b7efdbc0de3",
+    "INV-1143": "04512869-3e97-4bbd-ade2-3d379794bca9",
+    "INV-1145": "6113e604-78be-42c0-8438-86e0fba4cde2",
+    "INV-1146": "b321f9a3-b4e7-4b9b-ac05-6130091af1e2"
+  },
+  "transactions": {
+    "BF-2026-01:platform": "b920ba12-aeac-4e6a-aeb3-1c1a27a3ae73",
+    "WI-5401:platform": "5064b5b0-f17f-469a-b5f2-078043a0629c",
+    "WI-5401:counterparty": "f2aaac4b-0b0b-4ae6-ad52-2b534e0f3e5d",
+    "WI-5402:counterparty": "897ce46d-2ced-4e7c-a4cf-508fbe02bbed",
+    "WI-5402:platform": "6f197c8a-293a-4759-9bdb-624369952818",
+    "WI-5403:counterparty": "8ffd6d44-1849-4956-b870-633be9beda1a",
+    "WI-5404:counterparty": "f0c7ddce-bfc8-4439-9f8c-e6935079b98f",
+    "WI-5403:platform": "d4079857-abe8-4fb4-b5ca-5d0a88d5ef88",
+    "WI-5404:platform": "c1554206-4282-43f4-961c-bc56e1579107",
+    "WI-5405:platform": "7ed6d08f-5afd-4288-8de0-0ae08c2c9a9d",
+    "WI-5405:counterparty": "e057fdb0-0576-4256-a3be-c993291aec26",
+    "WI-5406:counterparty": "91e766ff-dd47-4a68-b926-1262d3f67ab2",
+    "WI-5406:platform": "e7846358-0279-4268-b5f9-a950b2801e74",
+    "WI-5407:platform": "d13bb914-0aea-4db6-8bf5-f6b725fab343",
+    "WI-5407:counterparty": "fe2a29d1-9f02-487e-875b-bea889f77cfb",
+    "AC-7101:platform": "62dce163-8b78-46fa-bfde-4d4c2f116ac8",
+    "AC-7101:counterparty": "32619ea8-f5d9-4ce8-a157-7830354c1d60",
+    "WI-5408:counterparty": "2dca6b98-a381-4473-945f-a29ee9ac7cbb",
+    "WI-5408:platform": "a49114e4-aa0c-46da-a31f-d0634a4fdc82",
+    "AC-7102:counterparty": "0a572c32-83ba-4ee4-985b-c8d3c76a9c53",
+    "WI-5409:platform": "afc7e482-1905-40b5-89d5-c71cb205eb52",
+    "WI-5409:counterparty": "e495571d-3130-475e-a6ff-d5247c498710",
+    "WI-5410:platform": "76c6a51f-4ef1-4ae3-b3d4-32b740200ad9",
+    "WI-5410:counterparty": "fa60cdcb-65e1-45b8-99c1-f82dea673d12",
+    "WI-5411:counterparty": "a03e1084-773d-4392-b559-fdd4347f600e",
+    "WI-5411:platform": "6610c131-ad82-4c06-8b41-4754d4343012",
+    "WI-5412:counterparty": "3e0065ee-68f0-4426-902a-ab32cb667d17",
+    "WI-5412:platform": "addcbd0d-e4f3-4850-82d2-a38913494961",
+    "WI-5413:counterparty": "a7750252-a4f2-44c8-8aff-5b871c60f226",
+    "WI-5413:platform": "e6beb030-4467-46a6-a480-949b7e57bca5",
+    "AC-7102:platform": "93309841-1ebe-45b9-8435-17593757ded2",
+    "WI-5414:counterparty": "5bb880fb-588c-465c-9d30-c11be522e2b7",
+    "WI-5414:platform": "7247c12e-2185-424b-865e-0411de5158b6",
+    "WI-5415:counterparty": "2d4bccd5-72c3-43e7-8a0f-1f0a1509496d",
+    "WI-5415:platform": "23acda05-2d27-48b1-95b3-24ffece9976c",
+    "WI-5416:counterparty": "83f116db-e20b-4301-957b-a1945be31f64",
+    "WI-5416:platform": "63618b08-c43f-4d40-8e88-5b55be45f4eb",
+    "WI-5417:platform": "fd1163ea-ca11-4f09-b284-a9f6b9c81393",
+    "WI-5417:counterparty": "5fd35b0c-b0a0-408a-ad17-f7f76fb3f888",
+    "BF-2026-02:platform": "b765ed96-4219-4ce9-b7ab-8f482a2fbd08",
+    "WI-5418:counterparty": "70857771-6ee5-4de6-8763-49045e111643",
+    "WI-5418:platform": "5f9f76c3-b039-4d4d-843c-563d0890c54d",
+    "WI-5419:counterparty": "9c1f40cd-1708-4954-aff2-9772992b2b85",
+    "WI-5419:platform": "08197881-7b37-4ec4-b192-21e0dae8504e",
+    "WI-5420:platform": "2e34eb04-2324-42ac-b974-1d90119c690f",
+    "WI-5420:counterparty": "aaad26ca-f4e7-4733-a35f-f053c9f8b695",
+    "WI-5531:platform": "df5d18d4-4a5d-4ff4-abad-99f224708917",
+    "WI-5531:counterparty": "f95973fa-e6a6-4c8d-b78e-61ccbdbcc2cc"
+  }
+}

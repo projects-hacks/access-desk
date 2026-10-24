@@ -9,4 +9,7 @@ dist/
 __pycache__/
 *.pyc
 .ruff_cache/
-.data/
+.data/*
+# Shared with the team: Nessie ids for each seeded run.
+!.data/nessie-*.json
+.data/nessie-plan.json
