@@ -158,6 +158,9 @@ def next_move(
     reply = rm_reply(view, world)
     if reply:
         return reply
+    note = note_pending(view, world)
+    if note:
+        return note if overdue else None
 
     pending = open_work(view, world)
     if pending:
@@ -664,6 +667,22 @@ def answered(view: ClientView, note_id: int) -> bool:
         w["subject_id"] == f"rm_note:{note_id}" or (w["kind"] == "REMINDER" and tag in w["proposal_json"])
         for w in view.work_item
     )
+
+
+ACTIONABLE = {"already_paid", "exception_request", "material_event"}
+
+
+def note_pending(view: ClientView, world: World) -> Wait | None:
+    """An RM note the agent hasn't read or answered yet: no step and no collection until it has."""
+    for note in sorted(view.rm_note, key=lambda n: n["id"]):
+        if answered(view, note["id"]):
+            continue
+        reading = world.readings.get(note["id"])
+        if reading is None or reading.intent in ACTIONABLE:
+            what = "is not read yet" if reading is None else f"({reading.intent.replace('_', ' ')}) is not answered yet"
+            return Wait("rm_note_pending", f"RM note {note['id']} from {note['author']} {what}; no restriction step "
+                                           "or custody debit until it is.")
+    return None
 
 
 def rm_reply(view: ClientView, world: World) -> Move | None:

@@ -660,5 +660,72 @@ def usd_text(cents):
     return f"${cents / 100:,.2f}"
 
 
+STEPS = {RESTRICT, "propose_restriction", "propose_custody_debit"}
+OTHER = RmReading(intent="other", summary="FYI")
+
+
+def ready(**extra):
+    """A Tier 3 client restrictions auto-apply to, cure period over, custody cash a debit could take."""
+    return view(tier=3, debit=True, usd=10_000_00, owed=(("INV-1", "TRADING", 50_000_00),), **extra)
+
+
+class LadderPausesWhileAPersonIsLooking(unittest.TestCase):
+    def steps(self, v, **kw):
+        return [m for m in moves(v, **kw) if m.action in STEPS]
+
+    def test_control_the_client_is_restricted_when_nobody_is_looking(self):
+        self.assertEqual([m.action for m in self.steps(ready())], [RESTRICT])
+
+    def test_open_exception_request(self):
+        for state in ("PROPOSED", "NEEDS_INFO"):
+            with self.subTest(state):
+                case = item(12, "NOVEL_CASE", state, {"graceUntil": "2026-04-01"}, subject="rm_note:4")
+                v = ready(rm_note=[NOTE], work_item=[case])
+                self.assertEqual(self.steps(v, readings={4: HOLD_OFF}), [])
+                self.assertEqual(waited(v, readings={4: HOLD_OFF})[0], "pending_decision")
+
+    def test_unanswered_already_paid_note(self):
+        v = ready(rm_note=[NOTE])
+        self.assertEqual(self.steps(v, readings={4: PAID}), [])
+        self.assertEqual(only(v, readings={4: PAID}).args["channel"], "rm")
+
+    def test_note_not_read_yet(self):
+        v = ready(rm_note=[NOTE])
+        self.assertEqual(self.steps(v), [])
+        self.assertEqual(waited(v)[0], "rm_note_pending")
+
+    def test_exception_or_material_event_note_before_it_is_filed(self):
+        for reading in (HOLD_OFF, ACQUIRED):
+            with self.subTest(reading.intent):
+                self.assertEqual(self.steps(ready(rm_note=[NOTE]), readings={4: reading}), [])
+
+    def test_pending_payment_match(self):
+        for proposer in ("agent", "matcher"):
+            with self.subTest(proposer):
+                match = item(40, "PAYMENT_MATCH", "PROPOSED", {"proposedBy": proposer}, required_role="ACCOUNTANT",
+                             subject="nessie:JD-0001")
+                v = ready(work_item=[match])
+                self.assertEqual(self.steps(v), [])
+                self.assertEqual(waited(v)[0], "payment_unapplied")
+
+    def test_fyi_note_does_not_pause(self):
+        self.assertEqual([m.action for m in self.steps(ready(rm_note=[NOTE]), readings={4: OTHER})], [RESTRICT])
+
+    def test_whole_sequence_pauses_until_the_people_are_done(self):
+        v = ready(rm_note=[NOTE])
+        v.cash = [wire(match="exception", value_on="2026-03-18")]
+        first = only(v, readings={4: PAID})
+        self.assertEqual(first.action, "propose_payment_match")
+        v.work_item = [item(40, "PAYMENT_MATCH", "PROPOSED", required_role="ACCOUNTANT", subject=v.cash[0]["id"])]
+        self.assertEqual(self.steps(v, readings={4: PAID}), [])
+        reply = only(v, readings={4: PAID})
+        self.assertEqual(reply.args["channel"], "rm")
+        v.work_item.append(item(41, "REMINDER", "POSTED", {"body": reply.args["body"]}))
+        self.assertEqual(self.steps(v, readings={4: PAID}), [])
+        v.work_item[0]["state"] = "REJECTED"
+        v.cash = []
+        self.assertEqual([m.action for m in self.steps(v, readings={4: PAID})], [RESTRICT])
+
+
 if __name__ == "__main__":
     unittest.main()
