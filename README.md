@@ -35,6 +35,41 @@ With `DEMO_CONTROLS=true` the server exposes `POST /demo/inject`, `/demo/settle`
 
 ## Policy drafter (Factory Droid)
 
+> **Handoff to Aryan.** Seat 2 will not merge this branch: Factory goes into your policy learning instead. Take what helps.
+>
+> **What the sandbox does.** The model never works in the repo. Each run copies what it needs into a fresh temp folder (`Workspace` in `sandbox.py`):
+> - `policies/` is the only place it may write.
+> - `harness/` holds the test and backtest scripts, read-only.
+> - `data/` is a read-only snapshot of the database taken at the start.
+>
+> The Droid runs with that folder as its working directory, at autonomy `off`, with only `Read`, `LS`, `Grep`, `Glob`, `Create`, `Edit`, `ApplyPatch` and `Execute` enabled (`BUILTIN_TOOLS` in `droid_runner.py`). Secrets are blanked from its environment.
+>
+> **How the permission handler works.** `permission_handler(sandbox)` in `droid_runner.py` receives every request and passes each action to `check_action`:
+> - File writes are allowed only if the real path (after resolving `..` and symlinks) is inside `policies/`.
+> - Commands are allowed only if they exactly match one of `ALLOWED_COMMANDS` in `sandbox.py`.
+> - MCP calls are allowed only for our own server.
+>
+> Anything else gets `CANCEL`, a warning on the `desk_agents.policy_drafter` logger, and a `denied` step. If the handler raises or doesn't answer, the SDK cancels too.
+>
+> Known gap: read-only tools and Factory's default-allowed commands (`ls`, `pwd`) don't ask the handler, so the Droid can read outside the folder.
+>
+> **Reusable as is** (no Seat 2 dependencies):
+> - `sandbox.py`: `Workspace` (temp folder, read-only copies, clean env) and `Sandbox` (the tool implementations plus the path and command checks, shared by the Droid and the Claude fallback).
+> - `droid_runner.py`: `droid_available`, `check_action`, `permission_handler`, `mcp_server`, `run_droid`. Swap our two MCP tools (`report_step`, `submit_draft`) for yours.
+> - `claude_runner.py`: `run_claude`, the same tools through the Anthropic tool runner, for when the `droid` CLI or `FACTORY_API_KEY` is missing.
+> - The anti-cheat idea in `harness/run_tests.py`: a case names only a precedent id and an expected outcome. The harness, not the model, looks up the facts and checks the expectation against the recorded decision.
+>
+> **Specific to restriction rules** (replace for credit policies): `families.py`, `snapshot.py`, `prompt.py`, the rule schema and backtest in `harness/`, and the trigger and filing in `agent.py`. Filing already matches your `activatePolicyDraft` (`policy_key`, always the next version, no `:` in platform ids).
+>
+> **Seat 2's live precedents as input** (`zayyan` from 16bcd20). The access controller writes one `PRC-L<work_item_id>` row, `source='live'`, for every decision on its restrictions, custody debits and RM exceptions/material events. That covers `Approved`, `Rejected` and `Withdrawn` decisions, not only overrides. The fields have the same shape as the imported history, so your `_precedent()` reads them as is:
+> - `situation`: short facts as of the decision, e.g. "Late 37 days, $50,000.00 past due (TRADING), coverage 0.7×, renewal in 12 days, tier 3, hedged positions open". RM cases add the RM's request.
+> - `proposed`: the step, e.g. "Pause OTC trading (trading, PAUSE_OTC)".
+> - `decision` and `override_reason`: the controller's note on rejections.
+> - `outcome`: empty until the client cures, then "Paid in Nd". Withdrawn proposals read "Paid before the restriction applied".
+> - `policy_ref`: pol-006 for restrictions, pol-005 for debits.
+>
+> Your credit precedents (`CREDIT_REVIEW`) use the same id scheme. Work item ids are unique, so the two never collide.
+
 `agents/src/desk_agents/policy_drafter/`. When at least `POLICY_DRAFT_THRESHOLD` (default 4) overrides of one policy family pile up that no draft covers yet, the agent drafts a policy change. pol-003 and pol-006 count as one family, the restriction ladder (`FAMILIES` in `families.py`). An override is a precedent whose decision differs from the proposed restriction, or one that was `Rejected`. In the demo, PRC-0001..0003 plus the live Kestrel rejection produce pol-014: near renewal, hold only the amount owed. The agent only drafts. It saves the policy with status `draft` (`upsert_policy`) and files a `POLICY_DRAFT` work item for a controller. The proposal carries the rule before and after, a diff, the precedent ids, the test results and the backtest. If the controller rejects it with a note, the agent drafts once more with the note added; a second rejection stops drafting for that family.
 
 The drafts are built to work with `applyPolicyDraft` → `activatePolicyDraft` on `aryan`:
