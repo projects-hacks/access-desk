@@ -29,6 +29,7 @@ A withdrawal during a running cure period is honored (§9.1), but if it leaves c
 
 - **Automatically**, when the kind's policy is active and the client is not Tier 1 or strategic: restrictions (pol-006), custody debits (pol-005, also within `platform.auto_apply_limit_cents`, $50,000), restores (pol-011), notices (pol-007). The item is created APPROVED with `auto_applied = true`.
 - **A controller** for top clients (Tier 1, strategic), offboarding steps (capabilities with `two_approvers`: close-only, full freeze; titled "Offboarding: …") and custody debits over the limit.
+- **Credit proposals** (tier changes, company policies, exploit alerts from the credit agents) follow their own rule: tier 1 and 2 (and strategic) clients always go to a controller; for tier 3 to 5 they apply on their own except the worst cases. See [credit](credit.md#who-approves-autonomy-by-tier). The rule above (not Tier 1) still governs restrictions, custody debits, restores and notices.
 - `transition_work_item` enforces: approvers are ACCOUNTANT or CONTROLLER, `required_role = CONTROLLER` items need a controller, no one approves their own proposal. Denied attempts are audited, not thrown.
 - APPROVED → POSTED happens when the gateway has confirmed every command.
 
