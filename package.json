@@ -25,7 +25,9 @@
     "demo:reset": "pnpm bank reset && pnpm stdb:publish:reset && pnpm stdb:roles && pnpm sync",
     "ledger:verify": "pnpm --filter @access-desk/server ledger:verify",
     "tieout:verify": "pnpm --filter @access-desk/server tieout:verify",
-    "actions:verify": "pnpm --filter @access-desk/server actions:verify"
+    "actions:verify": "pnpm --filter @access-desk/server actions:verify",
+    "credit:fixture": "pnpm --filter @access-desk/server credit:fixture",
+    "credit:verify": "pnpm --filter @access-desk/server credit:verify"
   },
   "devDependencies": {
     "prettier": "^3.9.10",
