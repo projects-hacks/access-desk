@@ -252,6 +252,8 @@ export const Dispute = __t.object("Dispute", {
   openedOn: __t.string(),
   status: __t.string(),
   owner: __t.string(),
+  resolvedOn: __t.option(__t.string()),
+  resolution: __t.string(),
 });
 export type Dispute = __Infer<typeof Dispute>;
 

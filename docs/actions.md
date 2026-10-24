@@ -21,7 +21,9 @@ The sim date moves by `advance_clock(days)` or on its own: `set_clock_speed(seco
 - clients newly past their grace period get a default notice (pol-007); once sent it starts the cure period (`contract.cure_days`);
 - paying what was in default closes open cure periods and promises at once.
 
-Restrictions need an expired cure period. The tick also requeues gateway commands stuck executing for 60s. Demo: `POST /demo/clock {secondsPerDay, runUntil}`.
+Restrictions need an expired cure period. Disputes count from the day they were filed: a dispute filed after the notice still takes those invoices out of default when the cure period ends (Orchard, the serial disputer, ends `met` with nothing paid; spotting that is the agents' job).
+
+A withdrawal during a running cure period is honored (§9.1), but if it leaves custody cash below the amount in default the module raises an `EXPLOIT_FLAG` work item for the controller and an `exploit_flag` row (`withdrawal_during_cure`) with the evidence. The tick also requeues gateway commands stuck executing for 60s. Demo: `POST /demo/clock {secondsPerDay, runUntil}`.
 
 ## Who approves
 

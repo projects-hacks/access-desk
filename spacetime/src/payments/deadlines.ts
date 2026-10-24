@@ -6,11 +6,15 @@ import { addDays, audit, simDate, type Ctx } from '../context';
  * (the scheduled clock or a manual advance) and closed early when a client pays.
  */
 
-/** Undisputed invoices unpaid past their grace period. */
+/** Under an open dispute that was already filed on `on`. */
+const disputedOn = (ctx: Ctx, invoiceId: string, on: string) =>
+  [...ctx.db.dispute.invoiceId.filter(invoiceId)].some((d) => d.status !== 'resolved' && d.openedOn <= on);
+
+/** Invoices unpaid past their grace period on `on`, and not disputed by then. */
 export function defaultedInvoices(ctx: Ctx, clientId: string, on = simDate(ctx)) {
   const grace = ctx.db.contract.clientId.find(clientId)?.graceDays ?? 0;
   return [...ctx.db.invoice.clientId.filter(clientId)].filter(
-    (i) => i.status !== 'disputed' && i.paidCents < i.amountCents && addDays(i.dueOn, grace) < on,
+    (i) => i.paidCents < i.amountCents && addDays(i.dueOn, grace) < on && !disputedOn(ctx, i.id, on),
   );
 }
 
@@ -29,7 +33,8 @@ export function cureState(ctx: Ctx, clientId: string): { state: 'none' | 'runnin
 
 /** A default notice went out: the cure period starts (once per default). */
 export function startCure(ctx: Ctx, clientId: string, sentOn: string, workItemId?: bigint) {
-  if (!inDefault(ctx, clientId) || cureState(ctx, clientId).state !== 'none') return;
+  // In default when the notice went out; a dispute filed later is judged when the cure period ends.
+  if (!defaultedInvoices(ctx, clientId, sentOn).length || cureState(ctx, clientId).state !== 'none') return;
   const days = ctx.db.contract.clientId.find(clientId)?.cureDays ?? 0;
   const d = ctx.db.deadline.insert({
     id: 0n, kind: 'cure_period', clientId, workItemId, startedOn: sentOn, dueOn: addDays(sentOn, days), status: 'open',

@@ -30,8 +30,12 @@ export const dispute = table(
     amountCents: t.i64(),
     reason: t.string(),
     openedOn: t.string(),
+    /** under_review | resolved */
     status: t.string(),
     owner: t.string(),
+    resolvedOn: t.string().optional(),
+    /** no_change | credited (resolved disputes) */
+    resolution: t.string(),
   },
 );
 

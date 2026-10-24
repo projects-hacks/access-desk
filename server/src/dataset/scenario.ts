@@ -60,5 +60,7 @@ export const CASES: PlantedCase[] = [
   { id: 'duplicate-wire', clientId: 'ORG-90391', title: 'Same wire sent twice', expected: 'Apply the first, flag the second as a duplicate, propose a refund for approval.' },
   { id: 'wrong-reference', clientId: 'ORG-90251', title: "Quotes February's invoice numbers, pays January's amount", expected: 'Match to the open January invoices by amount; leave February open.' },
   { id: 'new-bank-account', clientId: 'ORG-90378', title: 'Pays from an account never seen before', expected: 'Match by name and amount at lower confidence, ask to confirm, then add the account to the CRM.' },
+  { id: 'dispute-to-delay', clientId: 'ORG-90518', title: 'Serial disputer: every invoice disputed, every dispute upheld, paid two days after each resolution', expected: 'Disputed invoices are not in default, so the cure period ends "met" with nothing paid. Spot the pattern in the history and escalate; do not collect disputed amounts.' },
+  { id: 'cure-withdrawal', clientId: 'ORG-90412', title: 'Client in its cure period withdraws custody cash (live: POST /demo/withdraw)', expected: 'Honor the withdrawal (no restriction before the cure period ends, §9.1), flag it as an exploit for the controller, and hold under §7.2 once the cure period expires.' },
   { id: 'strategic-client', clientId: 'ORG-90101', title: 'Strategic client', expected: 'Never act automatically; route to the controller.' },
 ];

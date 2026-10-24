@@ -19,4 +19,6 @@ export default __t.row({
   openedOn: __t.string().name("opened_on"),
   status: __t.string(),
   owner: __t.string(),
+  resolvedOn: __t.option(__t.string()).name("resolved_on"),
+  resolution: __t.string(),
 });

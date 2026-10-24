@@ -1,5 +1,5 @@
 import { addDays } from './dates';
-import type { Client, HistoryPayment, Invoice, IsoDate, MetricSnapshot, Precedent } from './types';
+import type { Client, HistoryDispute, HistoryPayment, Invoice, IsoDate, MetricSnapshot, Precedent } from './types';
 
 /**
  * Twelve months of history before the bank window: every invoice paid, with
@@ -17,7 +17,7 @@ const LAST_HISTORY_DAY = '2026-01-31';
 /** Typical days after the due date, by tier. */
 const TIER_OFFSET: Record<number, number> = { 1: -2, 2: 0, 3: 3, 4: 12, 5: 25 };
 
-type Pattern = 'restriction_eve' | 'partial_reset' | 'pays_restricted_only' | 'quarter_end' | 'recent_late';
+type Pattern = 'restriction_eve' | 'partial_reset' | 'pays_restricted_only' | 'quarter_end' | 'recent_late' | 'dispute_delay';
 
 /** Patterns the exploit sub-agent should find. Each is real in the payment data below. */
 export const PATTERNS: Record<string, { pattern: Pattern; description: string }> = {
@@ -26,6 +26,7 @@ export const PATTERNS: Record<string, { pattern: Pattern; description: string }>
   'ORG-90758': { pattern: 'pays_restricted_only', description: 'Pays the restricted product (API) fast, custody late' },
   'ORG-90101': { pattern: 'quarter_end', description: 'Pays only at quarter end' },
   'ORG-90412': { pattern: 'recent_late', description: 'Paid late 3 times in the last 90 days, always within 30' },
+  'ORG-90518': { pattern: 'dispute_delay', description: 'Disputes every invoice; each is resolved with no change and paid in full two days later' },
 };
 
 /** Payment dates fixed by a precedent's outcome ("paid in 4 days"). */
@@ -42,6 +43,40 @@ export function historyPeriodsFor(client: Client): string[] {
 }
 
 const clamp = (date: IsoDate) => (date > LAST_HISTORY_DAY ? LAST_HISTORY_DAY : date);
+
+/** A serial disputer: disputes four days after due, resolved with no change four weeks later, pays two days after that. */
+function disputeWindow(clientId: string, period: string, due: IsoDate, unit: (seed: string) => number) {
+  const resolvedOn = addDays(due, 27 + Math.round(unit(`${clientId}:${period}:dispute`) * 4));
+  // The last window is squeezed so history still ends on its last day.
+  if (addDays(resolvedOn, 2) > LAST_HISTORY_DAY) return { openedOn: addDays(due, 4), resolvedOn: addDays(LAST_HISTORY_DAY, -2), paidOn: LAST_HISTORY_DAY };
+  return { openedOn: addDays(due, 4), resolvedOn, paidOn: addDays(resolvedOn, 2) };
+}
+
+const DISPUTE_REASONS = [
+  'Custody fee charged on assets moved out mid-month',
+  'API calls billed during the vendor outage',
+  'Volume tier discount not applied',
+  'Custody fee billed twice for the same period',
+];
+
+/** Every dispute the serial disputer raised in the history window; all resolved with no change. */
+export function historyDisputes(clients: Client[], invoices: Invoice[], unit: (seed: string) => number): HistoryDispute[] {
+  const out: HistoryDispute[] = [];
+  for (const c of clients.filter((x) => PATTERNS[x.id]?.pattern === 'dispute_delay')) {
+    historyPeriodsFor(c).forEach((period, n) => {
+      const list = invoices.filter((i) => i.clientId === c.id && i.period === period);
+      if (!list.length) return;
+      const w = disputeWindow(c.id, period, list[0]!.dueOn, unit);
+      for (const i of list) {
+        out.push({
+          id: `DSP-H${i.id.slice(4)}`, invoiceId: i.id, clientId: c.id, amountCents: i.amountCents,
+          reason: DISPUTE_REASONS[n % DISPUTE_REASONS.length]!, openedOn: w.openedOn, resolvedOn: w.resolvedOn, resolution: 'no_change',
+        });
+      }
+    });
+  }
+  return out;
+}
 const QUARTER_ENDS = ['2025-03-31', '2025-06-30', '2025-09-30', '2025-12-31'];
 
 interface PaymentDraft {
@@ -82,6 +117,8 @@ export function payHistory(clients: Client[], invoices: Invoice[], unit: (seed: 
           const days = i.product === 'API' ? 2 : 30;
           drafts.push({ clientId: c.id, valueDate: clamp(addDays(due, days)), allocations: [{ invoice: i, amountCents: i.amountCents }] });
         }
+      } else if (pattern === 'dispute_delay') {
+        all(disputeWindow(c.id, period, due, unit).paidOn);
       } else if (pattern === 'quarter_end') {
         all(QUARTER_ENDS.find((q) => q >= due) ?? LAST_HISTORY_DAY);
       } else if (pattern === 'recent_late' && ['2025-10', '2025-11', '2025-12'].includes(period)) {

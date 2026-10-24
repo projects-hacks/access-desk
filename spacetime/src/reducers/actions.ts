@@ -235,12 +235,43 @@ export const requestCustodyWithdrawal = spacetimedb.reducer(
         type: 'CUSTODY_WITHDRAWAL', clientId, withdrawalId: String(request.id), amountCents: allowed, on: simDate(ctx),
       });
     }
+    flagCureWithdrawal(ctx, c.name, clientId, request.id, allowed, usdCash(ctx, clientId) - pending);
     audit(ctx, {
       action: 'WITHDRAWAL_REQUESTED', subjectType: 'access_request', subjectId: String(request.id), clientId,
       toState: request.decision, detail: `${c.name} asked ${formatUsd(amountCents)}: ${formatUsd(allowed)} approved, ${formatUsd(withheld)} held`,
     });
   },
 );
+
+/**
+ * Money leaving custody while the client is in default and its cure period
+ * runs. The contract forbids restricting before the cure period ends, so the
+ * withdrawal goes through; the controller and agents get an exploit flag when
+ * what's left would no longer cover the amount in default.
+ */
+function flagCureWithdrawal(ctx: Ctx, name: string, clientId: string, requestId: bigint, releasedCents: bigint, usdBeforeCents: bigint) {
+  const cure = cureState(ctx, clientId);
+  if (cure.state !== 'running' || releasedCents <= 0n) return;
+  const inDefaultCents = defaultedInvoices(ctx, clientId).reduce((s, i) => s + i.amountCents - i.paidCents, 0n);
+  const leftCents = usdBeforeCents - releasedCents;
+  if (leftCents >= inDefaultCents) return;
+  const evidence = {
+    requestId: String(requestId), releasedCents: String(releasedCents), usdBeforeCents: String(usdBeforeCents), usdAfterCents: String(leftCents),
+    inDefaultCents: String(inDefaultCents), cureStartedOn: cure.startedOn, cureEndsOn: cure.dueOn,
+  };
+  ctx.db.exploitFlag.insert({
+    id: `cure-withdrawal:${requestId}`, clientId, pattern: 'withdrawal_during_cure', score: 0.9, status: 'open', months: 0,
+    evidenceJson: JSON.stringify(evidence),
+    proposedFix: `Call the client today; when the cure period ends on ${cure.dueOn}, hold the amount in default under the set-off clause.`,
+  });
+  createWorkItem(ctx, {
+    kind: 'EXPLOIT_FLAG', clientId, subjectId: `access_request:${requestId}`, amountCents: releasedCents,
+    title: `${name} withdrew ${formatUsd(releasedCents)} during its cure period`,
+    proposal: evidence, policyRef: 'pol-006', confidence: 0.9, requiredRole: 'CONTROLLER', autoApplied: false,
+    reasoning: `In default on ${formatUsd(inDefaultCents)} with the cure period running until ${cure.dueOn}. The withdrawal had to be honored (§9.1), `
+      + `and custody cash is now ${formatUsd(leftCents)}, below what is in default.`,
+  });
+}
 
 // ── Execution on approval ───────────────────────────────────────────────────
 

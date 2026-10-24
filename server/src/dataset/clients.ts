@@ -68,7 +68,9 @@ const RAW: (Omit<Client, 'bank'> & { bank?: Client['bank'] })[] = [
     id: 'ORG-90518', name: 'Orchard Treasury', legalName: 'Orchard Treasury Inc', segment: 'Corporate treasury', tier: 3,
     products: ['CUSTODY', 'API'], termsDays: 15, relationshipManager: 'Sofia Lindqvist',
     monthly: { CUSTODY: 16000, API: 8000 }, janOverride: { CUSTODY: 16000, API: 8000 },
-    jan: { kind: 'open' }, city: 'Seattle', state: 'WA',
+    // Serial disputer: disputed January the day after its default notice (history: every invoice, all upheld).
+    jan: { kind: 'open' }, janDispute: { openedOn: '2026-02-28', reason: 'Custody fee charged on assets moved out in January' },
+    city: 'Seattle', state: 'WA',
   },
   {
     id: 'ORG-90677', name: 'Juniper Labs', legalName: 'Juniper Labs Inc', segment: 'Fintech', tier: 4,

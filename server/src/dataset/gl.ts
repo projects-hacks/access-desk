@@ -16,7 +16,7 @@ export const ACCOUNTS = {
 } as const;
 
 /** Bank balances before the first movement in the data (Nessie's balance field can't carry them). Booked in the GL too, so bank = ledger. */
-export const BANK_OPENING_CENTS: Record<string, number> = { collections: 200_000_000, disbursements: 500_000_000 };
+export const BANK_OPENING_CENTS: Record<string, number> = { collections: 200_000_000, disbursements: 1_000_000_000 };
 
 export const REVENUE: Record<Product, string> = {
   CUSTODY: '4100',

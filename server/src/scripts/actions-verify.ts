@@ -16,6 +16,7 @@ import { LocalPlatform } from '../platform/client';
 import { Sync } from '../sync';
 
 const KESTREL = 'ORG-90412'; // no debit clause, set-off right, hedged book
+const COBALT = 'ORG-90355'; // in its cure period, being acquired, $1.89M custody cash
 const BLUEFIN = 'ORG-90233'; // debit clause signed, plenty of USD in custody
 
 if (!env.STDB_GATEWAY_TOKEN || !env.STDB_DEMO_TOKEN || !process.env.STDB_AGENT_TOKEN) throw new Error('needs gateway, demo and agent tokens in .env');
@@ -39,7 +40,7 @@ execFileSync('spacetime', ['call', '-s', 'maincloud', env.STDB_DATABASE, 'assign
 const subscribe = (conn: DbConnection) => new Promise<void>((resolve) => conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([
   tables.workItem, tables.invoice, tables.paymentApplication, tables.ledgerEntry, tables.custodyHolding, tables.hold,
   tables.accessLever, tables.accessRequest, tables.cashMovement, tables.notice, tables.tieOutRun, tables.auditEvent,
-  tables.clock, tables.deadline, tables.bankAccount,
+  tables.clock, tables.deadline, tables.bankAccount, tables.exploitFlag,
 ]));
 await subscribe(controller);
 const db = controller.db;
@@ -108,10 +109,24 @@ check(cure()?.status === 'open' && cure()?.dueOn === '2026-03-06', 'Kestrel noti
 r = await refused(agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 'withdrawals', step: 'HOLD_AMOUNT_OWED', reasoning: reason, policyRef: 'pol-006', confidence: 0.9 }), /9\.1/);
 check(r === true, 'Hold refused while the cure period runs', String(r));
 
+console.log('\nExploit: cash out during the cure period');
+const flags = () => [...db.workItem.iter()].filter((w) => w.clientId === COBALT && w.kind === 'EXPLOIT_FLAG');
+await demo.reducers.requestCustodyWithdrawal({ clientId: COBALT, amountCents: 50_000_000n });
+await settle();
+check(flags().length === 0, '$500,000 out, $1.39M still covers the $61,400 in default: no flag');
+await demo.reducers.requestCustodyWithdrawal({ clientId: COBALT, amountCents: 135_000_000n });
+await settle();
+const cobaltReq = [...db.accessRequest.iter()].filter((a) => a.clientId === COBALT).sort((a, b) => (a.id < b.id ? 1 : -1))[0];
+check(cobaltReq?.allowedCents === 135_000_000n, 'Next $1.35M honored in full: no restriction before the cure period ends (§9.1)');
+check(flags().length === 1 && flags()[0]!.state === 'PROPOSED', 'Flagged to the controller: custody left below the amount in default', `${flags().length}`);
+check([...db.exploitFlag.iter()].some((f) => f.clientId === COBALT && f.pattern === 'withdrawal_during_cure'), 'Exploit flag recorded for the agents');
+
 console.log('\nTime (scheduled reducer)');
 await agent.reducers.setDeadline({ clientId: KESTREL, kind: 'promise_to_pay', dueOn: '2026-03-05', note: 'CFO promised a wire by Thursday', workItemId: undefined });
 await demo.reducers.setClockSpeed({ secondsPerDay: 1, runUntil: '2026-03-06' });
-await wait(5_000);
+// Ticks are once a second, so three sim days take three to six seconds.
+for (let t = 0; t < 40 && db.clock.id.find(1)?.secondsPerDay; t++) await wait(250);
+await wait(500);
 const clock = db.clock.id.find(1);
 check(clock?.simDate === '2026-03-06' && clock.secondsPerDay === 0, 'Clock ran on its own to Mar 6 and paused', `${clock?.simDate} ${clock?.secondsPerDay}`);
 check(cure()?.status === 'expired', 'Cure period expired unpaid', cure()?.status);

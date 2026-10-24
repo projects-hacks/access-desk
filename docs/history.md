@@ -22,9 +22,10 @@ History cash goes through payment checking like any payment, quietly: no work it
 | Monarch Rails | Pays the restricted product only | API invoices paid within 2 days, custody at day 30 |
 | Halcyon Capital | Pays only at quarter end | `paid_on` is always a quarter end |
 | Kestrel Quant | Recently late | Late in each of Oct, Nov, Dec 2025, always within 30 days |
+| Orchard Treasury | Disputes to delay | Every history invoice disputed 4 days after due, resolved with no change ~4 weeks later, paid in full 2 days after; January disputed on Feb 28, the day after its default notice |
 
 ## Precedents for policy drafting
 
 PRC-0001 to PRC-0003 are overrides of pol-003 ("hold amount + no new positions") to "hold amount only" near renewal (Fieldstone, Ember, Polaris). The live Kestrel override on Mar 3 makes four, which is what pol-014 is drafted from. The rest are plain decisions with outcomes (Bluefin custody debit, Orchard netting, Tessellate prepay, Ivory Lane paid at day 41) for replay. Outcomes like "Paid in 4d" match real payments in the history.
 
-Not modelled: custody withdrawal history (the design's Vantage "withdraws before due dates" pattern), and Tessellate's "pays only the restricted product" (it has one product; Monarch carries that pattern).
+Live, not in history: cash leaving custody during a cure period (try Cobalt Ridge or Kestrel with `POST /demo/withdraw`); the module flags it. Not modelled: custody withdrawal history (the design's Vantage "withdraws before due dates" pattern), and Tessellate's "pays only the restricted product" (it has one product; Monarch carries that pattern).

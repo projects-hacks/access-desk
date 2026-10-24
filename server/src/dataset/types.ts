@@ -57,6 +57,8 @@ export interface Client {
   olderOpenPeriods?: string[];
   /** Extra one-off invoices, e.g. a disputed overage. */
   extraJanInvoices?: Array<{ product: Product; label: string; amount: number; disputed?: boolean }>;
+  /** Disputes its January invoices on this date (the live dispute of a serial disputer). */
+  janDispute?: { openedOn: IsoDate; reason: string };
   city: string;
   state: string;
   /** Where the client banks. International clients pay by SWIFT. */
@@ -160,6 +162,18 @@ export interface PlantedCase {
 }
 
 /** Cash from before the bank window: 12 months of payments billing already applied. */
+/** A past dispute: opened, resolved, closed. */
+export interface HistoryDispute {
+  id: string;
+  invoiceId: string;
+  clientId: string;
+  amountCents: number;
+  reason: string;
+  openedOn: IsoDate;
+  resolvedOn: IsoDate;
+  resolution: 'no_change' | 'credited';
+}
+
 export interface HistoryPayment {
   id: string;
   clientId: string;
@@ -204,6 +218,7 @@ export interface Dataset {
   history: {
     start: IsoDate;
     cash: HistoryPayment[];
+    disputes: HistoryDispute[];
     precedents: Precedent[];
     metrics: MetricSnapshot[];
   };

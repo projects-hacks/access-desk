@@ -33,7 +33,10 @@ export interface PositionRow { id: string; clientId: string; instrument: string;
 export interface LeverRow { id: string; clientId: string; lever: string; state: string; detail: string }
 export interface CapabilityRow { id: string; product: string; lever: string; step: string; gentleness: number; reversible: boolean; twoApprovers: boolean; adapterAction: string }
 export interface OwedRow { id: string; clientId: string; kind: string; amountCents: number; asOf: string }
-export interface DisputeRow { id: string; invoiceId: string; clientId: string; amountCents: number; reason: string; openedOn: string; status: string; owner: string }
+export interface DisputeRow {
+  id: string; invoiceId: string; clientId: string; amountCents: number; reason: string; openedOn: string; status: string; owner: string;
+  resolvedOn: string | undefined; resolution: string;
+}
 
 export function clientStatus(c: Client): string {
   return STATUS[c.id] ?? 'active';
@@ -147,12 +150,21 @@ export function owedToClient(ds: Dataset): OwedRow[] {
 }
 
 export function disputes(ds: Dataset): DisputeRow[] {
-  return ds.invoices
+  const live = ds.invoices
     .filter((i) => i.status === 'disputed')
-    .map((i) => ({
-      id: `DSP-${i.id.slice(4)}`, invoiceId: i.id, clientId: i.clientId, amountCents: i.amountCents,
-      reason: 'Client says overage was double-counted during the Jan 14 outage', openedOn: '2026-02-18', status: 'under_review', owner: 'Marcus Okafor',
-    }));
+    .map((i) => {
+      const own = ds.clients.find((c) => c.id === i.clientId)?.janDispute;
+      return {
+        id: `DSP-${i.id.slice(4)}`, invoiceId: i.id, clientId: i.clientId, amountCents: i.amountCents,
+        reason: own?.reason ?? 'Client says overage was double-counted during the Jan 14 outage', openedOn: own?.openedOn ?? '2026-02-18',
+        status: 'under_review', owner: 'Marcus Okafor', resolvedOn: undefined, resolution: '',
+      };
+    });
+  const past = ds.history.disputes.map((d) => ({
+    id: d.id, invoiceId: d.invoiceId, clientId: d.clientId, amountCents: d.amountCents, reason: d.reason, openedOn: d.openedOn,
+    status: 'resolved', owner: 'Marcus Okafor', resolvedOn: d.resolvedOn, resolution: d.resolution,
+  }));
+  return [...live, ...past];
 }
 
 export interface NoticeRow { ref: string; clientId: string; channel: string; body: string; sentOn: string }
@@ -164,10 +176,16 @@ export interface NoticeRow { ref: string; clientId: string; channel: string; bod
  */
 export function dunningNotices(ds: Dataset): NoticeRow[] {
   const out: NoticeRow[] = [];
+  const disputedOn = new Map(disputes(ds).filter((d) => d.status !== 'resolved').map((d) => [d.invoiceId, d.openedOn]));
   for (const c of ds.clients) {
     const { graceDays, cureDays } = contractFor(c);
+    // A dispute filed after the default (a serial disputer) doesn't undo the notice that already went out.
+    const inDefault = (i: Dataset['invoices'][number]) => {
+      const opened = disputedOn.get(i.id);
+      return !opened || opened > addDays(i.dueOn, graceDays + 1);
+    };
     const defaulted = ds.invoices
-      .filter((i) => i.clientId === c.id && i.status === 'open' && i.paidCents < i.amountCents && addDays(i.dueOn, graceDays) < ds.simDate)
+      .filter((i) => i.clientId === c.id && i.status !== 'paid' && i.paidCents < i.amountCents && addDays(i.dueOn, graceDays) < ds.simDate && inDefault(i))
       .sort((a, b) => a.dueOn.localeCompare(b.dueOn));
     const first = defaulted[0];
     if (!first) continue;

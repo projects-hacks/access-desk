@@ -104,6 +104,8 @@ for (const t of hidden) check(!visibleRefs.has(t.movementId), `cash ${t.movement
 const allowEmpty: Record<string, string[]> = {
   cash_movement: ['origName', 'origAccount', 'reverses', 'remittance', 'hintsJson', 'parseNotes', 'instructedCents', 'chargesCents', 'chargeBearer', 'returnCode'],
   invoice: ['paidOn'],
+  // Only resolved disputes have these (checked below).
+  dispute: ['resolvedOn', 'resolution'],
 };
 const tableRows: Record<string, Iterable<object>> = {
   client: db.client.iter(), payer_identity: db.payerIdentity.iter(), contract: db.contract.iter(),
@@ -136,7 +138,10 @@ const fk: [string, Iterable<{ clientId: string }>][] = [
 ];
 for (const [table, rows] of fk) for (const r of rows) check(clientIds.has(r.clientId), `${table}: unknown client ${r.clientId}`);
 const invoiceIds = new Set([...db.invoice.iter()].map((i) => i.id));
-for (const d of db.dispute.iter()) check(invoiceIds.has(d.invoiceId), `dispute ${d.id}: unknown invoice ${d.invoiceId}`);
+for (const d of db.dispute.iter()) {
+  check(invoiceIds.has(d.invoiceId), `dispute ${d.id}: unknown invoice ${d.invoiceId}`);
+  check((d.status === 'resolved') === (!!d.resolvedOn && !!d.resolution), `dispute ${d.id}: ${d.status} but resolution ${d.resolution || 'empty'}`);
+}
 
 // 5. Lineage: every cash movement has its raw record.
 const rawIds = new Set([...db.rawRecord.iter()].map((r) => r.id));
@@ -180,6 +185,12 @@ const wrenCash = [...db.cashMovement.iter()].filter((m) => m.isHistory && m.orig
 const perInvoice = new Map<string, number>();
 for (const m of wrenCash) for (const r of m.refs) perInvoice.set(r, (perInvoice.get(r) ?? 0) + 1);
 pattern(perInvoice.size > 0 && [...perInvoice.values()].every((n) => n === 2), 'Wrenfield pays every invoice in two partial payments');
+const orchard = paidHistory('ORG-90518');
+const orchardDisputes = [...db.dispute.iter()].filter((d) => d.clientId === 'ORG-90518');
+const upheld = orchard.every((i) => orchardDisputes.some((d) => d.invoiceId === i.id && d.status === 'resolved' && d.resolution === 'no_change'
+  && d.resolvedOn !== undefined && days(d.resolvedOn, i.paidOn!) === 2));
+const liveDispute = orchardDisputes.some((d) => d.status === 'under_review' && d.openedOn === '2026-02-28');
+pattern(orchard.length > 0 && upheld && liveDispute, `Orchard disputed all ${orchard.length} history invoices (all upheld, paid 2 days after each), and January the day after its notice`);
 const overrides = [...db.precedent.iter()].filter((p) => p.overrideReason);
 pattern(overrides.length === 3, `${overrides.length} past overrides of pol-003 available for drafting (the live Kestrel override makes 4)`);
 

@@ -1,7 +1,7 @@
 import type { Product } from '../domain';
 import { AFFILIATES, CLIENTS } from './clients';
 import { addDays, monthAfter } from './dates';
-import { HISTORY_PERIODS, PRECEDENTS, historyPeriodsFor, payHistory, weeklyMetrics } from './history';
+import { HISTORY_PERIODS, PRECEDENTS, historyDisputes, historyPeriodsFor, payHistory, weeklyMetrics } from './history';
 import { CASES, LOANS, LOAN_MOVEMENTS, UNKNOWN_WALLET_PAYMENT } from './scenario';
 import type { BankMovement, Client, Dataset, Invoice, OnchainPayment, Party } from './types';
 
@@ -58,7 +58,7 @@ function draftInvoices(): DraftInvoice[] {
           dueOn,
           amountCents: override !== undefined ? toCents(override) : monthlyAmount(client, product, period),
           paidCents: 0,
-          status: 'open',
+          status: period === '2026-01' && client.janDispute ? 'disputed' : 'open',
         });
       }
       if (period === '2026-01') {
@@ -276,6 +276,7 @@ export function buildDataset(platform: Dataset['platform']): Dataset {
     history: {
       start: '2025-03-01',
       cash: historyCash,
+      disputes: historyDisputes(CLIENTS, invoices.filter((i) => HISTORY_PERIODS.includes(i.period) && !isOlderOpen(i)), unit),
       precedents: PRECEDENTS,
       metrics: weeklyMetrics(SIM_DATE),
     },
