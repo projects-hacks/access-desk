@@ -25,6 +25,18 @@ main { padding: 24px; }
 @media (max-width: 1100px) { .credit-grid { grid-template-columns: 1fr; } }
 .card { background: #fff; border: 1px solid #e5e5e5; border-left: 4px solid #6366f1; border-radius: 8px; padding: 12px; margin-bottom: 10px; cursor: pointer; }
 .card.flag { border-left-color: #f59e0b; }
+.card.policy { border-left-color: #0d9488; }
+.decision { font-size: 12px; background: #fafafa; border-radius: 6px; padding: 6px 8px; margin: 0 0 8px; }
+.decision p { margin: 4px 0 0; }
+.decision details { margin-top: 4px; }
+.decision summary { cursor: pointer; color: #555; }
+.decision ul { margin: 4px 0 0; padding-left: 18px; }
+.decision ul.violations { color: #991b1b; }
+.pill.by-claude { background: #ccfbf1; color: #115e59; }
+.pill.by-rules { background: #f0f0f0; color: #444; }
+.pill.active { background: #dcfce7; color: #166534; }
+.pill.draft { background: #e0f2fe; color: #075985; }
+.pill.superseded { background: #f0f0f0; color: #999; }
 .card-top { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
 .kind { font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .card h4 { margin: 6px 0; font-size: 15px; }
