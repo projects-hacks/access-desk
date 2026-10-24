@@ -1,7 +1,8 @@
 import { SenderError, t } from 'spacetimedb/server';
-import { actorOf, audit, requireRole, simDate, type Ctx } from '../context';
+import { actorOf, addDays, audit, requireRole, simDate, type Ctx } from '../context';
 import { createWorkItem, overdueCents, recomputeInvoice, releaseHoldsIfCured, withdrawStaleProposals } from '../payments/apply';
 import { GL, cr, dr, queueCommand, queueJournal } from '../payments/gateway';
+import { cureState, defaultedInvoices } from '../payments/deadlines';
 import { formatUsd } from '../payments/match';
 import { spacetimedb } from '../schema';
 
@@ -155,6 +156,15 @@ export const proposeRestriction = spacetimedb.reducer(
     }
     const hedged = [...ctx.db.position.clientId.filter(clientId)].some((p) => p.status === 'open' && p.hedgeGroup);
     if (lever === 'trading' && hedged && step === 'CLOSE_ONLY') throw new SenderError('pol-008: never force a hedged book to close-only; propose NO_NEW_POSITIONS');
+    // §9.1: no restriction until a default notice has gone out and the cure period has run.
+    const cure = clause(ctx, clientId, 'cure');
+    if (cure?.allowed) {
+      const s = cureState(ctx, clientId);
+      const days = contract?.cureDays ?? 0;
+      if (s.state === 'none') throw new SenderError(`§${cure.clause}: no default notice yet; send one (propose_notice), then the ${days}-day cure period runs`);
+      if (s.state === 'running') throw new SenderError(`§${cure.clause}: cure period runs until ${s.dueOn} (notice of ${s.startedOn})`);
+      cited.push(cure.clause);
+    }
 
     const isHold = lever === 'withdrawals' && step === 'HOLD_AMOUNT_OWED';
     propose(ctx, {
@@ -294,10 +304,51 @@ export function executeApproved(ctx: Ctx, workItemId: bigint) {
     }
     case 'REMINDER': {
       const notice = ctx.db.notice.insert({
-        id: 0n, clientId: item.clientId, workItemId: item.id, channel: p.channel, body: p.body, status: 'queued', sentAt: undefined,
+        id: 0n, clientId: item.clientId, workItemId: item.id, channel: p.channel, body: p.body, status: 'queued', sentOn: simDate(ctx), ref: `WI-${item.id}`, sentAt: undefined,
       });
       queueCommand(ctx, `SEND_NOTICE:${notice.id}`, { type: 'SEND_NOTICE', clientId: item.clientId, channel: p.channel, body: p.body, noticeId: String(notice.id) }, item.id);
       return;
     }
+  }
+}
+
+// ── Time ────────────────────────────────────────────────────────────────────
+
+/** A promise to pay or a follow-up date (e.g. from an RM call). Resolved automatically when the date comes. */
+export const setDeadline = spacetimedb.reducer(
+  { clientId: t.string(), kind: t.string(), dueOn: t.string(), note: t.string(), workItemId: t.u64().optional() },
+  (ctx, { clientId, kind, dueOn, note, workItemId }) => {
+    requireRole(ctx, ['AGENT', 'CONTROLLER', 'RELATIONSHIP_MANAGER', 'ADMIN']);
+    client(ctx, clientId);
+    if (kind !== 'promise_to_pay' && kind !== 'follow_up') throw new SenderError('kind must be promise_to_pay or follow_up (cure periods start from notices)');
+    const today = simDate(ctx);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dueOn) || dueOn <= today) throw new SenderError(`dueOn must be a date after ${today}`);
+    const d = ctx.db.deadline.insert({ id: 0n, kind, clientId, workItemId, startedOn: today, dueOn, status: 'open', clause: '', note });
+    audit(ctx, { action: 'DEADLINE_SET', subjectType: 'deadline', subjectId: String(d.id), clientId, workItemId, toState: 'open', detail: `${kind.replace(/_/g, ' ')} by ${dueOn}: ${note}` });
+  },
+);
+
+/**
+ * Dunning (pol-007), run as each sim day starts: a client newly past its grace
+ * period gets a default notice, which starts the cure period once sent.
+ */
+export function sendDefaultNotices(ctx: Ctx) {
+  if (!policyActive(ctx, 'pol-007')) return;
+  const today = simDate(ctx);
+  for (const c of [...ctx.db.client.iter()]) {
+    const defaulted = defaultedInvoices(ctx, c.id, today);
+    if (!defaulted.length || cureState(ctx, c.id).state !== 'none') continue;
+    if ([...ctx.db.notice.clientId.filter(c.id)].some((n) => n.status === 'queued')) continue;
+    const contract = ctx.db.contract.clientId.find(c.id);
+    const owed = defaulted.reduce((s, i) => s + i.amountCents - i.paidCents, 0n);
+    const list = defaulted.map((i) => `${i.id} (due ${i.dueOn})`).join(', ');
+    const body = `Payment of ${formatUsd(owed)} is past due: ${list}. Under §9.1 you have ${contract?.cureDays ?? 0} days from this notice `
+      + `(until ${addDays(today, contract?.cureDays ?? 0)}) to pay before access may be restricted.`;
+    const item = createWorkItem(ctx, {
+      kind: 'REMINDER', clientId: c.id, subjectId: c.id, title: `Default notice to ${c.name}`, amountCents: owed,
+      proposal: { channel: 'email', body }, reasoning: `Past the ${contract?.graceDays ?? 0}-day grace period on ${list}.`,
+      policyRef: 'pol-007', confidence: 1, requiredRole: 'CONTROLLER', autoApplied: true,
+    });
+    executeApproved(ctx, item.id);
   }
 }

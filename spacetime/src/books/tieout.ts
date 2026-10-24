@@ -54,8 +54,11 @@ export function runTieOut(ctx: Ctx, trigger: string) {
   const breaks: Break[] = [];
 
   for (const [account, code] of Object.entries(CASH_ACCOUNTS)) {
-    const bank = movements
-      .filter((m) => m.platformAccount === account && m.status === 'posted')
+    // Bank accounts: the statement's opening balance (which includes history) plus everything posted since.
+    // The wallet has no statement: all its movements count.
+    const statement = ctx.db.bankAccount.id.find(account);
+    const bank = (statement?.openingCents ?? 0n) + movements
+      .filter((m) => m.platformAccount === account && m.status === 'posted' && !(statement && m.isHistory))
       .reduce((s, m) => s + (m.direction === 'in' ? m.amountCents : -m.amountCents), 0n);
     areas.push({ area: `cash:${account}`, subledgerCents: bank, glCents: gl.get(code) ?? 0n });
     for (const m of movements.filter((x) => x.platformAccount === account && x.status === 'pending')) {

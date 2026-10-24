@@ -38,6 +38,7 @@ reducer → gateway_command (queued) → gateway claims → platform API / bank 
 | 1300 | Loans receivable |
 | 2100 | Client funds |
 | 2300 | Unapplied cash and credits |
+| 3000 | Equity (opening bank balances) |
 | 4100–4400 | Revenue: custody, trading, financing, API |
 | 6850 | Bank fees |
 
@@ -62,3 +63,7 @@ pnpm sync               # full pass + gateway drain + tie-out
 pnpm ledger:verify      # journals balance, ledger = platform GL, every decision booked, billing agrees
 pnpm tieout:verify      # baseline ties; a planted stray GL line is caught and escalated (then: pnpm demo:reset)
 ```
+
+## Bank balances
+
+Nessie's balance field never moves, so `bank_account` holds statement balances computed from its transactions: opening + posted, pending in and out separately, available = posted − pending out. Platform openings equal the GL's `JE-OPEN` plus the history receipts that predate the bank window, so a statement balance equals GL cash; tie-out compares opening + posted movements per account. Client openings are a tier-based cushion. Platform accounts refresh every cash pass; client accounts on the full pass and whenever the gateway or a demo wire moves their money.

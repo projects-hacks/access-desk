@@ -24,7 +24,7 @@ let failed = results.some((r) => r.errors.length);
 
 if (env.STDB_GATEWAY_TOKEN) {
   const { conn: gwConn } = await connectStdb(env.STDB_GATEWAY_TOKEN);
-  const gateway = new Gateway(gwConn, new LocalPlatform(platform), bank, ds, () => sync.cash());
+  const gateway = new Gateway(gwConn, new LocalPlatform(platform), bank, ds, (accounts) => sync.cash(accounts));
   await gateway.ready();
   const ran = await gateway.drain();
   const left = gateway.pending();

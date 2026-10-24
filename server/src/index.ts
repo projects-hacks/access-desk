@@ -40,7 +40,7 @@ await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
 if (env.STDB_GATEWAY_TOKEN) {
   const { conn: gatewayConn } = await connectStdb(env.STDB_GATEWAY_TOKEN);
-  gateway = new Gateway(gatewayConn, new PlatformClient(env.PLATFORM_API_URL ?? `http://127.0.0.1:${env.PORT}/platform`), bank, ds, () => sync.cash(), log);
+  gateway = new Gateway(gatewayConn, new PlatformClient(env.PLATFORM_API_URL ?? `http://127.0.0.1:${env.PORT}/platform`), bank, ds, (accounts) => sync.cash(accounts), log);
   await gateway.ready();
   gateway.start();
 } else {

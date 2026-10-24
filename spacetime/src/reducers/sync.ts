@@ -4,10 +4,11 @@ import { CAN_SYNC } from '../roles';
 import { spacetimedb } from '../schema';
 import { accessLever, capability, client, contract, contractClause, payerIdentity } from '../tables/clients';
 import { assetPrice, custodyHolding, loan, owedToClient, position } from '../tables/assets';
-import { cashMovement, dispute, invoice, ledgerEntry } from '../tables/money';
+import { bankAccount, cashMovement, dispute, invoice, ledgerEntry } from '../tables/money';
 import { rawRecord, syncSource } from '../tables/sync';
 import { metricSnapshot, precedent } from '../tables/learning';
 import { recomputeInvoice } from '../payments/apply';
+import { startCure } from '../payments/deadlines';
 import { onCashMovement, onCashRemoved } from './payments';
 
 // Sync writes golden rows from systems of record. Every reducer is an idempotent upsert by primary key.
@@ -116,6 +117,24 @@ export const upsertAssetPrice = spacetimedb.reducer({ row: assetPrice.rowType },
   if (ctx.db.assetPrice.asset.find(row.asset)) ctx.db.assetPrice.asset.update(row);
   else ctx.db.assetPrice.insert(row);
 });
+
+/** Bank balances computed from the Nessie statement. */
+export const upsertBankAccount = spacetimedb.reducer({ row: bankAccount.rowType }, (ctx, { row }) => {
+  requireRole(ctx, CAN_SYNC);
+  if (ctx.db.bankAccount.id.find(row.id)) ctx.db.bankAccount.id.update(row);
+  else ctx.db.bankAccount.insert(row);
+});
+
+/** A notice the platform's messaging system already sent. A default notice starts the cure period from its date. */
+export const upsertNotice = spacetimedb.reducer(
+  { ref: t.string(), clientId: t.string(), channel: t.string(), body: t.string(), sentOn: t.string() },
+  (ctx, { ref, clientId, channel, body, sentOn }) => {
+    requireRole(ctx, CAN_SYNC);
+    if ([...ctx.db.notice.ref.filter(ref)].length) return;
+    ctx.db.notice.insert({ id: 0n, clientId, workItemId: undefined, channel, body, status: 'sent', sentOn, ref, sentAt: undefined });
+    if (channel !== 'rm') startCure(ctx, clientId, sentOn);
+  },
+);
 
 export const upsertOwedToClient = spacetimedb.reducer({ row: owedToClient.rowType }, (ctx, { row }) => {
   requireRole(ctx, CAN_SYNC);

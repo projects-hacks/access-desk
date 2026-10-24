@@ -125,3 +125,28 @@ export const ledgerEntry = table(
     workItemId: t.u64().optional(),
   },
 );
+
+/**
+ * Balances per bank account, computed from Nessie's transactions like a bank
+ * statement: opening + posted, with pending shown separately. (Nessie's own
+ * balance field never moves.)
+ */
+export const bankAccount = table(
+  { public: true },
+  {
+    /** collections | disbursements | ORG-xxxxx | ORG-xxxxx:secondary | aff:key */
+    id: t.string().primaryKey(),
+    /** platform, or the client the account belongs to (affiliates: the parent). */
+    owner: t.string().index('btree'),
+    nickname: t.string(),
+    accountNumber: t.string(),
+    nessieId: t.string(),
+    openingCents: t.i64(),
+    postedCents: t.i64(),
+    pendingInCents: t.i64(),
+    pendingOutCents: t.i64(),
+    availableCents: t.i64(),
+    transactions: t.u32(),
+    asOf: t.string(),
+  },
+);

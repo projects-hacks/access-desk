@@ -24,7 +24,7 @@ export class Gateway {
     private readonly bank: Bank,
     private readonly ds: Dataset,
     /** Called after a bank write, so the movement is picked up immediately. */
-    private readonly onBankWrite: () => Promise<unknown>,
+    private readonly onBankWrite: (accounts: string[]) => Promise<unknown>,
     private readonly log: (msg: string) => void = console.log,
   ) {}
 
@@ -114,7 +114,7 @@ export class Gateway {
         result = await this.platform.execute(String(cmd.id), action);
       }
       await this.conn.reducers.completeGatewayCommand({ id: cmd.id, resultJson: JSON.stringify(result), externalRef });
-      if (action.type === 'REFUND' || action.type === 'CUSTODY_WITHDRAWAL') await this.onBankWrite();
+      if (action.type === 'REFUND' || action.type === 'CUSTODY_WITHDRAWAL') await this.onBankWrite([action.clientId]);
       if ('invoices' in result) this.updateBills(result.invoices);
       return true;
     } catch (err) {

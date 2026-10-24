@@ -83,6 +83,10 @@ class SpacetimeClient:
         """A client withdrawal request (CLIENT for their own account, DEMO, CONTROLLER)."""
         self.call("request_custody_withdrawal", client_id, amount_cents)
 
+    def set_deadline(self, client_id: str, kind: str, due_on: str, note: str, work_item_id: int | None = None) -> None:
+        """kind: promise_to_pay | follow_up. Resolved automatically when the sim date reaches due_on."""
+        self.call("set_deadline", client_id, kind, due_on, note, work_item_id)
+
     def decide(self, work_item_id: int, to_state: str, note: str = "") -> None:
         """APPROVED | REJECTED | NEEDS_INFO | WITHDRAWN. Denied attempts are audited, not raised."""
         self.call("transition_work_item", work_item_id, to_state, note)
@@ -99,10 +103,12 @@ class SpacetimeClient:
         tables = [
             "invoice", "dispute", "contract", "contract_clause", "access_lever", "hold", "custody_holding",
             "position", "loan", "client_credit", "payer_identity", "credit_profile", "work_item", "access_request",
+            "deadline", "notice",
         ]
         snap: dict[str, Any] = {"client": next(iter(self.sql(f"SELECT * FROM client WHERE id = '{cid}'")), None)}
         for table in tables:
             snap[table] = self.sql(f"SELECT * FROM {table} WHERE client_id = '{cid}'")
+        snap["bank_account"] = self.sql(f"SELECT * FROM bank_account WHERE owner = '{cid}'")
         return snap
 
     def close(self) -> None:

@@ -58,3 +58,18 @@ export function queueJournal(ctx: Ctx, journalId: string, postedOn: string, ref:
   if (isBooked(ctx, ref, journalId)) return;
   queueCommand(ctx, journalId, { type: 'POST_JOURNAL', journal: { journalId, postedOn, ref, memo, lines: nonZero } }, workItemId);
 }
+
+/** A command executing longer than this was abandoned (gateway crashed or lost its connection). */
+const STUCK_AFTER_MICROS = 60_000_000n;
+
+/** Called by the clock tick: abandoned commands go back in the queue (claiming keeps execution single). */
+export function requeueStuckCommands(ctx: Ctx) {
+  for (const cmd of [...ctx.db.gatewayCommand.status.filter('executing')]) {
+    if (ctx.timestamp.microsSinceUnixEpoch - cmd.updatedAt.microsSinceUnixEpoch < STUCK_AFTER_MICROS) continue;
+    ctx.db.gatewayCommand.id.update({ ...cmd, status: 'queued', updatedAt: ctx.timestamp });
+    audit(ctx, {
+      action: 'COMMAND_REQUEUED', subjectType: 'gateway_command', subjectId: String(cmd.id), workItemId: cmd.workItemId,
+      fromState: 'executing', toState: 'queued', detail: `${cmd.type} ${cmd.key}: no result after 60s`,
+    });
+  }
+}

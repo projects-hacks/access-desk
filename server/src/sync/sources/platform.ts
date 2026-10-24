@@ -5,7 +5,7 @@ import type {
 } from '../../module_bindings/types';
 import type { Dataset } from '../../dataset';
 import {
-  PRICES, capabilities, clausesFor, clientStatus, contractFor, disputes, owedToClient, positionsFor, renewalOn,
+  PRICES, capabilities, clausesFor, clientStatus, contractFor, disputes, dunningNotices, owedToClient, positionsFor, renewalOn,
 } from '../../dataset/platform-data';
 import type { SeedMap } from '../../integrations/nessie/seed-map';
 import type { PlatformSimulator } from '../../platform/simulator';
@@ -121,5 +121,9 @@ export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap, 
     positions.push(rec('loan', l.id, row, (x) => r.upsertLoan({ row: x })));
   }
 
-  return { crm, billing, platform_admin: admin, custody, positions };
+  // After billing and contracts: a default notice needs both to start its cure period.
+  const messaging: SyncRecord<unknown>[] = [];
+  for (const n of dunningNotices(ds)) messaging.push(rec('notice', n.ref, n, (x) => r.upsertNotice(x)));
+
+  return { crm, billing, platform_admin: admin, custody, positions, messaging };
 }

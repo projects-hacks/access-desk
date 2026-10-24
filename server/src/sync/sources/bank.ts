@@ -1,12 +1,14 @@
 import type { DbConnection } from '../../module_bindings';
-import type { CashMovement } from '../../module_bindings/types';
+import type { BankAccount, CashMovement } from '../../module_bindings/types';
 import type { RemittanceInterpreter } from '../../integrations/bank-text/interpret';
 import { parseBankText } from '../../integrations/bank-text/parse';
 import type { Bank } from '../../integrations/nessie/bank';
 import type { NessieTransaction } from '../../integrations/nessie/client';
+import { PLATFORM_ACCOUNTS, accountOwner, balanceOf, type Statement } from '../../integrations/nessie/statement';
+import type { SeedPlan } from '../../integrations/nessie/seed-plan';
+import type { Dataset } from '../../dataset';
 import type { SyncRecord } from '../writer';
 
-const PLATFORM_ACCOUNTS = ['collections', 'disbursements'] as const;
 const STATUS: Record<string, string> = { completed: 'posted', pending: 'pending', cancelled: 'cancelled' };
 const INBOUND = new Set(['wire_in', 'ach_collection', 'unknown']);
 const OUTBOUND = new Set(['wire_out', 'ach_return', 'fee', 'unknown']);
@@ -77,13 +79,12 @@ export async function toCashMovement(
  * The platform's bank feed: deposits and withdrawals on its own accounts.
  * Anything dated after the simulated date hasn't happened yet and is skipped.
  */
-export async function bankRecords(conn: DbConnection, bank: Bank, simDate: string, interpreter?: RemittanceInterpreter): Promise<SyncRecord<CashMovement>[]> {
+export async function bankRecords(conn: DbConnection, statements: Map<string, Statement>, simDate: string, interpreter?: RemittanceInterpreter): Promise<SyncRecord<CashMovement>[]> {
   const records: SyncRecord<CashMovement>[] = [];
   for (const key of PLATFORM_ACCOUNTS) {
-    const acct = bank.map.accounts[key];
-    if (!acct) throw new Error(`platform account "${key}" missing from seed map ${bank.map.run}`);
-    const [deposits, withdrawals] = await Promise.all([bank.api.listDeposits(acct.id), bank.api.listWithdrawals(acct.id)]);
-    for (const [kind, list] of [['deposit', deposits], ['withdrawal', withdrawals]] as const) {
+    const s = statements.get(key);
+    if (!s) throw new Error(`no statement for platform account "${key}"`);
+    for (const [kind, list] of [['deposit', s.deposits], ['withdrawal', s.withdrawals]] as const) {
       for (const tx of list) {
         if (tx.transaction_date > simDate) continue;
         const row = await toCashMovement(tx, kind, key, interpreter);
@@ -93,6 +94,27 @@ export async function bankRecords(conn: DbConnection, bank: Bank, simDate: strin
         });
       }
     }
+  }
+  return records;
+}
+
+/** Statement balances for every account fetched in this pass. */
+export function balanceRecords(
+  conn: DbConnection, bank: Bank, ds: Dataset, plan: SeedPlan, openings: Map<string, number>,
+  statements: Map<string, Statement>, simDate: string,
+): SyncRecord<BankAccount>[] {
+  const records: SyncRecord<BankAccount>[] = [];
+  for (const [key, s] of statements) {
+    const acct = bank.map.accounts[key]!;
+    const opening = openings.get(key) ?? 0;
+    const b = balanceOf(opening, s, simDate);
+    const row: BankAccount = {
+      id: key, owner: accountOwner(ds, key), nickname: plan.accounts.find((a) => a.key === key)?.nickname ?? key,
+      accountNumber: acct.number, nessieId: acct.id, openingCents: BigInt(opening), postedCents: BigInt(b.postedCents),
+      pendingInCents: BigInt(b.pendingInCents), pendingOutCents: BigInt(b.pendingOutCents), availableCents: BigInt(b.availableCents),
+      transactions: b.transactions, asOf: simDate,
+    };
+    records.push({ table: 'bank_account', id: key, row, upsert: (r) => conn.reducers.upsertBankAccount({ row: r }) });
   }
   return records;
 }

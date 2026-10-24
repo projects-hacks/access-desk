@@ -80,6 +80,22 @@ export const AuditEvent = __t.object("AuditEvent", {
 });
 export type AuditEvent = __Infer<typeof AuditEvent>;
 
+export const BankAccount = __t.object("BankAccount", {
+  id: __t.string(),
+  owner: __t.string(),
+  nickname: __t.string(),
+  accountNumber: __t.string(),
+  nessieId: __t.string(),
+  openingCents: __t.i64(),
+  postedCents: __t.i64(),
+  pendingInCents: __t.i64(),
+  pendingOutCents: __t.i64(),
+  availableCents: __t.i64(),
+  transactions: __t.u32(),
+  asOf: __t.string(),
+});
+export type BankAccount = __Infer<typeof BankAccount>;
+
 export const Capability = __t.object("Capability", {
   id: __t.string(),
   product: __t.string(),
@@ -149,9 +165,17 @@ export type ClientCredit = __Infer<typeof ClientCredit>;
 export const Clock = __t.object("Clock", {
   id: __t.u8(),
   simDate: __t.string(),
+  secondsPerDay: __t.u32(),
+  runUntil: __t.option(__t.string()),
   updatedAt: __t.timestamp(),
 });
 export type Clock = __Infer<typeof Clock>;
+
+export const ClockTick = __t.object("ClockTick", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type ClockTick = __Infer<typeof ClockTick>;
 
 export const Contract = __t.object("Contract", {
   clientId: __t.string(),
@@ -198,8 +222,11 @@ export const Deadline = __t.object("Deadline", {
   kind: __t.string(),
   clientId: __t.string(),
   workItemId: __t.option(__t.u64()),
+  startedOn: __t.string(),
   dueOn: __t.string(),
   status: __t.string(),
+  clause: __t.string(),
+  note: __t.string(),
 });
 export type Deadline = __Infer<typeof Deadline>;
 
@@ -335,6 +362,8 @@ export const Notice = __t.object("Notice", {
   channel: __t.string(),
   body: __t.string(),
   status: __t.string(),
+  sentOn: __t.option(__t.string()),
+  ref: __t.string(),
   sentAt: __t.option(__t.timestamp()),
 });
 export type Notice = __Infer<typeof Notice>;

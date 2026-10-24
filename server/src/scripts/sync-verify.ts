@@ -2,6 +2,7 @@
  * Checks the shared database against the sources after a sync. Exit code 1 on any failure.
  * Usage: pnpm sync:verify
  */
+import { dunningNotices } from '../dataset/platform-data';
 import { tables } from '../module_bindings';
 import { loadDataset } from '../dataset';
 import {
@@ -9,6 +10,7 @@ import {
 } from '../dataset/platform-data';
 import { openBank } from '../integrations/nessie/bank';
 import { bankRecords } from '../sync/sources/bank';
+import { PLATFORM_ACCOUNTS, fetchStatements } from '../integrations/nessie/statement';
 import { chainRecords } from '../sync/sources/chain';
 import { historyRecords } from '../sync/sources/history';
 import { buildSeedPlan } from '../integrations/nessie/seed-plan';
@@ -24,7 +26,7 @@ await new Promise<void>((resolve) =>
     tables.platform, tables.clock, tables.syncSource, tables.rawRecord, tables.client, tables.payerIdentity,
     tables.contract, tables.contractClause, tables.capability, tables.accessLever, tables.invoice, tables.dispute,
     tables.cashMovement, tables.custodyHolding, tables.assetPrice, tables.owedToClient, tables.position, tables.loan,
-    tables.precedent, tables.metricSnapshot,
+    tables.precedent, tables.metricSnapshot, tables.notice, tables.bankAccount,
   ]),
 );
 
@@ -73,7 +75,7 @@ expectCount('metric_snapshot', [...db.metricSnapshot.iter()].length, ds.history.
 const jsonSafe = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v);
 const history = historyRecords(conn, ds, bank.map).filter((r) => r.table === 'cash_movement').map((r) => r.row as ReturnType<typeof chainRecords>[number]['row']);
 // Compare with rules-only parsing; Claude's hints are checked separately (parsedBy/hintsJson are ours to add).
-const live = [...(await bankRecords(conn, bank, simDate)), ...chainRecords(conn, ds, simDate), ...history.map((row) => ({ row }))];
+const live = [...(await bankRecords(conn, await fetchStatements(bank, PLATFORM_ACCOUNTS), simDate)), ...chainRecords(conn, ds, simDate), ...history.map((row) => ({ row }))];
 for (const { row: expected } of live) {
   const actual = db.cashMovement.id.find(expected.id);
   check(!!actual, `cash ${expected.bankRef} missing`);
@@ -183,7 +185,9 @@ pattern(overrides.length === 3, `${overrides.length} past overrides of pol-003 a
 
 // 8. Every source reported a clean pass, and the platform row follows configuration.
 for (const s of db.syncSource.iter()) check(s.status === 'synced', `source ${s.source}: ${s.status} ${s.error ?? ''}`);
-check([...db.syncSource.iter()].length === 9, `expected 9 sync sources, found ${[...db.syncSource.iter()].length}`);
+check([...db.syncSource.iter()].length === 11, `expected 11 sync sources, found ${[...db.syncSource.iter()].length}`);
+check([...db.notice.iter()].length === dunningNotices(ds).length, `notices: ${[...db.notice.iter()].length} vs ${dunningNotices(ds).length} sent by dunning`);
+check([...db.bankAccount.iter()].length === Object.keys(bank.map.accounts).length, `bank accounts: ${[...db.bankAccount.iter()].length} vs ${Object.keys(bank.map.accounts).length} in Nessie`);
 check(db.platform.id.find(1)?.name === env.PLATFORM_NAME, 'platform name does not match PLATFORM_NAME');
 
 conn.disconnect();

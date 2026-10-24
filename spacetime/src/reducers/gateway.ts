@@ -1,6 +1,7 @@
 import { SenderError, t } from 'spacetimedb/server';
-import { audit, requireRole, type Ctx } from '../context';
+import { audit, requireRole, simDate, type Ctx } from '../context';
 import { createWorkItem, recomputeInvoice } from '../payments/apply';
+import { startCure } from '../payments/deadlines';
 import { CAN_EXECUTE } from '../roles';
 import { spacetimedb } from '../schema';
 
@@ -76,7 +77,13 @@ export const completeGatewayCommand = spacetimedb.reducer(
       }
       case 'SEND_NOTICE': {
         const notice = action.noticeId ? ctx.db.notice.id.find(BigInt(action.noticeId)) : undefined;
-        if (notice) ctx.db.notice.id.update({ ...notice, status: 'sent', sentAt: ctx.timestamp });
+        if (notice) {
+          // Dated the day it was issued, even if the clock moved before the gateway sent it.
+          const sentOn = notice.sentOn ?? simDate(ctx);
+          ctx.db.notice.id.update({ ...notice, status: 'sent', sentOn, sentAt: ctx.timestamp });
+          // A notice to a client in default starts the contract's cure period.
+          if (notice.channel !== 'rm') startCure(ctx, notice.clientId, sentOn, notice.workItemId);
+        }
         break;
       }
       case 'REFUND':

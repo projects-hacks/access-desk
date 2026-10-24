@@ -1,4 +1,5 @@
 import { RESTRICTION_LADDER, type Product } from '../domain';
+import { addDays } from './dates';
 import type { Client, Dataset } from './types';
 
 /**
@@ -152,4 +153,31 @@ export function disputes(ds: Dataset): DisputeRow[] {
       id: `DSP-${i.id.slice(4)}`, invoiceId: i.id, clientId: i.clientId, amountCents: i.amountCents,
       reason: 'Client says overage was double-counted during the Jan 14 outage', openedOn: '2026-02-18', status: 'under_review', owner: 'Marcus Okafor',
     }));
+}
+
+export interface NoticeRow { ref: string; clientId: string; channel: string; body: string; sentOn: string }
+
+/**
+ * Default notices the platform's dunning already sent before the demo: one per
+ * client in default, the day after its grace period ended. Each starts the
+ * client's cure period (§9.1).
+ */
+export function dunningNotices(ds: Dataset): NoticeRow[] {
+  const out: NoticeRow[] = [];
+  for (const c of ds.clients) {
+    const { graceDays, cureDays } = contractFor(c);
+    const defaulted = ds.invoices
+      .filter((i) => i.clientId === c.id && i.status === 'open' && i.paidCents < i.amountCents && addDays(i.dueOn, graceDays) < ds.simDate)
+      .sort((a, b) => a.dueOn.localeCompare(b.dueOn));
+    const first = defaulted[0];
+    if (!first) continue;
+    const sentOn = addDays(first.dueOn, graceDays + 1);
+    const owed = defaulted.filter((i) => addDays(i.dueOn, graceDays) < sentOn).reduce((n, i) => n + i.amountCents - i.paidCents, 0);
+    out.push({
+      ref: `DUN-${c.id.slice(4)}-${sentOn}`, clientId: c.id, channel: 'email', sentOn,
+      body: `Payment of $${(owed / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })} is past due (${first.id}, due ${first.dueOn}). `
+        + `Under §9.1 you have ${cureDays} days from this notice (until ${addDays(sentOn, cureDays)}) to pay before access may be restricted.`,
+    });
+  }
+  return out;
 }

@@ -18,7 +18,20 @@ export const clock = table(
   {
     id: t.u8().primaryKey(),
     simDate: t.string(),
+    /** 0 = paused. Otherwise the clock moves one sim day every this many real seconds. */
+    secondsPerDay: t.u32(),
+    /** A running clock stops on this date. */
+    runUntil: t.string().optional(),
     updatedAt: t.timestamp(),
+  },
+);
+
+/** Drives tick_clock once a second (scheduled reducer; one row). */
+export const clockTick = table(
+  {},
+  {
+    scheduledId: t.u64().primaryKey().autoInc(),
+    scheduledAt: t.scheduleAt(),
   },
 );
 

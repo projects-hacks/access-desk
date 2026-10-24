@@ -50,12 +50,15 @@ import RemoveCashMovementReducer from "./remove_cash_movement_reducer";
 import RequestCustodyWithdrawalReducer from "./request_custody_withdrawal_reducer";
 import ResetWorldReducer from "./reset_world_reducer";
 import SetClockReducer from "./set_clock_reducer";
+import SetClockSpeedReducer from "./set_clock_speed_reducer";
+import SetDeadlineReducer from "./set_deadline_reducer";
 import SetPlatformReducer from "./set_platform_reducer";
 import SetSyncStatusReducer from "./set_sync_status_reducer";
 import TieOutReducer from "./tie_out_reducer";
 import TransitionWorkItemReducer from "./transition_work_item_reducer";
 import UpsertAccessLeverReducer from "./upsert_access_lever_reducer";
 import UpsertAssetPriceReducer from "./upsert_asset_price_reducer";
+import UpsertBankAccountReducer from "./upsert_bank_account_reducer";
 import UpsertCapabilityReducer from "./upsert_capability_reducer";
 import UpsertCashMovementReducer from "./upsert_cash_movement_reducer";
 import UpsertClientReducer from "./upsert_client_reducer";
@@ -67,6 +70,7 @@ import UpsertInvoiceReducer from "./upsert_invoice_reducer";
 import UpsertLedgerEntriesReducer from "./upsert_ledger_entries_reducer";
 import UpsertLoanReducer from "./upsert_loan_reducer";
 import UpsertMetricSnapshotReducer from "./upsert_metric_snapshot_reducer";
+import UpsertNoticeReducer from "./upsert_notice_reducer";
 import UpsertOwedToClientReducer from "./upsert_owed_to_client_reducer";
 import UpsertPayerIdentityReducer from "./upsert_payer_identity_reducer";
 import UpsertPolicyReducer from "./upsert_policy_reducer";
@@ -83,6 +87,7 @@ import ActorRow from "./actor_table";
 import AgentRunRow from "./agent_run_table";
 import AssetPriceRow from "./asset_price_table";
 import AuditEventRow from "./audit_event_table";
+import BankAccountRow from "./bank_account_table";
 import CapabilityRow from "./capability_table";
 import CashMovementRow from "./cash_movement_table";
 import ClientRow from "./client_table";
@@ -197,6 +202,20 @@ const tablesSchema = __schema({
       { name: 'audit_event_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, AuditEventRow),
+  bankAccount: __table({
+    name: 'bank_account',
+    indexes: [
+      { accessor: 'id', name: 'bank_account_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'owner', name: 'bank_account_owner_idx_btree', algorithm: 'btree', columns: [
+        'owner',
+      ] },
+    ],
+    constraints: [
+      { name: 'bank_account_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, BankAccountRow),
   capability: __table({
     name: 'capability',
     indexes: [
@@ -486,6 +505,9 @@ const tablesSchema = __schema({
       { accessor: 'id', name: 'notice_id_idx_btree', algorithm: 'btree', columns: [
         'id',
       ] },
+      { accessor: 'ref', name: 'notice_ref_idx_btree', algorithm: 'btree', columns: [
+        'ref',
+      ] },
     ],
     constraints: [
       { name: 'notice_id_key', constraint: 'unique', columns: ['id'] },
@@ -690,12 +712,15 @@ const reducersSchema = __reducers(
   __reducerSchema("request_custody_withdrawal", RequestCustodyWithdrawalReducer),
   __reducerSchema("reset_world", ResetWorldReducer),
   __reducerSchema("set_clock", SetClockReducer),
+  __reducerSchema("set_clock_speed", SetClockSpeedReducer),
+  __reducerSchema("set_deadline", SetDeadlineReducer),
   __reducerSchema("set_platform", SetPlatformReducer),
   __reducerSchema("set_sync_status", SetSyncStatusReducer),
   __reducerSchema("tie_out", TieOutReducer),
   __reducerSchema("transition_work_item", TransitionWorkItemReducer),
   __reducerSchema("upsert_access_lever", UpsertAccessLeverReducer),
   __reducerSchema("upsert_asset_price", UpsertAssetPriceReducer),
+  __reducerSchema("upsert_bank_account", UpsertBankAccountReducer),
   __reducerSchema("upsert_capability", UpsertCapabilityReducer),
   __reducerSchema("upsert_cash_movement", UpsertCashMovementReducer),
   __reducerSchema("upsert_client", UpsertClientReducer),
@@ -707,6 +732,7 @@ const reducersSchema = __reducers(
   __reducerSchema("upsert_ledger_entries", UpsertLedgerEntriesReducer),
   __reducerSchema("upsert_loan", UpsertLoanReducer),
   __reducerSchema("upsert_metric_snapshot", UpsertMetricSnapshotReducer),
+  __reducerSchema("upsert_notice", UpsertNoticeReducer),
   __reducerSchema("upsert_owed_to_client", UpsertOwedToClientReducer),
   __reducerSchema("upsert_payer_identity", UpsertPayerIdentityReducer),
   __reducerSchema("upsert_policy", UpsertPolicyReducer),

@@ -1,7 +1,7 @@
 /**
  * Exercises every agent action end to end on the shared database: proposal
- * checks, auto-approval by policy, controller approval, gateway execution,
- * Nessie (wire + bills), books and tie-out.
+ * checks, auto-approval by policy, controller approval, the scheduled clock and
+ * cure periods, gateway execution, Nessie (wire, bills, balances), books and tie-out.
  * Usage: pnpm actions:verify  (after pnpm demo:reset; run demo:reset again afterwards)
  */
 import { execFileSync } from 'node:child_process';
@@ -28,7 +28,7 @@ const platform = await openPlatform(syncConn, ds);
 const sync = new Sync(syncConn, bank, ds, platform);
 await sync.ready();
 const { conn: gwConn } = await connectStdb(env.STDB_GATEWAY_TOKEN);
-const gateway = new Gateway(gwConn, new LocalPlatform(platform), bank, ds, () => sync.cash(), () => {});
+const gateway = new Gateway(gwConn, new LocalPlatform(platform), bank, ds, (accounts) => sync.cash(accounts), () => {});
 await gateway.ready();
 const { conn: agent } = await connectStdb(process.env.STDB_AGENT_TOKEN);
 const { conn: demo } = await connectStdb(env.STDB_DEMO_TOKEN);
@@ -39,6 +39,7 @@ execFileSync('spacetime', ['call', '-s', 'maincloud', env.STDB_DATABASE, 'assign
 const subscribe = (conn: DbConnection) => new Promise<void>((resolve) => conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([
   tables.workItem, tables.invoice, tables.paymentApplication, tables.ledgerEntry, tables.custodyHolding, tables.hold,
   tables.accessLever, tables.accessRequest, tables.cashMovement, tables.notice, tables.tieOutRun, tables.auditEvent,
+  tables.clock, tables.deadline, tables.bankAccount,
 ]));
 await subscribe(controller);
 const db = controller.db;
@@ -102,6 +103,22 @@ r = await refused(agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 
 check(r === true, 'Close-only on Kestrel refused (hedged book)', String(r));
 r = await refused(agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 'financing', step: 'NO_NEW_BORROWING', reasoning: reason, policyRef: 'pol-006', confidence: 0.9 }), /contract/);
 check(r === true, 'Financing refused: not in Kestrel\'s contract', String(r));
+const cure = () => [...db.deadline.iter()].find((d) => d.clientId === KESTREL && d.kind === 'cure_period');
+check(cure()?.status === 'open' && cure()?.dueOn === '2026-03-06', 'Kestrel notified Feb 19: cure period (§9.1) runs to Mar 6', `${cure()?.status} ${cure()?.dueOn}`);
+r = await refused(agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 'withdrawals', step: 'HOLD_AMOUNT_OWED', reasoning: reason, policyRef: 'pol-006', confidence: 0.9 }), /9\.1/);
+check(r === true, 'Hold refused while the cure period runs', String(r));
+
+console.log('\nTime (scheduled reducer)');
+await agent.reducers.setDeadline({ clientId: KESTREL, kind: 'promise_to_pay', dueOn: '2026-03-05', note: 'CFO promised a wire by Thursday', workItemId: undefined });
+await demo.reducers.setClockSpeed({ secondsPerDay: 1, runUntil: '2026-03-06' });
+await wait(5_000);
+const clock = db.clock.id.find(1);
+check(clock?.simDate === '2026-03-06' && clock.secondsPerDay === 0, 'Clock ran on its own to Mar 6 and paused', `${clock?.simDate} ${clock?.secondsPerDay}`);
+check(cure()?.status === 'expired', 'Cure period expired unpaid', cure()?.status);
+const promise = [...db.deadline.iter()].find((d) => d.clientId === KESTREL && d.kind === 'promise_to_pay');
+check(promise?.status === 'broken', 'Promise to pay marked broken', promise?.status);
+await settle();
+
 await agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 'withdrawals', step: 'HOLD_AMOUNT_OWED', reasoning: reason, policyRef: 'pol-006', confidence: 0.9 });
 await wait(500);
 item = latestItem(KESTREL, 'RESTRICTION');
@@ -125,6 +142,9 @@ check(denial?.detail === 'no self-approval', 'Denial written to the audit log');
 
 console.log('\nCustody withdrawal');
 const kestrelUsd = usd(KESTREL);
+const bankBal = (key: string) => db.bankAccount.id.find(key)?.postedCents ?? 0n;
+const kestrelBank = bankBal(KESTREL);
+const disbursements = bankBal('disbursements');
 await demo.reducers.requestCustodyWithdrawal({ clientId: KESTREL, amountCents: 5_000_000n });
 await settle();
 const request = [...db.accessRequest.iter()].filter((a) => a.clientId === KESTREL).sort((a, b) => (a.id < b.id ? 1 : -1))[0];
@@ -135,6 +155,8 @@ const wire = [...db.cashMovement.iter()].find((m) => m.refs.includes(ref));
 check(wire?.direction === 'out' && wire.amountCents === 2_600_000n, `Nessie wire ${ref} came back through the bank feed`);
 check(wire?.matchStatus === 'matched', 'Recognized as the approved withdrawal', wire?.matchStatus);
 check(!!db.ledgerEntry.id.find(`JE-R-${wire?.bankRef}:1`), 'Booked Dr 2100 client funds / Cr 1011 disbursements');
+check(bankBal(KESTREL) - kestrelBank === 2_600_000n, "Kestrel's bank balance (Nessie statement) up $26,000", `${bankBal(KESTREL) - kestrelBank}`);
+check(disbursements - bankBal('disbursements') === 2_600_000n, 'Disbursements balance down $26,000');
 
 console.log('\nNotices');
 await agent.reducers.proposeNotice({ clientId: KESTREL, channel: 'email', body: 'Your February invoices are overdue; $148,200 of withdrawals is held under §7.2.', reasoning: reason, policyRef: 'pol-007', confidence: 0.9 });

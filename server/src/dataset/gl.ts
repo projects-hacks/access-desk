@@ -12,7 +12,11 @@ export const ACCOUNTS = {
   CLIENT_FUNDS: '2100',
   UNAPPLIED_CASH: '2300',
   BANK_FEES: '6850',
+  EQUITY: '3000',
 } as const;
+
+/** Bank balances before the first movement in the data (Nessie's balance field can't carry them). Booked in the GL too, so bank = ledger. */
+export const BANK_OPENING_CENTS: Record<string, number> = { collections: 200_000_000, disbursements: 500_000_000 };
 
 export const REVENUE: Record<Product, string> = {
   CUSTODY: '4100',
@@ -34,6 +38,7 @@ export const ACCOUNT_NAMES: Record<string, string> = {
   '4300': 'Revenue · Financing',
   '4400': 'Revenue · API',
   '6850': 'Bank fees',
+  '3000': 'Equity · owner funding',
 };
 
 export const cashAccount = (platformAccount: string): string =>
@@ -74,6 +79,14 @@ export function isBalanced(j: Journal): boolean {
 export function baselineJournals(ds: Dataset): Journal[] {
   const cutoff = addDays(ds.simDate, -1); // overnight cash (from this date) isn't booked yet
   const journals: Journal[] = [];
+
+  // Opening bank balances, funded by the owners the day before the first movement.
+  const first = [...ds.history.cash.map((p) => p.valueDate), ...ds.movements.map((m) => m.valueDate)].sort()[0] ?? ds.simDate;
+  const opening = BANK_OPENING_CENTS.collections! + BANK_OPENING_CENTS.disbursements!;
+  journals.push({
+    journalId: 'JE-OPEN', postedOn: addDays(first, -1), ref: 'OPENING', memo: 'Opening bank balances', source: 'treasury',
+    lines: [dr(ACCOUNTS.CASH_COLLECTIONS, BANK_OPENING_CENTS.collections!), dr(ACCOUNTS.CASH_DISBURSEMENTS, BANK_OPENING_CENTS.disbursements!), cr(ACCOUNTS.EQUITY, opening)],
+  });
 
   for (const i of ds.invoices.filter((x) => x.issuedOn <= ds.simDate)) {
     journals.push({

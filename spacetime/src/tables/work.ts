@@ -75,6 +75,10 @@ export const notice = table(
     channel: t.string(),
     body: t.string(),
     status: t.string(),
+    /** Sim date it was issued (starts the cure period for a default notice once sent). */
+    sentOn: t.string().optional(),
+    /** The messaging system's id, for notices synced from the platform. */
+    ref: t.string().index('btree'),
     sentAt: t.timestamp().optional(),
   },
 );
@@ -122,11 +126,16 @@ export const deadline = table(
   { public: true },
   {
     id: t.u64().primaryKey().autoInc(),
+    /** cure_period | promise_to_pay | follow_up */
     kind: t.string(),
     clientId: t.string().index('btree'),
     workItemId: t.u64().optional(),
+    startedOn: t.string(),
     dueOn: t.string(),
+    /** open → met | expired (cure) | broken (promise) | due (follow-up) */
     status: t.string(),
+    clause: t.string(),
+    note: t.string(),
   },
 );
 

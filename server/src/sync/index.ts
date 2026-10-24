@@ -3,7 +3,9 @@ import { tables, type DbConnection } from '../module_bindings';
 import type { Dataset } from '../dataset';
 import type { Bank } from '../integrations/nessie/bank';
 import { env } from '../lib/env';
-import { bankRecords } from './sources/bank';
+import { balanceRecords, bankRecords } from './sources/bank';
+import { PLATFORM_ACCOUNTS, fetchStatements, openingBalances } from '../integrations/nessie/statement';
+import { buildSeedPlan, type SeedPlan } from '../integrations/nessie/seed-plan';
 import { chainRecords } from './sources/chain';
 import { glRows } from './sources/gl';
 import { historyRecords } from './sources/history';
@@ -21,6 +23,8 @@ const LABELS: Record<string, string> = {
   gl: 'General ledger',
   history: 'History (12 months)',
   bank: 'Bank feed (Nessie)',
+  bank_balances: 'Bank balances (Nessie statements)',
+  messaging: 'Messaging (notices)',
   chain: 'On-chain wallet',
 };
 
@@ -37,6 +41,8 @@ export class Sync {
   private ledgerHashes = new Map<string, string>();
   private interpreter = RemittanceInterpreter.fromEnv(env.ANTHROPIC_API_KEY);
   private running = Promise.resolve();
+  private readonly plan: SeedPlan;
+  private readonly openings: Map<string, number>;
 
   constructor(
     private readonly conn: DbConnection,
@@ -46,6 +52,8 @@ export class Sync {
     private readonly log: (msg: string) => void = console.log,
   ) {
     this.writer = new SyncWriter(conn);
+    this.plan = buildSeedPlan(ds);
+    this.openings = openingBalances(ds, this.plan);
   }
 
   /** Subscribes to the rows sync needs to read (the clock). Call once before passes. */
@@ -73,16 +81,16 @@ export class Sync {
       results.push(await this.syncLedger());
       // After billing (it claims billing-applied cash), before live cash.
       results.push(await this.runSource('history', historyRecords(this.conn, this.ds, this.bank.map)));
-      results.push(...(await this.cashOnly()));
+      results.push(...(await this.cashOnly(Object.keys(this.bank.map.accounts))));
       await this.conn.reducers.tieOut({ trigger: 'full sync' });
       return results;
     });
   }
 
-  /** Bank and chain only: what changes during the demo. */
-  cash(): Promise<PassResult[]> {
+  /** Bank and chain only: what changes during the demo. `accounts`: client bank accounts whose balances moved too. */
+  cash(accounts: string[] = []): Promise<PassResult[]> {
     return this.serialize(async () => {
-      const results = await this.cashOnly();
+      const results = await this.cashOnly(accounts);
       if (results.some((r) => r.written)) await this.conn.reducers.tieOut({ trigger: 'new bank activity' });
       return results;
     });
@@ -113,11 +121,12 @@ export class Sync {
     this.log(`[sync:${r.source}] ${r.written}/${r.records} written${r.errors.length ? `, ${r.errors.length} errors: ${r.errors.slice(0, 3).join('; ')}` : ''}`);
   }
 
-  private async cashOnly(): Promise<PassResult[]> {
+  private async cashOnly(accounts: string[] = []): Promise<PassResult[]> {
     const simDate = this.simDate();
     const results: PassResult[] = [];
+    const statements = await fetchStatements(this.bank, [...PLATFORM_ACCOUNTS, ...accounts.filter((a) => this.bank.map.accounts[a])]);
     for (const [source, records] of [
-      ['bank', await bankRecords(this.conn, this.bank, simDate, this.interpreter)],
+      ['bank', await bankRecords(this.conn, statements, simDate, this.interpreter)],
       ['chain', chainRecords(this.conn, this.ds, simDate)],
     ] as const) {
       // Live cash goes in date order, one at a time: which of two identical wires is the duplicate must not depend on timing.
@@ -126,6 +135,7 @@ export class Sync {
       result.errors.push(...(await this.removeStale(source === 'bank' ? 'nessie' : 'chain', new Set(records.map((r) => r.id)))));
       results.push(result);
     }
+    results.push(await this.runSource('bank_balances', balanceRecords(this.conn, this.bank, this.ds, this.plan, this.openings, statements, simDate)));
     return results;
   }
 

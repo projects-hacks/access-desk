@@ -119,7 +119,7 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
         description: `WIRE TYPE:FED OUT TRN:${trn} BNF:${ds.platform.legalName.toUpperCase()} ID:${collections.number} RCV BK:${PLATFORM_BANK.name} PMT DET:${p.remittance.toUpperCase()}`,
       });
     }
-    await sync.cash();
+    await sync.cash(client ? [client.id] : []);
     await awaitMovement(trn);
     return outcome(trn, startedAt);
   });
@@ -172,6 +172,19 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
     await conn.reducers.advanceClock({ days });
     await sync.cash(); // wires dated up to the new date become visible
     return { simDate: simDate() };
+  });
+
+  /** Let time run: one sim day every `secondsPerDay` (0 pauses), optionally stopping on `runUntil`. */
+  app.post('/demo/clock', async (req, reply) => {
+    const body = (req.body ?? {}) as { secondsPerDay?: number; runUntil?: string };
+    const secondsPerDay = Number(body.secondsPerDay ?? 0);
+    if (!Number.isInteger(secondsPerDay) || secondsPerDay < 0) return reply.code(400).send({ error: 'secondsPerDay must be a whole number ≥ 0' });
+    try {
+      await conn.reducers.setClockSpeed({ secondsPerDay, runUntil: body.runUntil });
+    } catch (e) {
+      return reply.code(422).send({ error: e instanceof Error ? e.message : String(e) });
+    }
+    return { simDate: simDate(), secondsPerDay, runUntil: body.runUntil ?? null };
   });
 
   app.post('/demo/reset', async () => {

@@ -4,18 +4,18 @@ import { tieOutBreak, tieOutRun } from './tables/books';
 import { assetPrice, custodyHolding, hold, loan, owedToClient, position } from './tables/assets';
 import { accessLever, capability, client, contract, contractClause, payerIdentity } from './tables/clients';
 import { creditProfile, exploitFlag, metricSnapshot, policy, precedent } from './tables/learning';
-import { cashMovement, clientCredit, dispute, invoice, ledgerEntry, paymentApplication } from './tables/money';
+import { bankAccount, cashMovement, clientCredit, dispute, invoice, ledgerEntry, paymentApplication } from './tables/money';
 import { rawRecord, syncSource } from './tables/sync';
 import {
   accessRequest, agentRun, deadline, decision, gatewayCommand, investigationStep, notice, rmNote, workItem,
 } from './tables/work';
-import { actor, clock, platform } from './tables/world';
+import { actor, clock, clockTick, platform } from './tables/world';
 
 export const spacetimedb = schema({
-  platform, clock, actor,
+  platform, clock, clockTick, actor,
   syncSource, rawRecord,
   client, payerIdentity, contract, contractClause, capability, accessLever,
-  invoice, dispute, cashMovement, paymentApplication, clientCredit, ledgerEntry,
+  invoice, dispute, cashMovement, paymentApplication, clientCredit, ledgerEntry, bankAccount,
   custodyHolding, assetPrice, hold, owedToClient, position, loan,
   workItem, decision, investigationStep, rmNote, notice, gatewayCommand, accessRequest, deadline, agentRun,
   creditProfile, policy, precedent, exploitFlag, metricSnapshot,

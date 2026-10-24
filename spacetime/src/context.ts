@@ -42,13 +42,14 @@ interface AuditInput {
 /** Append an audit row. Call it in the same reducer as the change it records. */
 export function audit(ctx: Ctx, e: AuditInput) {
   const who = actorOf(ctx);
+  const system = ctx.sender.isEqual(ctx.databaseIdentity);
   ctx.db.auditEvent.insert({
     id: 0n,
     at: ctx.timestamp,
     simDate: simDate(ctx),
     actor: ctx.sender,
-    actorRole: who?.role ?? 'UNREGISTERED',
-    actorName: who?.name ?? '',
+    actorRole: who?.role ?? (system ? 'SYSTEM' : 'UNREGISTERED'),
+    actorName: who?.name ?? (system ? 'scheduler' : ''),
     action: e.action,
     subjectType: e.subjectType,
     subjectId: e.subjectId,

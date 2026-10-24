@@ -17,5 +17,7 @@ export default __t.row({
   channel: __t.string(),
   body: __t.string(),
   status: __t.string(),
+  sentOn: __t.option(__t.string()).name("sent_on"),
+  ref: __t.string(),
   sentAt: __t.option(__t.timestamp()).name("sent_at"),
 });

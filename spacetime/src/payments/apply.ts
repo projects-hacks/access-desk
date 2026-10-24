@@ -1,5 +1,6 @@
 import { audit, simDate, type Ctx } from '../context';
 import { GL, cashAccount, cr, dr, isBooked, queueCommand, queueJournal, toJson } from './gateway';
+import { closeDeadlinesIfCured } from './deadlines';
 import { formatUsd, normalizeName, type CandidateInvoice, type MatchPlan } from './match';
 
 type Invoice = NonNullable<ReturnType<Ctx['db']['invoice']['id']['find']>>;
@@ -218,6 +219,7 @@ export function releaseHoldsIfCured(ctx: Ctx, clientId: string, cause: string, w
 
 /** Restriction proposals for a client who is no longer overdue are withdrawn. */
 export function withdrawStaleProposals(ctx: Ctx, clientId: string, cause: string) {
+  closeDeadlinesIfCured(ctx, clientId, cause);
   if (overdueCents(ctx, clientId) > 0n) return;
   for (const w of [...ctx.db.workItem.clientId.filter(clientId)]) {
     if (!['RESTRICTION', 'CUSTODY_DEBIT', 'REMINDER'].includes(w.kind)) continue;

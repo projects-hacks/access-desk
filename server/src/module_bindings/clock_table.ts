@@ -13,5 +13,7 @@ import {
 export default __t.row({
   id: __t.u8().primaryKey(),
   simDate: __t.string().name("sim_date"),
+  secondsPerDay: __t.u32().name("seconds_per_day"),
+  runUntil: __t.option(__t.string()).name("run_until"),
   updatedAt: __t.timestamp().name("updated_at"),
 });

@@ -1,10 +1,14 @@
-import { Identity } from 'spacetimedb';
+import { Identity, ScheduleAt } from 'spacetimedb';
 import { SenderError, t } from 'spacetimedb/server';
-import { addDays, audit, requireRole, simDate } from '../context';
+import { addDays, audit, requireRole, simDate, type Ctx } from '../context';
 import { CAN_MOVE_CLOCK, CAN_RESET, isRole } from '../roles';
 import { spacetimedb } from '../schema';
 import { seedBaselinePolicies } from './policies';
 import { runTieOut } from '../books/tieout';
+import { evaluateDeadlines } from '../payments/deadlines';
+import { clockTick } from '../tables/world';
+import { sendDefaultNotices } from './actions';
+import { requeueStuckCommands } from '../payments/gateway';
 
 /** Runs on first publish (and after a data reset). The publisher becomes ADMIN. */
 export const init = spacetimedb.init((ctx) => {
@@ -15,7 +19,8 @@ export const init = spacetimedb.init((ctx) => {
     wireInstructions: '',
     autoApplyLimitCents: 5_000_000n,
   });
-  ctx.db.clock.insert({ id: 1, simDate: '2026-03-03', updatedAt: ctx.timestamp });
+  ctx.db.clock.insert({ id: 1, simDate: '2026-03-03', secondsPerDay: 0, runUntil: undefined, updatedAt: ctx.timestamp });
+  ensureTicker(ctx);
   ctx.db.actor.insert({ identity: ctx.sender, name: 'owner', role: 'ADMIN', clientId: undefined });
   seedBaselinePolicies(ctx);
 });
@@ -47,26 +52,71 @@ export const assignRole = spacetimedb.reducer(
   },
 );
 
-/** Moves the shared simulated date forward and marks deadlines that fall due. */
+// ── Time ────────────────────────────────────────────────────────────────────
+
+const MAX_SECONDS_PER_DAY = 3600;
+
+function ensureTicker(ctx: Ctx) {
+  if (ctx.db.clockTick.count() === 0n) ctx.db.clockTick.insert({ scheduledId: 0n, scheduledAt: ScheduleAt.interval(1_000_000n) });
+}
+
+/**
+ * One sim day passes: deadlines resolve, clients newly past their grace period
+ * get a default notice (pol-007). Days are stepped one at a time so every
+ * notice and deadline carries the day it really happened.
+ */
+function moveClock(ctx: Ctx, days: number, trigger: string) {
+  const from = simDate(ctx);
+  for (let i = 0; i < days; i++) {
+    const c = ctx.db.clock.id.find(1)!;
+    const to = addDays(c.simDate, 1);
+    const stop = !!c.runUntil && to >= c.runUntil;
+    ctx.db.clock.id.update({ ...c, simDate: to, secondsPerDay: stop ? 0 : c.secondsPerDay, runUntil: stop ? undefined : c.runUntil, updatedAt: ctx.timestamp });
+    evaluateDeadlines(ctx);
+    sendDefaultNotices(ctx);
+    if (stop) break;
+  }
+  const to = simDate(ctx);
+  audit(ctx, { action: 'ADVANCE_CLOCK', subjectType: 'clock', subjectId: '1', fromState: from, toState: to, detail: trigger });
+  runTieOut(ctx, `clock moved to ${to}`);
+}
+
+/** Jump the shared simulated date forward. */
 export const advanceClock = spacetimedb.reducer({ days: t.u16() }, (ctx, { days }) => {
   requireRole(ctx, CAN_MOVE_CLOCK);
-  const from = simDate(ctx);
-  const to = addDays(from, days);
-  ctx.db.clock.id.update({ id: 1, simDate: to, updatedAt: ctx.timestamp });
-  for (const d of ctx.db.deadline.iter()) {
-    if (d.status === 'open' && d.dueOn <= to) {
-      ctx.db.deadline.id.update({ ...d, status: 'due' });
-      audit(ctx, { action: 'DEADLINE_DUE', subjectType: 'deadline', subjectId: String(d.id), clientId: d.clientId, workItemId: d.workItemId, detail: d.kind });
-    }
+  if (days < 1 || days > 60) throw new SenderError('days must be 1–60');
+  moveClock(ctx, days, `advanced ${days} day(s)`);
+});
+
+/** Let time run on its own: one sim day every `secondsPerDay` (0 pauses), optionally until a date. */
+export const setClockSpeed = spacetimedb.reducer(
+  { secondsPerDay: t.u32(), runUntil: t.string().optional() },
+  (ctx, { secondsPerDay, runUntil }) => {
+    requireRole(ctx, CAN_MOVE_CLOCK);
+    if (secondsPerDay > MAX_SECONDS_PER_DAY) throw new SenderError(`at most ${MAX_SECONDS_PER_DAY} seconds per day`);
+    const c = ctx.db.clock.id.find(1)!;
+    if (runUntil && !(/^\d{4}-\d{2}-\d{2}$/.test(runUntil) && runUntil > c.simDate)) throw new SenderError(`runUntil must be a date after ${c.simDate}`);
+    ctx.db.clock.id.update({ ...c, secondsPerDay, runUntil: secondsPerDay ? runUntil : undefined, updatedAt: ctx.timestamp });
+    audit(ctx, {
+      action: 'CLOCK_SPEED', subjectType: 'clock', subjectId: '1', toState: secondsPerDay ? 'running' : 'paused',
+      detail: secondsPerDay ? `1 day every ${secondsPerDay}s${runUntil ? ` until ${runUntil}` : ''}` : 'paused',
+    });
+  },
+);
+
+/** Scheduled every second: moves a running clock, and puts back commands a crashed gateway left mid-flight. */
+export const tickClock = spacetimedb.reducer({ onSchedule: clockTick }, { tick: clockTick.rowType }, (ctx) => {
+  const c = ctx.db.clock.id.find(1);
+  if (c && c.secondsPerDay > 0 && ctx.timestamp.microsSinceUnixEpoch - c.updatedAt.microsSinceUnixEpoch >= BigInt(c.secondsPerDay) * 1_000_000n) {
+    moveClock(ctx, 1, 'clock running');
   }
-  audit(ctx, { action: 'ADVANCE_CLOCK', subjectType: 'clock', subjectId: '1', fromState: from, toState: to });
-  runTieOut(ctx, `clock advanced to ${to}`);
+  requeueStuckCommands(ctx);
 });
 
 /** Demo reset: back to the morning of the demo. */
 export const setClock = spacetimedb.reducer({ simDate: t.string() }, (ctx, args) => {
   requireRole(ctx, CAN_RESET);
-  ctx.db.clock.id.update({ id: 1, simDate: args.simDate, updatedAt: ctx.timestamp });
+  ctx.db.clock.id.update({ id: 1, simDate: args.simDate, secondsPerDay: 0, runUntil: undefined, updatedAt: ctx.timestamp });
   audit(ctx, { action: 'SET_CLOCK', subjectType: 'clock', subjectId: '1', toState: args.simDate });
 });
 
@@ -116,10 +166,12 @@ export const resetWorld = spacetimedb.reducer({ simDate: t.string() }, (ctx, { s
   wipe(db.exploitFlag.iter(), (r: { id: string }) => r.id, (k) => db.exploitFlag.id.delete(k));
   wipe(db.metricSnapshot.iter(), (r: { id: string }) => r.id, (k) => db.metricSnapshot.id.delete(k));
   wipe(db.tieOutRun.iter(), (r: { id: bigint }) => r.id, (k) => db.tieOutRun.id.delete(k));
+  wipe(db.bankAccount.iter(), (r: { id: string }) => r.id, (k) => db.bankAccount.id.delete(k));
   wipe(db.tieOutBreak.iter(), (r: { id: bigint }) => r.id, (k) => db.tieOutBreak.id.delete(k));
   wipe(db.auditEvent.iter(), (r: { id: bigint }) => r.id, (k) => db.auditEvent.id.delete(k));
   for (const p of [...db.policy.iter()]) if (p.learnedFrom !== 'baseline' && db.policy.key.delete(p.key)) rows++;
   seedBaselinePolicies(ctx);
-  ctx.db.clock.id.update({ id: 1, simDate, updatedAt: ctx.timestamp });
+  ctx.db.clock.id.update({ id: 1, simDate, secondsPerDay: 0, runUntil: undefined, updatedAt: ctx.timestamp });
+  ensureTicker(ctx);
   audit(ctx, { action: 'RESET_WORLD', subjectType: 'world', subjectId: '1', toState: simDate, detail: `${rows} rows removed` });
 });

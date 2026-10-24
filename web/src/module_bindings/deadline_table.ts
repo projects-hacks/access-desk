@@ -15,6 +15,9 @@ export default __t.row({
   kind: __t.string(),
   clientId: __t.string().name("client_id"),
   workItemId: __t.option(__t.u64()).name("work_item_id"),
+  startedOn: __t.string().name("started_on"),
   dueOn: __t.string().name("due_on"),
   status: __t.string(),
+  clause: __t.string(),
+  note: __t.string(),
 });
