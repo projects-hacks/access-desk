@@ -208,9 +208,11 @@ def _right(action: str, current: int, to_tier: int, late: int) -> bool | None:
 
 
 def backtest_claude(books: list[ClientBook], cutoffs: list[date], ask: Ask,
-                    tier_then: dict[str, int] | None = None) -> dict[str, Any]:
+                    tier_then: dict[str, int] | None = None,
+                    outcomes_out: list[tuple[str, Any]] | None = None) -> dict[str, Any]:
     """
-    Claude decides at each past month-end from the books as they stood then, exactly as
+    `outcomes_out`, if given, collects (cutoff, Outcome) for every company, asked or not.
+    Claude (or any provider behind `ask`) decides at each past month-end from the books as they stood then, exactly as
     the agent does today; each call's facts end at that date, so nothing leaks from later.
     Scored against the rules where the two disagree: whoever matched what happened wins.
     """
@@ -231,6 +233,8 @@ def backtest_claude(books: list[ClientBook], cutoffs: list[date], ask: Ask,
             reqs.append(Request(book=b, scores=scores[b.client.id], flags=flags,
                                 baseline=decide(b, scores[b.client.id], flags)))
         outcomes = decide_all(reqs, ask)
+        if outcomes_out is not None:
+            outcomes_out.extend((t.isoformat(), o) for o in outcomes.values())
         for b in past:
             o = outcomes[b.client.id]
             if o.decided_by != "claude":

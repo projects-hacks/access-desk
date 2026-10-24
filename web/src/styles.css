@@ -300,6 +300,7 @@ th.num .sort { width: 100%; text-align: right; }
 .credit .waterfall small, .credit .trace small { color: #777; font-size: 11px; }
 .credit .pill.by-claude { background: #fae8ff; color: #86198f; }
 .credit .pill.by-rules { background: #e0f2fe; color: #075985; }
+.credit .pill.by-factory { background: #ffedd5; color: #9a3412; }
 .credit .accuracy { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
 .credit .accuracy summary { cursor: pointer; font-weight: 600; }
 .credit .acc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 10px; }

@@ -18,7 +18,6 @@ from ..credit.decide import (
     CompanyContext,
     Outcome,
     Request,
-    claude_ask,
     decide_all,
 )
 from ..credit.detectors import detect
@@ -27,6 +26,7 @@ from ..credit.model import ClientBook, Evidence, Flag, Scores, TierDecision
 from ..credit.reasoning import template
 from ..credit.scoring import score_all
 from ..credit.tiers import decide
+from ..llm import get_ask
 from ..models import Proposal, Role, WorkItemKind
 from .base import Agent
 
@@ -247,6 +247,8 @@ def _decision_meta(o: Outcome) -> dict[str, Any]:
     b = o.baseline
     return {
         "decided_by": o.decided_by,
+        "provider": o.provider,
+        **({"model": o.model} if o.model else {}),
         "why": o.why,
         "view": view_of(b),
         "baseline": {"action": b.action, "to_tier": b.to_tier, "policy_ref": b.policy_ref,
@@ -333,7 +335,7 @@ class CreditAnalyst(Agent):
 
     def __init__(self, db, ask: Ask | None = None):
         super().__init__(db)
-        self.ask = ask if ask is not None else claude_ask()
+        self.ask = ask if ask is not None else get_ask()
         self.memo: dict[str, tuple[str, Outcome]] = {}
 
     async def run(self) -> list[Proposal]:

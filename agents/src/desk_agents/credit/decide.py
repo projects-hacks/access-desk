@@ -12,17 +12,15 @@ own policies is failing its success criteria.
 import hashlib
 import json
 import logging
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import timedelta
 from statistics import mean, median
 from typing import Any, Literal
 
-import anthropic
 from pydantic import BaseModel, ValidationError
 
-from ..config import settings
+from ..llm import Ask, DecisionUnavailable, Reply, claude_ask  # noqa: F401 (re-exported)
 from . import guardrails as g
 from .company import CompanyPolicy, Evaluation
 from .detectors import restriction_day
@@ -31,11 +29,8 @@ from .tiers import POLICY
 
 log = logging.getLogger("desk_agents.credit")
 
-TIMEOUT_SECONDS = 45.0
-MAX_TOKENS = 8000
 MAX_ATTEMPTS = 2  # the first answer, then one retry with the violations listed
 WORKERS = 6
-SCHEMA = anthropic.transform_schema(g.Decision)
 
 # The credit policies every company may cite, with what they say (the live table overrides).
 BASE_CREDIT_POLICIES = {
@@ -82,47 +77,6 @@ RETRY = """That decision was rejected:
 {problems}
 
 Return a corrected decision that respects every guardrail."""
-
-
-# ── The Claude call, injectable ─────────────────────────────────────────────
-
-
-@dataclass
-class Reply:
-    text: str
-    content: list[Any]  # replayed as the assistant turn on a retry
-
-
-Ask = Callable[[list[dict[str, Any]]], Reply]
-
-
-class DecisionUnavailable(Exception):
-    """The call could not produce an answer (timeout, refusal, cut off)."""
-
-
-def claude_ask(usage: list[Any] | None = None) -> Ask | None:
-    """
-    The real call, or None with no key (then every decision falls back to the rules).
-    `usage` collects each response's token usage (the backtest reports its cost).
-    """
-    if not settings.anthropic_api_key:
-        return None
-    client = anthropic.Anthropic(
-        api_key=settings.anthropic_api_key, timeout=TIMEOUT_SECONDS, max_retries=0,
-    )
-
-    def ask(messages: list[dict[str, Any]]) -> Reply:
-        r = client.messages.create(
-            model=settings.anthropic_model, max_tokens=MAX_TOKENS, messages=messages,
-            output_config={"effort": "low", "format": {"type": "json_schema", "schema": SCHEMA}},
-        )
-        if usage is not None:
-            usage.append(r.usage)
-        if r.stop_reason != "end_turn":
-            raise DecisionUnavailable(f"stop_reason {r.stop_reason}")
-        return Reply("".join(b.text for b in r.content if b.type == "text"), list(r.content))
-
-    return ask
 
 
 # ── Facts ───────────────────────────────────────────────────────────────────
@@ -258,7 +212,9 @@ class Attempt(BaseModel):
 
 class Outcome(BaseModel):
     client_id: str
-    decided_by: Literal["claude", "rules"]
+    decided_by: Literal["claude", "rules"]  # "claude" = a model decided, whichever provider
+    provider: str = "rules"  # who decided: "anthropic", "factory", "rules"
+    model: str = ""
     why: str  # why Claude was (or wasn't) asked, or why it fell back
     baseline: TierDecision
     final: TierDecision
@@ -298,7 +254,7 @@ class Request:
 
 
 def _rules(r: Request, why: str, attempts: list[Attempt] | None = None) -> Outcome:
-    return Outcome(client_id=r.book.client.id, decided_by="rules", why=why, baseline=r.baseline,
+    return Outcome(client_id=r.book.client.id, decided_by="rules", provider="rules", why=why, baseline=r.baseline,
                    final=r.baseline, choice=None, attempts=attempts or [],
                    guardrails=g.applicable(r.book, r.flags))
 
@@ -347,7 +303,8 @@ def decide_company(r: Request, ask: Ask | None) -> Outcome:
             attempts.append(Attempt(decision=d.model_dump(), violations=problems))
             if not problems:
                 return Outcome(
-                    client_id=cid, decided_by="claude", why=why, baseline=r.baseline,
+                    client_id=cid, decided_by="claude", provider=reply.provider,
+                    model=reply.model, why=why, baseline=r.baseline,
                     final=to_tier_decision(r.book, r.baseline, d), choice=d, attempts=attempts,
                     guardrails=g.applicable(r.book, r.flags),
                 )
