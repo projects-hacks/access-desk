@@ -92,6 +92,10 @@ class SpacetimeClient:
     ) -> None:
         self.call("record_agent_run", agent, trigger, proposed, status, {"some": error} if error else {"none": []}, duration_ms)
 
+    def record_wait(self, client_id: str, code: str, reason: str) -> None:
+        """Audits a decision not to act on a client who owes money."""
+        self.call("record_wait", client_id, code, reason)
+
     def record_investigation(self, work_item_id: int, steps: list[dict[str, str]]) -> None:
         """Steps are {tool, summary, status}, in the order the agent took them."""
         self.call("record_investigation", work_item_id, steps)

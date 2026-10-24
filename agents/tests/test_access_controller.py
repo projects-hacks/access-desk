@@ -55,7 +55,7 @@ def event(state, sim_date, item_id, kind="RESTRICTION", detail=""):
 
 def item(item_id, kind, state, proposal=None, subject="ORG-1", **extra):
     return {"id": item_id, "kind": kind, "state": state, "subject_id": subject, "proposal_json": json.dumps(proposal or {}),
-            "title": f"{kind} {item_id}", "reasoning": "why", "policy_ref": "pol-006", **extra}
+            "title": f"{kind} {item_id}", "reasoning": "why", "policy_ref": "pol-006", "required_role": "CONTROLLER", **extra}
 
 
 def world(v, today=TODAY, readings=None):
@@ -73,9 +73,17 @@ def moves(v, **kw):
     return plan(world(v, **kw), escalation_days=7)
 
 
+BOOKKEEPING = {"upsert_precedent", "record_investigation", "record_wait"}
+
+
 def only(v, **kw):
-    found = [m for m in moves(v, **kw) if m.action != "upsert_precedent"]
+    found = [m for m in moves(v, **kw) if m.action not in BOOKKEEPING]
     return found[0] if found else None
+
+
+def waited(v, **kw):
+    found = [m for m in moves(v, **kw) if m.action == "record_wait"]
+    return (found[0].args["code"], found[0].args["reason"]) if found else None
 
 
 class AccessControllerPlan(unittest.TestCase):
@@ -102,7 +110,8 @@ class AccessControllerPlan(unittest.TestCase):
         self.assertEqual(only(v).args["invoice_ids"], ["INV-1", "INV-2"])
 
     def test_waits_for_payment_in_transit(self):
-        self.assertIsNone(only(view(in_transit=[{"id": "WIRE"}])))
+        transit = {"amount_cents": 50_000_00, "rail": "WIRE", "bank_ref": "WI-5412", "orig_name": "ACME LP", "value_on": "2026-03-19"}
+        self.assertIsNone(only(view(in_transit=[transit])))
 
     def test_waits_for_open_promise_to_pay(self):
         v = view()
@@ -320,6 +329,53 @@ class MaterialEvent(unittest.TestCase):
         self.assertEqual(rec[0].args, {"work_item_id": 20, "steps": [{"tool": "rm_note", "summary": "x", "status": "done"}]})
         w.investigated = {20}
         self.assertFalse([m for m in plan(w, escalation_days=7) if m.action == "record_investigation"])
+
+
+class WhyIDidntAct(unittest.TestCase):
+    def test_each_reason_to_wait_is_recorded(self):
+        transit = {"amount_cents": 50_000_00, "rail": "WIRE", "bank_ref": "WI-5412", "orig_name": "ACME LP", "value_on": "2026-03-19"}
+        promise = {"id": 2, "kind": "promise_to_pay", "started_on": TODAY, "due_on": "2026-03-25", "status": "open",
+                   "note": "CFO promised a wire"}
+        restricted = [
+            {"lever": "withdrawals", "state": "active", "detail": "Normal", "work_item_id": None},
+            {"lever": "trading", "state": "limited", "detail": "OTC paused", "work_item_id": None},
+        ]
+        cases = {
+            "cure_period": view(cure="open"),
+            "awaiting_default_notice": view(cure=None),
+            "payment_in_transit": view(in_transit=[transit]),
+            "promise_to_pay": view(deadline=[promise]),
+            "controller_rejected": view(rejections=[event("REJECTED", "2026-03-10", 5, detail="Too strict for this tier")]),
+            "escalation_spacing": view(levers=restricted, cure_due="2026-03-15"),
+            "no_further_step": view(products=("CUSTODY",), owed=(("INV-1", "CUSTODY", 100_00),), set_off=False),
+            "pending_decision": view(work_item=[item(9, "RESTRICTION", "PROPOSED")]),
+        }
+        for code, v in cases.items():
+            with self.subTest(code):
+                self.assertEqual(waited(v)[0], code)
+        self.assertIn("WI-5412", waited(cases["payment_in_transit"])[1])
+        self.assertIn("CFO promised a wire", waited(cases["promise_to_pay"])[1])
+        self.assertIn("“Too strict for this tier”", waited(cases["controller_rejected"])[1])
+        self.assertIn("until 2026-03-22", waited(cases["escalation_spacing"])[1])
+
+    def test_inside_grace_period_explains_why_no_debit(self):
+        v = view(owed=(("INV-1", "TRADING", 50_000_00),))
+        v.invoice[0]["due_on"] = "2026-03-15"
+        code, reason = waited(v)
+        self.assertEqual(code, "grace_period")
+        self.assertIn("in default from 2026-03-26", reason)
+        self.assertIn("consent (§6.3)", reason)
+
+    def test_same_reason_is_recorded_once(self):
+        v = view(cure="open")
+        w = world(v)
+        first = [m for m in plan(w, escalation_days=7) if m.action == "record_wait"]
+        w.last_waits = {v.id: first[0].args["reason"]}
+        self.assertFalse([m for m in plan(w, escalation_days=7) if m.action == "record_wait"])
+
+    def test_nothing_recorded_for_clients_who_owe_nothing(self):
+        self.assertIsNone(waited(view(owed=())))
+        self.assertIsNone(waited(view(owed=(), work_item=[item(9, "RESTRICTION", "PROPOSED")])))
 
 
 if __name__ == "__main__":

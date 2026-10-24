@@ -50,6 +50,7 @@ class World:
     readings: dict[int, Any] = field(default_factory=dict)
     policies: list[Row] = field(default_factory=list)
     investigated: set[int] = field(default_factory=set)
+    last_waits: dict[str, str] = field(default_factory=dict)
 
 
 def load_world(db: SpacetimeClient) -> World:
@@ -89,6 +90,10 @@ def load_world(db: SpacetimeClient) -> World:
         work_items=work_items,
         policies=db.sql("SELECT * FROM policy WHERE status = 'active'"),
         investigated={s["work_item_id"] for s in db.sql("SELECT * FROM investigation_step")},
+        last_waits={
+            e["client_id"]: e["detail"]
+            for e in sorted(db.sql("SELECT * FROM audit_event WHERE action = 'AGENT_WAITED'"), key=lambda e: e["id"])
+        },
     )
 
 

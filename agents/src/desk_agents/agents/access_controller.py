@@ -53,6 +53,14 @@ class Move:
     summary: str
 
 
+@dataclass
+class Wait:
+    """A deliberate decision not to act on a client who owes money, and why."""
+
+    code: str
+    reason: str
+
+
 class AccessController(Agent):
     """Recover first, restrict the unpaid product first, gentlest step first; restore on payment."""
 
@@ -103,23 +111,24 @@ def plan(world: World, escalation_days: int | None = None) -> list[Move]:
     moves = []
     for view in world.clients.values():
         moves += precedents_due(view, world) + investigations_due(view, world)
-        move = next_move(view, world, ladder, days)
-        if move:
-            moves.append(move)
+        decision = next_move(view, world, ladder, days)
+        if isinstance(decision, Move):
+            moves.append(decision)
+        elif isinstance(decision, Wait) and world.last_waits.get(view.id) != decision.reason:
+            moves.append(Move(action="record_wait", client_id=view.id,
+                              args={"client_id": view.id, "code": decision.code, "reason": decision.reason},
+                              summary=f"waited ({decision.code}): {decision.reason}"))
     return moves
 
 
-def busy(view: ClientView) -> bool:
-    return any(
-        w["kind"] in OUR_KINDS and (w["state"] in OPEN or (w["state"] == "APPROVED" and w["kind"] in EXECUTED_KINDS))
-        for w in view.work_item
-    )
-
-
-def next_move(view: ClientView, world: World, ladder: dict[str, list[str]], escalation_days: int) -> Move | None:
-    if busy(view):
-        return None
+def next_move(
+    view: ClientView, world: World, ladder: dict[str, list[str]], escalation_days: int,
+) -> Move | Wait | None:
     today = world.today
+    overdue = overdue_invoices(view, today)
+    pending = open_work(view)
+    if pending:
+        return Wait("pending_decision", pending) if overdue else None
 
     reply = rm_reply(view, world)
     if reply:
@@ -129,23 +138,79 @@ def next_move(view: ClientView, world: World, ladder: dict[str, list[str]], esca
     if notice:
         return notice
 
-    waiting = bool(view.in_transit) or open_promise(view) or grace_until(view, today, escalation_days) is not None
-    overdue = overdue_invoices(view, today)
-    if overdue and not waiting and rejected_since(view, overdue[0]["due_on"], "CUSTODY_DEBIT") is None:
+    hold_off = waiting(view, today, escalation_days)
+    debit_rejected = overdue and rejected_since(view, overdue[0]["due_on"], "CUSTODY_DEBIT")
+    if overdue and not hold_off and not debit_rejected:
         debit = custody_debit(view, today, world.platform["auto_apply_limit_cents"])
         if debit:
             return debit
 
     defaulted = defaulted_invoices(view, today)
     if not defaulted:
-        return restore(view)
-    if waiting:
-        return None
+        restored = restore(view)
+        if restored or not overdue:
+            return restored
+        grace = view.contract["grace_days"] if view.contract else 0
+        return Wait("grace_period", f"{usd(owed(overdue))} overdue on {ids(overdue)} but inside the {grace}-day grace period "
+                                    f"(in default from {add_days(overdue[0]['due_on'], grace + 1)}). {no_debit(view, today)}")
+    if hold_off:
+        return hold_off
 
     episode = episode_start(view, defaulted)
-    if cure_blocks(view) or rejected_since(view, episode, "RESTRICTION") is not None:
-        return None
+    cure = latest_deadline(view, "cure_period")
+    if cure_blocks(view):
+        if cure and cure["status"] == "open":
+            return Wait("cure_period", f"{usd(owed(defaulted))} in default, but the cure period{cite(view, 'cure')} runs until {cure['due_on']} "
+                                       f"after the default notice of {cure['started_on']}; restricting before then breaches the contract.")
+        return Wait("awaiting_default_notice", f"{usd(owed(defaulted))} in default on {ids(defaulted)}; no default notice has "
+                                               f"gone out yet, so the cure period{cite(view, 'cure')} has not started (pol-007 sends it).")
+    rejected = rejected_since(view, episode, "RESTRICTION")
+    if rejected:
+        note = f": \u201c{rejected['detail']}\u201d" if rejected.get("detail") else ""
+        return Wait("controller_rejected", f"A controller rejected a restriction on {rejected['sim_date']}{note}. "
+                                           "Not escalating again until the client cures.")
     return restriction(view, today, ladder, escalation_days, only_levers=agreed_levers(view))
+
+
+def open_work(view: ClientView) -> str | None:
+    for w in sorted(view.work_item, key=lambda w: w["id"]):
+        if w["kind"] not in OUR_KINDS:
+            continue
+        if w["state"] in OPEN:
+            return f"{w['kind'].replace('_', ' ').lower()} WI-{w['id']} is waiting for a {w['required_role'].lower()}: {w['title']}."
+        if w["state"] == "APPROVED" and w["kind"] in EXECUTED_KINDS:
+            return f"WI-{w['id']} ({w['title']}) is approved and executing through the gateway."
+    return None
+
+
+def busy(view: ClientView) -> bool:
+    return open_work(view) is not None
+
+
+def waiting(view: ClientView, today: str, escalation_days: int) -> Wait | None:
+    if view.in_transit:
+        m = view.in_transit[0]
+        return Wait("payment_in_transit", f"{usd(m['amount_cents'])} {m['rail']} {m['bank_ref']} from {m['orig_name']} was sent "
+                                          f"{m['value_on']} and has not posted; acting only on posted funds.")
+    promise = next((d for d in view.deadline if d["kind"] == "promise_to_pay" and d["status"] == "open"), None)
+    if promise:
+        note = f" ({promise['note']})" if promise.get("note") else ""
+        return Wait("promise_to_pay", f"Promise to pay by {promise['due_on']}{note}.")
+    until = grace_until(view, today, escalation_days)
+    if until:
+        return Wait("approved_exception", f"A controller approved an exception; holding off until {until}.")
+    return None
+
+
+def no_debit(view: ClientView, today: str) -> str:
+    if not allowed(view, "debit"):
+        return f"Custody can't be debited without the client's consent{cite(view, 'debit')}."
+    cash = next((h["value_cents"] for h in view.custody_holding if h["asset"] == "USD"), 0)
+    return f"USD custody of {usd(cash)} doesn't cover any overdue invoice."
+
+
+def ids(invoices: list[Row]) -> str:
+    return ", ".join(i["id"] for i in invoices)
 
 
 def overdue_invoices(view: ClientView, today: str) -> list[Row]:
@@ -170,6 +235,11 @@ def owed(invoices: list[Row]) -> int:
 
 def clause(view: ClientView, kind: str) -> Row | None:
     return next((c for c in view.contract_clause if c["kind"] == kind), None)
+
+
+def cite(view: ClientView, kind: str) -> str:
+    c = clause(view, kind)
+    return f" (§{c['clause']})" if c else ""
 
 
 def allowed(view: ClientView, kind: str) -> bool:
@@ -248,7 +318,7 @@ def usable_steps(view: ClientView, lever: str, ladder: dict[str, list[str]]) -> 
 
 def restriction(
     view: ClientView, today: str, ladder: dict[str, list[str]], escalation_days: int, only_levers: set[str] | None = None,
-) -> Move | None:
+) -> Move | Wait | None:
     overdue = overdue_invoices(view, today)
     if not overdue:
         return None
@@ -281,7 +351,13 @@ def restriction(
         candidates.append((group == 2, position, group, name, steps[position]))
 
     if not candidates:
-        return None
+        if only_levers is not None:
+            why = f"the controller-approved plan limits restrictions to {', '.join(sorted(only_levers))}, already in place"
+        elif rungs_in_place:
+            why = "every step the contract and policy allow is already in place"
+        else:
+            why = "the contract gives no lever for the unpaid products (no set-off right, no cross-default)"
+        return Wait("no_further_step", f"{usd(owed(overdue))} still past due, but {why}; escalating needs a person.")
     defaulted = defaulted_invoices(view, today)
     ready_on = escalation_clock(view, defaulted)
     if rungs_in_place:
@@ -289,7 +365,8 @@ def restriction(
         approved = [a["sim_date"] for a in view.approvals if a["work_item_kind"] == "RESTRICTION" and a["sim_date"] >= episode]
         ready_on = add_days(max([ready_on, *approved]), escalation_days)
     if today < ready_on:
-        return None
+        return Wait("escalation_spacing", f"A restriction is in place; the next step waits until {ready_on} "
+                                          f"({escalation_days} days after the last one, giving the client time to pay).")
 
     *_, lever, step = min(candidates)
     amount = owed(overdue)
@@ -297,7 +374,7 @@ def restriction(
     why = [f"{usd(amount)} past due on {', '.join(i['id'] for i in overdue)} ({', '.join(sorted(unpaid))})."]
     cure = latest_deadline(view, "cure_period")
     if cure and cure["status"] == "expired":
-        why.append(f"Default notice of {cure['started_on']}; the cure period ended {cure['due_on']} unpaid (§9.1).")
+        why.append(f"Default notice of {cure['started_on']}; the cure period ended {cure['due_on']} unpaid{cite(view, 'cure')}.")
     if rungs_in_place:
         why.append(f"The last restriction has been in place {escalation_days}+ days without payment.")
     if lever == "withdrawals":
@@ -533,7 +610,7 @@ def material_event_case(view: ClientView, note: Row, reading: RmReading, world: 
         ("contract", "; ".join(filter(None, [
             f"§{coc['clause']}: {coc['text'].rstrip('.')}" if coc and coc["allowed"] else "No change-of-control clause",
             f"§{set_off['clause']} set-off allowed" if set_off and set_off["allowed"] else "no set-off right",
-            "custody debits allowed" if debit and debit["allowed"] else f"§{debit['clause'] if debit else '6.3'} debits need written consent",
+            "custody debits allowed" if debit and debit["allowed"] else f"debits need written consent{cite(view, 'debit')}",
             f"cure period {cure['status']} until {cure['due_on']}" if cure and cure["status"] in ("open", "expired") else None,
         ])) + "."),
         ("exposure", (f"{usd(in_default)} in default, {usd(total_open)} open in total; custody holds {usd(usd_cash)} USD "
