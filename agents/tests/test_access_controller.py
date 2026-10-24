@@ -103,13 +103,18 @@ class AccessControllerPlan(unittest.TestCase):
         m = only(view(debit=True, usd=1_000_000_00))
         self.assertEqual(m.action, "propose_custody_debit")
 
-    def test_debit_splits_at_auto_apply_limit(self):
-        v = view(debit=True, usd=1_000_000_00, owed=(("INV-1", "CUSTODY", 22_400_00), ("INV-2", "TRADING", 64_000_00)))
-        self.assertEqual(only(v).args["invoice_ids"], ["INV-1"])
+    def test_debit_takes_every_invoice_custody_covers_in_one_go(self):
+        for tier in (1, 3):
+            with self.subTest(tier=tier):
+                v = view(tier=tier, debit=True, usd=1_000_000_00,
+                         owed=(("INV-1", "CUSTODY", 22_400_00), ("INV-2", "TRADING", 64_000_00)))
+                self.assertEqual(only(v).args["invoice_ids"], ["INV-1", "INV-2"])
 
-    def test_tier_one_debit_goes_whole_to_controller(self):
-        v = view(tier=1, debit=True, usd=1_000_000_00, owed=(("INV-1", "CUSTODY", 22_400_00), ("INV-2", "TRADING", 64_000_00)))
-        self.assertEqual(only(v).args["invoice_ids"], ["INV-1", "INV-2"])
+    def test_debit_stops_where_custody_runs_out(self):
+        v = view(debit=True, usd=30_000_00, owed=(("INV-1", "CUSTODY", 22_400_00), ("INV-2", "TRADING", 64_000_00)))
+        m = only(v)
+        self.assertEqual(m.args["invoice_ids"], ["INV-1"])
+        self.assertIn("Custody covers 1 of 2 overdue invoices", m.args["reasoning"])
 
     def test_waits_for_payment_in_transit(self):
         transit = {"amount_cents": 50_000_00, "rail": "WIRE", "bank_ref": "WI-5412", "orig_name": "ACME LP", "value_on": "2026-03-19"}

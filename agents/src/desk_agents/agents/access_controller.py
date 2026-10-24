@@ -209,7 +209,7 @@ def next_move(
     hold_off = waiting(view, today, escalation_days)
     debit_rejected = overdue and rejected_since(view, overdue[0]["due_on"], "CUSTODY_DEBIT")
     if overdue and not hold_off and not debit_rejected:
-        debit = custody_debit(view, today, world.platform["auto_apply_limit_cents"])
+        debit = custody_debit(view, today)
         if debit:
             return debit
 
@@ -610,13 +610,13 @@ def fill(invoices: list[Row], budget: int) -> list[Row]:
     return chosen
 
 
-def custody_debit(view: ClientView, today: str, auto_limit: int) -> Move | None:
+def custody_debit(view: ClientView, today: str) -> Move | None:
+    """Every overdue invoice USD custody covers, oldest first, in one debit (debits apply without a person)."""
     if not allowed(view, "debit"):
         return None
     overdue = overdue_invoices(view, today)
     cash = next((h["value_cents"] for h in view.custody_holding if h["asset"] == "USD"), 0)
-    auto_eligible = view.client["tier"] > 1 and not view.client["strategic"]
-    chosen = (fill(overdue, min(cash, auto_limit)) if auto_eligible else []) or fill(overdue, cash)
+    chosen = fill(overdue, cash)
     if not chosen:
         return None
     ids = [i["id"] for i in chosen]
@@ -626,10 +626,7 @@ def custody_debit(view: ClientView, today: str, auto_limit: int) -> Move | None:
         f"from custody, and USD custody of {usd(cash)} covers it. Collecting first avoids any restriction."
     )
     if len(chosen) < len(overdue):
-        reasoning += (
-            f" This covers {len(chosen)} of {len(overdue)} overdue invoices"
-            f"{' (the part within the auto-apply limit)' if total <= auto_limit < owed(overdue) else ''}; the rest follows separately."
-        )
+        reasoning += f" Custody covers {len(chosen)} of {len(overdue)} overdue invoices; the rest stays in collections."
     return Move(
         action="propose_custody_debit",
         client_id=view.id,
