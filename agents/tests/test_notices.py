@@ -1,10 +1,9 @@
+import json
 import unittest
 from types import SimpleNamespace
 
-import anthropic
-import httpx
-
 from desk_agents.agents.access_controller import AccessController, Move
+from desk_agents.llm.types import DecisionUnavailable, Reply
 from desk_agents.notices import Writer, safe
 
 DRAFT = (
@@ -19,16 +18,17 @@ GOOD = (
 )
 
 
-class FakeClaude:
-    def __init__(self, text="", stop="end_turn", error=None):
-        self.text, self.stop, self.error, self.requests = text, stop, error, []
-        self.beta = SimpleNamespace(messages=SimpleNamespace(create=self.create))
+def provider(name, text=None, error=None, calls=None):
+    """A fake provider: answers {"text": text}, or raises."""
 
-    def create(self, **request):
-        self.requests.append(request)
-        if self.error:
-            raise self.error
-        return SimpleNamespace(stop_reason=self.stop, content=[SimpleNamespace(type="text", text=self.text)])
+    def ask(messages):
+        if calls is not None:
+            calls.append((name, messages))
+        if error:
+            raise error
+        return Reply(json.dumps({"text": text}), [], provider=name)
+
+    return name, ask
 
 
 class NumberCheck(unittest.TestCase):
@@ -52,46 +52,50 @@ class NumberCheck(unittest.TestCase):
 
 
 class Writing(unittest.TestCase):
-    def test_claude_words_it_and_the_tag_is_kept(self):
-        claude = FakeClaude(GOOD)
-        text, by_claude = Writer(claude).write("email", DRAFT, "Client: Kestrel Quant")
-        self.assertTrue(by_claude)
-        self.assertEqual(text, GOOD + " (ref WI-12)")
-        sent = claude.requests[0]
-        self.assertNotIn("(ref WI-12)", sent["messages"][0]["content"])
-        self.assertEqual((sent["fallbacks"], sent["output_config"]), ("default", {"effort": "low"}))
+    def test_factory_words_it_and_the_tag_is_kept(self):
+        calls = []
+        text, by = Writer([provider("factory", GOOD, calls=calls), provider("anthropic", GOOD, calls=calls)]).write(
+            "email", DRAFT, "Client: Kestrel Quant")
+        self.assertEqual((text, by), (GOOD + " (ref WI-12)", "factory"))
+        self.assertEqual([c[0] for c in calls], ["factory"])
+        self.assertNotIn("(ref WI-12)", calls[0][1][0]["content"])
 
-    def test_unsafe_wording_sends_the_template(self):
-        with self.assertLogs("desk_agents.notices", level="WARNING"):
-            text, by_claude = Writer(FakeClaude(GOOD.replace("$148,200.00", "$148,000.00"))).write("email", DRAFT, "")
-        self.assertEqual((text, by_claude), (DRAFT, False))
+    def test_factory_failure_falls_back_to_claude(self):
+        with self.assertLogs("desk_agents.seat2_llm", level="WARNING"):
+            _text, by = Writer([provider("factory", error=DecisionUnavailable("droid timed out after 15s")),
+                               provider("anthropic", GOOD)]).write("email", DRAFT, "")
+        self.assertEqual(by, "anthropic")
 
-    def test_refusal_sends_the_template(self):
-        with self.assertLogs("desk_agents.notices", level="WARNING"):
-            self.assertEqual(Writer(FakeClaude(GOOD, stop="refusal")).write("rm", DRAFT, ""), (DRAFT, False))
+    def test_wording_that_fails_the_number_check_goes_to_the_next_provider(self):
+        bad = GOOD.replace("$148,200.00", "$148,000.00")
+        with self.assertLogs("desk_agents.seat2_llm", level="WARNING") as logs:
+            _text, by = Writer([provider("factory", bad), provider("anthropic", GOOD)]).write("email", DRAFT, "")
+        self.assertEqual(by, "anthropic")
+        self.assertIn("$148,000.00", " ".join(logs.output))
 
-    def test_api_error_sends_the_template(self):
-        request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-        error = anthropic.APIConnectionError(request=request)
-        with self.assertLogs("desk_agents.notices", level="WARNING"):
-            self.assertEqual(Writer(FakeClaude(error=error)).write("email", DRAFT, ""), (DRAFT, False))
+    def test_every_provider_failing_sends_the_template(self):
+        with self.assertLogs("desk_agents.seat2_llm", level="WARNING"):
+            result = Writer([provider("factory", error=DecisionUnavailable("no answer")),
+                             provider("anthropic", "not json at all")]).write("rm", DRAFT, "")
+        self.assertEqual(result, (DRAFT, ""))
 
-    def test_no_key_sends_the_template(self):
-        self.assertEqual(Writer(None).write("email", DRAFT, ""), (DRAFT, False))
+    def test_no_providers_sends_the_template(self):
+        self.assertEqual(Writer(None).write("email", DRAFT, ""), (DRAFT, ""))
 
 
 class AgentUsesTheWriter(unittest.TestCase):
-    def test_notice_reasoning_says_claude_worded_it(self):
-        agent = AccessController(db=None, reader=SimpleNamespace(), writer=Writer(FakeClaude(GOOD)))
+    def test_notice_reasoning_names_who_worded_it(self):
+        agent = AccessController(db=None, reader=SimpleNamespace(), writer=Writer([provider("factory", GOOD)]))
         agent.names = {"ORG-90412": "Kestrel Quant"}
         move = Move("propose_notice", "ORG-90412",
                     {"client_id": "ORG-90412", "channel": "email", "body": DRAFT, "reasoning": "Tell the client.",
                      "policy_ref": "pol-007", "confidence": 0.95}, "notice")
         worded = agent.worded(move)
         self.assertEqual(worded.args["body"], GOOD + " (ref WI-12)")
-        self.assertEqual(worded.args["reasoning"], "Tell the client. Worded by Claude; every number checked against the facts.")
+        self.assertEqual(worded.args["reasoning"],
+                         "Tell the client. Worded by Factory (Droid); every number checked against the facts.")
 
-    def test_template_kept_without_claude(self):
+    def test_template_kept_without_providers(self):
         agent = AccessController(db=None, reader=SimpleNamespace(), writer=Writer(None))
         move = Move("propose_notice", "ORG-1", {"channel": "rm", "body": DRAFT, "reasoning": "r"}, "notice")
         self.assertIs(agent.worded(move), move)

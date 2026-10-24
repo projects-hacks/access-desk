@@ -1,9 +1,10 @@
+import json
 import logging
 import re
 
-import anthropic
-
 from .config import settings
+from .llm.types import Ask
+from .seat2_llm import chain, first_good, notice_order
 
 log = logging.getLogger("desk_agents.notices")
 
@@ -16,8 +17,7 @@ in the draft, character for character. Do not round, reformat or convert them.
 - Add no number, date or identifier that is not in the draft.
 - Keep every fact in the draft, including every amount and invoice number. Add no new facts or promises.
 - Plain text, no greeting line, no signature, no placeholders. At most 120 words.
-
-Reply with the notice text only."""
+"""
 
 AUDIENCE = {
     "email": "the client's finance team, by email",
@@ -46,51 +46,46 @@ def safe(draft: str, rewrite: str) -> str | None:
     return None
 
 
-class Writer:
-    """Claude words the notice; the template is used whenever Claude is unavailable or a number doesn't check out."""
+TEXT_SCHEMA = {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "The notice text only"}},
+    "required": ["text"],
+    "additionalProperties": False,
+}
 
-    def __init__(self, client: anthropic.Anthropic | None = None):
-        """No client means templates only; use Writer.from_settings() for Claude with the configured key."""
-        self._client = client
+
+class Writer:
+    """A provider words the notice; the template is used when none is available or no wording passes the check."""
+
+    def __init__(self, asks: list[tuple[str, Ask]] | None = None):
+        """No providers means templates only; Writer.from_settings() uses Seat 2's notice order."""
+        self._asks = asks or []
 
     @classmethod
     def from_settings(cls) -> "Writer":
-        return cls(anthropic.Anthropic(api_key=settings.anthropic_api_key) if settings.anthropic_api_key else None)
+        return cls(chain(notice_order(), TEXT_SCHEMA, {"factory": settings.seat2_factory_timeout_seconds}))
 
-    def write(self, channel: str, body: str, context: str) -> tuple[str, bool]:
-        """Returns the text to send and whether Claude wrote it."""
-        if not self._client:
-            return body, False
+    def write(self, channel: str, body: str, context: str) -> tuple[str, str]:
+        """Returns the text to send and which provider wrote it ("" for the template)."""
+        if not self._asks:
+            return body, ""
         tag = TAG.search(body)
         draft = body[: tag.start()] if tag else body
-        try:
-            rewrite = self._ask(channel, draft, context)
-        except anthropic.APIError as e:
-            log.warning("Claude could not word the notice, sending the template: %s", e)
-            return body, False
-        if not rewrite:
-            return body, False
-        problem = safe(draft, rewrite)
-        if problem:
-            log.warning("Claude's wording failed the number check (%s); sending the template", problem)
-            return body, False
-        return rewrite + (tag.group(0) if tag else ""), True
+        messages = [{
+            "role": "user",
+            "content": f"{SYSTEM}\n\nAudience: {AUDIENCE.get(channel, channel)}\n{context}\n\n<draft>\n{draft}\n</draft>\n\n"
+                       'Answer as JSON: {"text": "<the notice>"}.',
+        }]
 
-    def _ask(self, channel: str, draft: str, context: str) -> str | None:
-        response = self._client.beta.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=1024,
-            system=SYSTEM,
-            output_config={"effort": "low"},
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            messages=[{
-                "role": "user",
-                "content": f"Audience: {AUDIENCE.get(channel, channel)}\n{context}\n\n<draft>\n{draft}\n</draft>",
-            }],
-        )
-        if response.stop_reason != "end_turn":
-            log.warning("Claude stopped with %s while wording a notice; sending the template", response.stop_reason)
-            return None
-        text = "".join(b.text for b in response.content if b.type == "text").strip()
-        return text or None
+        def accept(raw: str) -> str:
+            text = json.loads(raw)["text"].strip()
+            problem = safe(draft, text)
+            if problem:
+                raise ValueError(f"number check failed ({problem})")
+            return text
+
+        got = first_good(self._asks, messages, accept, "word the notice")
+        if got is None:
+            return body, ""
+        text, provider = got
+        return text + (tag.group(0) if tag else ""), provider

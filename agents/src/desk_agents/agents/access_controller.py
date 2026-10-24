@@ -14,6 +14,7 @@ from ..config import settings
 from ..models import Proposal, WorkItemKind
 from ..notices import Writer
 from ..pushback import Reader, RmReading
+from ..seat2_llm import label
 from ..stdb import ReducerError
 from ..world import AuditLog, ClientView, Row, World, load_world
 from .base import Agent
@@ -159,10 +160,10 @@ class AccessController(Agent):
     def worded(self, move: Move) -> Move:
         args = move.args
         context = f"Client: {self.names.get(move.client_id, move.client_id)}"
-        body, by_claude = self.writer.write(args["channel"], args["body"], context)
-        if not by_claude:
+        body, by = self.writer.write(args["channel"], args["body"], context)
+        if not by:
             return move
-        reasoning = f"{args['reasoning']} Worded by Claude; every number checked against the facts."
+        reasoning = f"{args['reasoning']} Worded by {label(by)}; every number checked against the facts."
         return replace(move, args={**args, "body": body, "reasoning": reasoning})
 
 
@@ -769,11 +770,11 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
         )
     elif found := best_candidate(view, reading, note, world, since):
         m, evidence = found
-        reply = rm_reply_move(view, note, (
+        reply = rm_reply_move(view, note, reading=reading, finding=(
             f"{usd(m['amount_cents'])} {m['bank_ref']} from {m['orig_name']} arrived {m['value_on']} but could not be matched "
             "automatically; an accountant is reviewing it. Access comes back as soon as it is applied."
         ))
-        proposed = rm_reply_move(view, note, (
+        proposed = rm_reply_move(view, note, reading=reading, finding=(
             f"{found_payment(m['amount_cents'], m['orig_name'], evidence['invoices'], m['bank_ref'], m['value_on'])} "
             "An accountant is confirming the match now; access comes back as soon as it is applied."
         ))
@@ -782,7 +783,7 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
             action="propose_payment_match",
             client_id=view.id,
             args={"client_id": view.id, "movement_id": m["id"], "rm_note_id": note["id"],
-                  "reasoning": f"RM {note['author']} says {name} paid. Evidence: {signals}.",
+                  "reasoning": f"RM {note['author']} says {name} paid. Evidence: {signals}.{read_by(reading)}",
                   "evidence_json": json.dumps([evidence]), "confidence": evidence["confidence"]},
             summary=f"match {m['bank_ref']} to {name} on {note['author']}'s word and the evidence",
             fallback=reply,
@@ -798,7 +799,7 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
             f"({', '.join(i['id'] for i in defaulted)}). Restrictions stay as they are. Please ask the client for the "
             "Fed IMAD or MT103 so we can trace the wire."
         )
-    return rm_reply_move(view, note, finding)
+    return rm_reply_move(view, note, finding, reading)
 
 
 MATCH_TITLE = re.compile(r"^Confirm (\$[\d,]+\.\d{2}) from (.+?)(?: → (.+?))?(?: \([^()]*\))?$")
@@ -834,13 +835,18 @@ def waiting_match(view: ClientView, match: Row, world: World) -> str:
     return found_payment(amount, sender, invoices, m["bank_ref"] if m else "", m["value_on"] if m else "")
 
 
-def rm_reply_move(view: ClientView, note: Row, finding: str) -> Move:
+def read_by(reading: RmReading | None) -> str:
+    return f" Note read by {label(reading.read_by)}." if reading is not None and reading.read_by else ""
+
+
+def rm_reply_move(view: ClientView, note: Row, finding: str, reading: RmReading | None = None) -> Move:
     name = view.client["name"]
     return Move(
         action="propose_notice",
         client_id=view.id,
         args={"client_id": view.id, "channel": "rm", "body": f"{finding} {note_tag(note['id'])}", "policy_ref": "pol-007",
-              "confidence": 0.9, "reasoning": f"RM {note['author']} says {name} already paid; checked the bank feed before acting."},
+              "confidence": 0.9, "reasoning": f"RM {note['author']} says {name} already paid; checked the bank feed before acting."
+                                                    f"{read_by(reading)}"},
         summary=f"reply to {note['author']} on {name}'s payment",
     )
 
@@ -924,7 +930,8 @@ def exception_case(view: ClientView, note: Row, reading: RmReading, world: World
     ]
     if past:
         facts.append("Precedents: " + "; ".join(f"{p['decided_on']} {p['decision']} → {p['outcome']}" for p in past[-3:]) + ".")
-    facts.append("The agent cannot grant exceptions; a controller decides. Escalation is paused while this is open.")
+    facts.append("The agent cannot grant exceptions; a controller decides. Escalation is paused while this is open."
+                 + read_by(reading))
     proposal = Proposal(
         kind=WorkItemKind.NOVEL_CASE,
         client_id=view.id,
@@ -1008,7 +1015,7 @@ def material_event_case(view: ClientView, note: Row, reading: RmReading, world: 
         amount_cents=total_open,
         proposal={"rmNoteId": note["id"], "event": event, "counterparty": reading.counterparty, "effectiveDate": when,
                   "onlyLevers": ["withdrawals"], "investigation": [{"tool": t, "summary": x} for t, x in steps]},
-        reasoning=" ".join(plan_steps),
+        reasoning=" ".join(plan_steps) + read_by(reading),
         policy_ref="none",
         clauses_cited=[c["clause"] for c in (coc, set_off) if c and c["allowed"]],
         confidence=0.6,
