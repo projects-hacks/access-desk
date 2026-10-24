@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { AuditLog } from './screens/AuditLog';
 import { ClientPortal } from './screens/ClientPortal';
 import { ControllerConsole } from './screens/ControllerConsole';
+import { CreditDesk } from './screens/CreditDesk';
 import { WorkQueue } from './screens/WorkQueue';
 
 const SCREENS = {
   queue: { label: 'Work queue', component: WorkQueue },
   controller: { label: 'Controller', component: ControllerConsole },
+  credit: { label: 'Credit', component: CreditDesk },
   portal: { label: 'Client portal', component: ClientPortal },
   audit: { label: 'Audit log', component: AuditLog },
 } as const;

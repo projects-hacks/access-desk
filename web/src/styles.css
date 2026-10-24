@@ -6,3 +6,65 @@ nav h1 { font-size: 16px; margin: 0 0 12px; }
 nav button { text-align: left; padding: 8px 10px; border: 0; border-radius: 6px; background: none; cursor: pointer; }
 nav button.active { background: #eef2ff; font-weight: 600; }
 main { padding: 24px; }
+
+/* Credit analyst (seat 1) */
+.credit { max-width: 1500px; }
+.credit h2 { margin: 0; }
+.credit h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #555; margin: 20px 0 8px; }
+.muted { color: #777; font-weight: 400; }
+.ok { color: #15803d; }
+.bad { color: #b91c1c; }
+.credit-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.credit-head p { margin: 4px 0 0; font-size: 13px; }
+.stats { display: flex; gap: 8px; }
+.stat { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 8px 14px; display: flex; flex-direction: column; min-width: 80px; }
+.stat b { font-size: 22px; }
+.stat span { font-size: 12px; color: #777; }
+.banner { background: #fef2f2; border: 1px solid #fecaca; padding: 8px 12px; border-radius: 6px; }
+.credit-grid { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; gap: 24px; align-items: start; }
+@media (max-width: 1100px) { .credit-grid { grid-template-columns: 1fr; } }
+.card { background: #fff; border: 1px solid #e5e5e5; border-left: 4px solid #6366f1; border-radius: 8px; padding: 12px; margin-bottom: 10px; cursor: pointer; }
+.card.flag { border-left-color: #f59e0b; }
+.card-top { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
+.kind { font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.card h4 { margin: 6px 0; font-size: 15px; }
+.reasoning { font-size: 12.5px; line-height: 1.45; color: #333; margin: 0 0 8px; max-height: 7.5em; overflow: auto; }
+.actions { display: flex; gap: 6px; }
+.actions input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; }
+.actions button { border: 0; border-radius: 6px; padding: 6px 12px; font-weight: 600; cursor: pointer; color: #fff; }
+.actions button:disabled { opacity: .4; cursor: not-allowed; }
+.approve { background: #16a34a; }
+.reject { background: #dc2626; }
+.decided { font-size: 13px; padding: 6px 0; border-bottom: 1px solid #eee; cursor: pointer; }
+.credit table { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; }
+.credit th { text-align: left; font-size: 11px; color: #777; font-weight: 600; padding: 6px 8px; border-bottom: 1px solid #e5e5e5; }
+.credit td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; }
+.credit tbody tr { cursor: pointer; }
+.credit tbody tr:hover, .credit tr.selected { background: #f5f7ff; }
+.num { font-variant-numeric: tabular-nums; text-align: right; }
+.tier { font-weight: 700; white-space: nowrap; }
+.up { color: #15803d; }
+.down { color: #b91c1c; }
+.bar { display: inline-flex; align-items: center; gap: 6px; width: 110px; }
+.bar .fill { height: 6px; border-radius: 3px; }
+.bar .num { font-size: 12px; }
+.fill.good { background: #16a34a; } .fill.mid { background: #84cc16; } .fill.warn { background: #f59e0b; } .fill.poor { background: #dc2626; }
+.pill { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; margin: 0 4px 0 0; background: #eee; }
+.pill.flagged { background: #fef3c7; color: #92400e; }
+.pill.watch { background: #e0e7ff; color: #3730a3; }
+.pill.cleared { background: #f0f0f0; color: #999; text-decoration: line-through; }
+.pill.strategic { background: #ede9fe; color: #5b21b6; margin-left: 6px; }
+.pill.approved, .pill.posted { background: #dcfce7; color: #166534; }
+.pill.rejected { background: #fee2e2; color: #991b1b; }
+.pill.withdrawn { background: #f0f0f0; color: #666; }
+.detail { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px 16px; margin-top: 16px; font-size: 13px; }
+.detail h3 { text-transform: none; letter-spacing: 0; color: #1a1a1a; font-size: 16px; margin: 0 0 6px; }
+.breakdown { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.breakdown div { background: #f7f7f7; border-radius: 6px; padding: 4px 10px; }
+.breakdown dt { font-size: 11px; color: #777; }
+.breakdown dd { margin: 0; font-weight: 600; }
+.evidence h4 { margin: 12px 0 2px; }
+.evidence p { margin: 0 0 6px; }
+.audit { list-style: none; padding: 0; margin: 0; font-size: 12.5px; background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; }
+.audit li { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; }
+.audit li.denied { background: #fef2f2; }
