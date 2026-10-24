@@ -113,6 +113,20 @@ class SpacetimeClient:
             proposed_fix,
         )
 
+    def upsert_policy(
+        self, policy_id: str, version: int, status: str, title: str, rule_json: str,
+        learned_from: str, approved_by: str | None = None,
+    ) -> None:
+        """Agents may only write `draft` rows; a controller's approval activates them."""
+        self.call(
+            "upsert_policy", policy_id, version, status, title, rule_json, learned_from,
+            _option(approved_by),
+        )
+
+    def record_policy_outcome(self, policy_key: str, outcome: str) -> None:
+        """The evaluator's verdict on an active company policy, onto its live precedent."""
+        self.call("record_policy_outcome", policy_key, outcome)
+
     # ── Reads ──────────────────────────────────────────────────────────────
 
     def open_work(self) -> list[dict[str, Any]]:

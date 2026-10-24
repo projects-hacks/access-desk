@@ -128,7 +128,7 @@ def test_scores_near_the_plan(result, client_id):
 def test_same_input_gives_identical_output(books):
     a, b = plan(books, [], []), plan(books, [], [])
     assert [p.model_dump() for p in a.proposals] == [p.model_dump() for p in b.proposals]
-    assert a.profiles == b.profiles and a.flag_rows == b.flag_rows
+    assert a.profiles == b.profiles
 
 
 def test_strategic_clients_never_get_a_tier_change(result, books):
@@ -198,8 +198,9 @@ def test_second_run_proposes_nothing_new(books, result):
     again = plan(books, open_items, [])
     assert again.proposals == []
     assert again.withdraw == []
+    # Flags belong to ExploitWatch now: the credit analyst proposes reviews only.
     kinds = [p.kind.value for p in result.proposals]
-    assert kinds.count("CREDIT_REVIEW") == 10 and kinds.count("EXPLOIT_FLAG") == 6
+    assert kinds == ["CREDIT_REVIEW"] * 10
 
 
 def test_rejection_is_remembered_for_30_sim_days(books, result):
@@ -221,10 +222,11 @@ def test_proposals_carry_what_the_controller_needs(result):
     orchard = next(p for p in result.proposals if p.subject_id == "tier:ORG-90518:3->5")
     assert orchard.title == "Orchard Treasury: tier 3 → 5"
     assert orchard.policy_ref == "pol-020" and orchard.required_role.value == "CONTROLLER"
-    assert set(orchard.proposal) == {
+    assert set(orchard.proposal) >= {
         "action", "from_tier", "to_tier", "reliability", "value", "coverage_ratio", "breakdown",
-        "flags", "expected_settle_on",
+        "flags", "expected_settle_on", "decided_by", "baseline", "choice", "guardrails",
     }
+    assert orchard.proposal["decided_by"] == "rules" and orchard.proposal["choice"] is None
     assert orchard.proposal["flags"] == ["dispute_delay"]
     assert "dispute_delay" in orchard.reasoning  # template reasoning cites the flag
     halcyon = next(p for p in result.proposals if p.subject_id == "review:ORG-90101")
@@ -235,9 +237,6 @@ def test_profiles_are_whole_scores_for_every_client(result):
     assert len(result.profiles) == 30
     for row in result.profiles:
         assert 0 <= row["reliability_score"] <= 100 and 0 <= row["value_score"] <= 100
-    flags = {r["id"]: r for r in result.flag_rows}
-    assert flags["quarter_end:ORG-90101"]["status"] == "watch"  # strategic
-    assert flags["dispute_delay:ORG-90518"]["status"] == "flagged"
 
 
 def test_fieldstone_slide_after_the_lump_sum():
