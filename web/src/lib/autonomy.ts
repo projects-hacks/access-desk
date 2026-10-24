@@ -14,7 +14,8 @@ const PAYMENT_KINDS = [
 /** Why an open item is waiting for a person, in a few words (the database's rules, read back). */
 export function waitingReason(item: WorkItem, client?: Client): string | undefined {
   if (item.autoApplied || (item.state !== 'PROPOSED' && item.state !== 'NEEDS_INFO')) return;
-  if (client?.strategic) return 'Top client: a person decides';
+  // Mirrors isTopClient in spacetime/src/autonomy.ts.
+  if (client && (client.tier <= 1 || client.strategic)) return 'Top client: a person decides';
   if (item.title.startsWith('Offboarding')) return 'Offboarding: a person decides';
   if (item.policyRef === 'manual')
     return 'Proposed from the console: the other controller approves';

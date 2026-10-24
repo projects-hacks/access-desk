@@ -414,8 +414,8 @@ function ChangeAccess({ row }: { row: ClientRow }) {
       ))}
       {results.some((r) => r.tone === 'good') && (
         <p className="eyebrow">
-          Changes apply at once, except for strategic clients and offboarding (every permission
-          off), which wait in Approvals for the other controller.
+          Changes apply at once, except for top clients (Tier 1 or strategic) and offboarding (every
+          permission off), which wait in Approvals for the other controller.
         </p>
       )}
     </>

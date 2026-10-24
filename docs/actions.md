@@ -27,15 +27,15 @@ A withdrawal during a running cure period is honored (§9.1), but if it leaves c
 
 ## Who approves
 
-- **Automatically**, whenever the kind's policy is active, the client is not strategic and the agent's confidence is at least 0.1 (`MIN_AUTO_CONFIDENCE`, `spacetime/src/autonomy.ts`): restrictions (pol-006), custody debits (pol-005, any amount), restores (pol-011), notices (pol-007). The item is created APPROVED with `auto_applied = true`.
-- **A controller** only for the top clients (strategic, the hand-marked top 0.1%), proposals below the confidence threshold, and offboarding: capabilities with `two_approvers` (close-only, full freeze; titled "Offboarding: …") and a console permission change that turns off every permission the client has.
-- **Credit proposals** (tier changes, reviews, exploit alerts) follow the same line: strategic clients and low confidence wait, everyone else applies at once (exploit alerts never wait on confidence). See [credit](credit.md#who-approves).
+- **Automatically**, whenever the kind's policy is active and the agent's confidence is at least 0.1 (`MIN_AUTO_CONFIDENCE`, `spacetime/src/autonomy.ts`): restrictions (pol-006, except on top clients), custody debits (pol-005, any amount), restores (pol-011), notices (pol-007). The item is created APPROVED with `auto_applied = true`.
+- **A controller** only to restrict a top client (Tier 1 or strategic), for proposals below the confidence threshold, and for offboarding: capabilities with `two_approvers` (close-only, full freeze; titled "Offboarding: …") and a console permission change that turns off every permission the client has.
+- **Credit proposals** (tier changes, reviews, exploit alerts) follow the same line: top clients and low confidence wait, everyone else applies at once (exploit alerts never wait on confidence). See [credit](credit.md#who-approves).
 - `transition_work_item` enforces: approvers are ACCOUNTANT or CONTROLLER, `required_role = CONTROLLER` items need a controller, no one approves their own proposal. Denied attempts are audited, not thrown.
 - APPROVED → POSTED happens when the gateway has confirmed every command.
 
 ## Web
 
-Reads need no token: subscribe to the tables. Approvals call `transition_work_item` as the window's controller seat: Controller A (`VITE_STDB_CONTROLLER_TOKEN`) or Controller B (`VITE_STDB_CONTROLLER_B_TOKEN`), picked with `?as=a` / `?as=b`. Agents propose and either seat approves; what a seat proposes itself (console tier and permission changes on strategic clients, or an offboarding) needs the other seat. The portal's withdraw button is `POST /demo/withdraw {clientId, amount}` (dollars): it returns the decision, released and held amounts, and the Nessie wire once it's back through the feed.
+Reads need no token: subscribe to the tables. Approvals call `transition_work_item` as the window's controller seat: Controller A (`VITE_STDB_CONTROLLER_TOKEN`) or Controller B (`VITE_STDB_CONTROLLER_B_TOKEN`), picked with `?as=a` / `?as=b`. Agents propose and either seat approves; what a seat proposes itself (console tier and permission changes on top clients, or an offboarding) needs the other seat. The portal's withdraw button is `POST /demo/withdraw {clientId, amount}` (dollars): it returns the decision, released and held amounts, and the Nessie wire once it's back through the feed.
 
 ## Python
 

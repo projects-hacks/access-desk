@@ -1,6 +1,6 @@
 import { SenderError, t } from 'spacetimedb/server';
 import { audit, requireRole, type Ctx } from '../context';
-import { needsHuman } from '../autonomy';
+import { isTopClient, needsHuman } from '../autonomy';
 import { PERMISSIONS, isPermission, leverSummary, permissionNeedsHuman, type PermissionKey } from '../permissions';
 import { queueCommand } from '../payments/gateway';
 import { spacetimedb } from '../schema';
@@ -8,8 +8,8 @@ import { executeApproved } from './actions';
 
 /**
  * A controller moves a client to another tier from the console. Same CREDIT_REVIEW
- * path as the credit agent: it applies at once, except for strategic clients (the top
- * 0.1%), which wait for a second controller (no self-approval).
+ * path as the credit agent: it applies at once, except for top clients (Tier 1 or
+ * strategic), which wait for a second controller (no self-approval).
  */
 export const proposeTierChange = spacetimedb.reducer(
   { clientId: t.string(), toTier: t.u8(), reasoning: t.string() },
@@ -44,7 +44,7 @@ const PermissionChange = t.object('PermissionChange', { key: t.string(), enabled
 
 /**
  * A controller switches fine-grained permissions (buy, sell, crypto withdrawals...) from the
- * console. It applies at once, except for strategic clients (the top 0.1%) and offboarding
+ * console. It applies at once, except for top clients (Tier 1 or strategic) and offboarding
  * (every permission off), which wait for a second controller.
  */
 export const proposePermissionChange = spacetimedb.reducer(
@@ -71,7 +71,7 @@ export const proposePermissionChange = spacetimedb.reducer(
       return row ? row.enabled : ctx.db.accessLever.id.find(`${clientId}:${PERMISSIONS.find((p) => p.key === key)!.lever}`)?.state === 'active';
     };
     const offboards = PERMISSIONS.filter((p) => levers.has(p.lever)).every((p) => !after(p.key));
-    const reason = permissionNeedsHuman({ strategic: c.strategic, offboards, changes });
+    const reason = permissionNeedsHuman({ topClient: isTopClient(c.tier, c.strategic), offboards, changes });
     const auto = reason === undefined;
     const name = (k: string) => PERMISSIONS.find((p) => p.key === k)!.name;
     const title = `${c.name}: ${changes.map((ch) => `${name(ch.key)} ${ch.enabled ? 'on' : 'off'}`).join(', ')}`;

@@ -26,8 +26,6 @@
     "demo:reset": "pnpm --filter @access-desk/server reset",
     "demo:rebuild": "pnpm bank reset && pnpm stdb:publish:reset && pnpm stdb:roles && pnpm host:restart",
     "host:restart": "az containerapp revision restart -n access-desk-api -g access-desk-rg --revision $(az containerapp show -n access-desk-api -g access-desk-rg --query properties.latestRevisionName -o tsv) -o none",
-    "host:stop": "az containerapp revision deactivate -n access-desk-api -g access-desk-rg --revision $(az containerapp show -n access-desk-api -g access-desk-rg --query properties.latestRevisionName -o tsv) -o none",
-    "host:start": "az containerapp revision activate -n access-desk-api -g access-desk-rg --revision $(az containerapp show -n access-desk-api -g access-desk-rg --query properties.latestRevisionName -o tsv) -o none",
     "ledger:verify": "pnpm --filter @access-desk/server ledger:verify",
     "tieout:verify": "pnpm --filter @access-desk/server tieout:verify",
     "actions:verify": "pnpm --filter @access-desk/server actions:verify",

@@ -8,7 +8,7 @@ const review = (over: Partial<AutonomyInput> = {}, proposal: object = { action: 
 
 test('tier changes and reviews apply on their own, at any tier, whatever the move', () => {
   assert.equal(needsHuman(review()), undefined);
-  for (const tier of [1, 2, 3, 4, 5]) {
+  for (const tier of [2, 3, 4, 5]) {
     assert.equal(needsHuman(review({ tier }, { action: 'tier_change', to_tier: 5 })), undefined);
     assert.equal(needsHuman(review({ tier }, { action: 'tier_change', to_tier: 1 })), undefined);
   }
@@ -22,8 +22,9 @@ test('below the confidence threshold any proposal goes to a person, except explo
   assert.ok(lowConfidence(0.05));
 });
 
-test('strategic clients (the top 0.1%) always go to a controller', () => {
+test('top clients (Tier 1 or strategic) always go to a controller', () => {
   assert.equal(needsHuman(review({ strategic: true })), 'strategic client');
+  assert.equal(needsHuman(review({ tier: 1 })), 'tier 1 client');
   assert.equal(needsHuman({ kind: 'EXPLOIT_FLAG', tier: 1, strategic: true, confidence: 0.9, proposal: {} }), 'strategic client');
 });
 
@@ -42,9 +43,9 @@ test('company policies: reminders and prepay apply, custody debit and cross-defa
   assert.match(needsHuman(draft(['reminder'], { confidence: 0.05 })) ?? '', /confidence/);
 });
 
-test('exploit alerts are acknowledged automatically, whatever the tier or confidence', () => {
+test('exploit alerts on everyone but top clients are acknowledged automatically, whatever the confidence', () => {
   const flag = (over: Partial<AutonomyInput> = {}): AutonomyInput => ({ kind: 'EXPLOIT_FLAG', tier: 4, strategic: false, confidence: 0.3, proposal: {}, ...over });
   assert.equal(needsHuman(flag()), undefined);
-  assert.equal(needsHuman(flag({ tier: 1 })), undefined);
+  assert.equal(needsHuman(flag({ tier: 2 })), undefined);
   assert.equal(needsHuman(flag({ strategic: true })), 'strategic client');
 });

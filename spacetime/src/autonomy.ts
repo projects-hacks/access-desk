@@ -1,16 +1,21 @@
 /**
  * Which agent proposals a controller must decide, and which apply on their own.
  *
- * The desk acts on its own. A person decides only for the top clients (strategic:
- * the hand-marked top 0.1%), for offboarding, which is decided where the step is
- * chosen (capability.two_approvers, permissions.ts), and when the agent's own
- * confidence is below MIN_AUTO_CONFIDENCE. Company policy drafts also wait when a
- * term moves money or changes the contract.
+ * The desk acts on its own. A person decides only for the top clients (Tier 1 or
+ * strategic), for offboarding, which is decided where the step is chosen
+ * (capability.two_approvers, permissions.ts), and when the agent's own confidence is
+ * below MIN_AUTO_CONFIDENCE. Company policy drafts also wait when a term moves money
+ * or changes the contract.
  * Pure, so it is unit-tested; the module calls it from propose_work_item.
  */
 
 /** Below this the agent is not sure enough to act alone; every agent proposal checks it. */
 export const MIN_AUTO_CONFIDENCE = 0.1;
+
+/** The top clients (the top 0.1%): Tier 1, or marked strategic by a person. */
+export function isTopClient(tier: number, strategic: boolean): boolean {
+  return tier <= 1 || strategic;
+}
 
 export function lowConfidence(confidence: number): string | undefined {
   return confidence < MIN_AUTO_CONFIDENCE ? `confidence ${confidence.toFixed(2)} is below ${MIN_AUTO_CONFIDENCE}` : undefined;
@@ -33,7 +38,7 @@ export const isGoverned = (kind: string) => (GOVERNED_KINDS as readonly string[]
 
 /** Why a person must decide this, or undefined when it can apply on its own. */
 export function needsHuman(i: AutonomyInput): string | undefined {
-  if (i.strategic) return 'strategic client';
+  if (isTopClient(i.tier, i.strategic)) return i.strategic ? 'strategic client' : 'tier 1 client';
   const p = (i.proposal ?? {}) as { action?: string; to_tier?: number; rule?: { terms?: { lever?: string }[] } };
   if (i.kind === 'CREDIT_REVIEW' && p.action === 'tier_change') {
     const to = Number(p.to_tier);

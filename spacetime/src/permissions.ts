@@ -39,10 +39,10 @@ export function leverSummary(lever: string, enabled: (key: PermissionKey) => boo
 }
 
 /** Why a person (a second controller) must approve, or undefined when it applies at once. */
-export function permissionNeedsHuman(i: { strategic: boolean; offboards: boolean; changes: { key: string; enabled: boolean }[] }): string | undefined {
+export function permissionNeedsHuman(i: { topClient: boolean; offboards: boolean; changes: { key: string; enabled: boolean }[] }): string | undefined {
   // Giving access back never waits.
   if (i.changes.every((c) => c.enabled)) return undefined;
-  if (i.strategic) return 'strategic client';
+  if (i.topClient) return 'top client (Tier 1 or strategic)';
   if (i.offboards) return 'turns off every permission the client has (offboarding)';
   return undefined;
 }

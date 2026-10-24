@@ -127,7 +127,7 @@ The module decides this itself in `propose_work_item` (`spacetime/src/autonomy.t
 
 | Client | What the credit agents propose |
 |---|---|
-| Strategic (the hand-marked top 0.1%) | Always waits for a controller: tier changes, reviews, exploit alerts |
+| Top clients: Tier 1 or strategic | Always waits for a controller: tier changes, reviews, exploit alerts |
 | Everyone else, any tier, confidence at least 0.1 | Applies at once (item created `APPROVED`, `auto_applied`, audited `AUTO_APPLIED`): tier changes, reviews, exploit alerts acknowledged |
 
 Below confidence 0.1 (`MIN_AUTO_CONFIDENCE`) any proposal waits for a controller, except exploit alerts. Company policy drafts also wait when a term moves money or changes the contract (`custody_debit`, `cross_default`). A `tier_change` with an unreadable target tier is never applied.
