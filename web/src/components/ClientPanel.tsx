@@ -4,6 +4,7 @@ import { shortDate, type ClientRow, type Lever } from '../lib/clients';
 import { label, money } from '../lib/format';
 import { useSession } from '../lib/session';
 import { reducers, tables } from '../module_bindings';
+import { PERMISSION_GROUPS } from '../lib/permissions';
 import { Badge } from './Badge';
 import { Select } from './Select';
 
@@ -203,31 +204,6 @@ function leverText(l: Lever) {
   if (l.state === 'active') return l.detail || 'On';
   return l.detail || (l.state === 'off' ? 'Off' : 'Limited');
 }
-
-const PERMISSION_GROUPS = [
-  {
-    lever: 'withdrawals',
-    name: 'Custody',
-    items: [
-      { key: 'crypto_withdrawals', name: 'Crypto withdrawals' },
-      { key: 'fiat_withdrawals', name: 'Fiat withdrawals' },
-      { key: 'transfers', name: 'Transfers between portfolios' },
-      { key: 'staking', name: 'Staking' },
-    ],
-  },
-  {
-    lever: 'trading',
-    name: 'Trading',
-    items: [
-      { key: 'buy', name: 'Buy' },
-      { key: 'sell', name: 'Sell' },
-      { key: 'derivatives', name: 'Derivatives' },
-      { key: 'otc', name: 'OTC desk' },
-    ],
-  },
-  { lever: 'api', name: 'API', items: [{ key: 'api', name: 'API access' }] },
-  { lever: 'financing', name: 'Borrowing', items: [{ key: 'borrowing', name: 'New borrowing' }] },
-] as const;
 
 /**
  * People change tier and permissions the same way agents do: each change is a proposal.
