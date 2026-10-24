@@ -6,6 +6,7 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AddRmNoteReducer from "../add_rm_note_reducer";
 import AdvanceClockReducer from "../advance_clock_reducer";
 import AssignRoleReducer from "../assign_role_reducer";
 import ClaimGatewayCommandReducer from "../claim_gateway_command_reducer";
@@ -14,11 +15,16 @@ import FailGatewayCommandReducer from "../fail_gateway_command_reducer";
 import PlaceHoldReducer from "../place_hold_reducer";
 import ProposeCustodyDebitReducer from "../propose_custody_debit_reducer";
 import ProposeNoticeReducer from "../propose_notice_reducer";
+import ProposePaymentMatchReducer from "../propose_payment_match_reducer";
 import ProposeRestoreReducer from "../propose_restore_reducer";
 import ProposeRestrictionReducer from "../propose_restriction_reducer";
+import ProposeRestrictionWithBoundariesReducer from "../propose_restriction_with_boundaries_reducer";
 import ProposeWorkItemReducer from "../propose_work_item_reducer";
+import RecordAgentRunReducer from "../record_agent_run_reducer";
+import RecordInvestigationReducer from "../record_investigation_reducer";
 import RecordPolicyOutcomeReducer from "../record_policy_outcome_reducer";
 import RecordSyncErrorReducer from "../record_sync_error_reducer";
+import RecordWaitReducer from "../record_wait_reducer";
 import RemoveCashMovementReducer from "../remove_cash_movement_reducer";
 import RequestCustodyWithdrawalReducer from "../request_custody_withdrawal_reducer";
 import ResetWorldReducer from "../reset_world_reducer";
@@ -53,6 +59,7 @@ import UpsertPositionReducer from "../upsert_position_reducer";
 import UpsertPrecedentReducer from "../upsert_precedent_reducer";
 import UpsertRawRecordReducer from "../upsert_raw_record_reducer";
 
+export type AddRmNoteParams = __Infer<typeof AddRmNoteReducer>;
 export type AdvanceClockParams = __Infer<typeof AdvanceClockReducer>;
 export type AssignRoleParams = __Infer<typeof AssignRoleReducer>;
 export type ClaimGatewayCommandParams = __Infer<typeof ClaimGatewayCommandReducer>;
@@ -61,11 +68,16 @@ export type FailGatewayCommandParams = __Infer<typeof FailGatewayCommandReducer>
 export type PlaceHoldParams = __Infer<typeof PlaceHoldReducer>;
 export type ProposeCustodyDebitParams = __Infer<typeof ProposeCustodyDebitReducer>;
 export type ProposeNoticeParams = __Infer<typeof ProposeNoticeReducer>;
+export type ProposePaymentMatchParams = __Infer<typeof ProposePaymentMatchReducer>;
 export type ProposeRestoreParams = __Infer<typeof ProposeRestoreReducer>;
 export type ProposeRestrictionParams = __Infer<typeof ProposeRestrictionReducer>;
+export type ProposeRestrictionWithBoundariesParams = __Infer<typeof ProposeRestrictionWithBoundariesReducer>;
 export type ProposeWorkItemParams = __Infer<typeof ProposeWorkItemReducer>;
+export type RecordAgentRunParams = __Infer<typeof RecordAgentRunReducer>;
+export type RecordInvestigationParams = __Infer<typeof RecordInvestigationReducer>;
 export type RecordPolicyOutcomeParams = __Infer<typeof RecordPolicyOutcomeReducer>;
 export type RecordSyncErrorParams = __Infer<typeof RecordSyncErrorReducer>;
+export type RecordWaitParams = __Infer<typeof RecordWaitReducer>;
 export type RemoveCashMovementParams = __Infer<typeof RemoveCashMovementReducer>;
 export type RequestCustodyWithdrawalParams = __Infer<typeof RequestCustodyWithdrawalReducer>;
 export type ResetWorldParams = __Infer<typeof ResetWorldReducer>;
