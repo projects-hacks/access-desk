@@ -5,7 +5,8 @@ from datetime import date, timedelta
 from typing import Any
 
 from ..config import settings
-from ..models import Proposal
+from ..models import Proposal, WorkItemKind
+from ..pushback import Reader, RmReading
 from ..stdb import ReducerError
 from ..world import ClientView, Row, World, load_world
 from .base import Agent
@@ -13,8 +14,10 @@ from .base import Agent
 log = logging.getLogger("desk_agents.access_controller")
 
 LEVER_PRODUCT = {"withdrawals": "CUSTODY", "trading": "TRADING", "api": "API", "financing": "FINANCING"}
-IN_FLIGHT = {"PROPOSED", "NEEDS_INFO", "APPROVED"}
-OUR_KINDS = {"RESTRICTION", "RESTORE", "CUSTODY_DEBIT", "REMINDER", "NOVEL_CASE"}
+OPEN = {"PROPOSED", "NEEDS_INFO"}
+EXECUTED_KINDS = {"RESTRICTION", "RESTORE", "CUSTODY_DEBIT", "REMINDER"}
+OUR_KINDS = EXECUTED_KINDS | {"NOVEL_CASE"}
+LEARN_FROM = {"RESTRICTION", "CUSTODY_DEBIT", "NOVEL_CASE"}
 NEVER_PROPOSED = {"FEE_DEBIT", "FULL_FREEZE"}
 DETAIL_STEP = {
     "Prepay required": "REQUIRE_PREPAY",
@@ -39,7 +42,7 @@ STEP_WORDS = {
 
 @dataclass
 class Move:
-    """One reducer call the controller wants to make, with the reasoning it will cite."""
+    """One SpacetimeClient call the controller wants to make, with the reasoning it will cite."""
 
     action: str
     client_id: str
@@ -52,16 +55,29 @@ class AccessController(Agent):
 
     name = "access-controller"
 
+    def __init__(self, db, reader: Reader | None = None):
+        super().__init__(db)
+        self.reader = reader or Reader()
+        self.readings: dict[int, RmReading] = {}
+
     async def run(self) -> list[Proposal]:
-        world = load_world(self.db)
+        world = self.observe()
         for move in plan(world):
             self.execute(move)
         return []
 
+    def observe(self) -> World:
+        world = load_world(self.db)
+        for view in world.clients.values():
+            for note in view.rm_note:
+                if note["id"] not in self.readings and not answered(view, note["id"]):
+                    self.readings[note["id"]] = self.reader.read(note["text"], view.client["name"], world.today)
+        world.readings = self.readings
+        return world
+
     def execute(self, move: Move) -> None:
-        call = getattr(self.db, move.action)
         try:
-            call(move.client_id, **move.args)
+            getattr(self.db, move.action)(**move.args)
             log.info("[%s] %s %s: %s", self.name, move.action, move.client_id, move.summary)
         except ReducerError as e:
             log.warning("[%s] %s %s refused: %s", self.name, move.action, move.client_id, e)
@@ -72,22 +88,34 @@ def plan(world: World, escalation_days: int | None = None) -> list[Move]:
     ladder = ladders(world.capability)
     moves = []
     for view in world.clients.values():
+        moves += precedents_due(view, world)
         move = next_move(view, world, ladder, days)
         if move:
             moves.append(move)
     return moves
 
 
+def busy(view: ClientView) -> bool:
+    return any(
+        w["kind"] in OUR_KINDS and (w["state"] in OPEN or (w["state"] == "APPROVED" and w["kind"] in EXECUTED_KINDS))
+        for w in view.work_item
+    )
+
+
 def next_move(view: ClientView, world: World, ladder: dict[str, list[str]], escalation_days: int) -> Move | None:
-    if any(w["kind"] in OUR_KINDS and w["state"] in IN_FLIGHT for w in view.work_item):
+    if busy(view):
         return None
     today = world.today
+
+    reply = rm_reply(view, world)
+    if reply:
+        return reply
 
     notice = notice_owed(view, world)
     if notice:
         return notice
 
-    waiting = bool(view.in_transit) or open_promise(view)
+    waiting = bool(view.in_transit) or open_promise(view) or grace_until(view, today, escalation_days) is not None
     overdue = overdue_invoices(view, today)
     if overdue and not waiting and rejected_since(view, overdue[0]["due_on"], "CUSTODY_DEBIT") is None:
         debit = custody_debit(view, today, world.platform["auto_apply_limit_cents"])
@@ -269,7 +297,7 @@ def restriction(view: ClientView, today: str, ladder: dict[str, list[str]], esca
     return Move(
         action="propose_restriction",
         client_id=view.id,
-        args={"lever": lever, "step": step, "reasoning": " ".join(why), "policy_ref": "pol-006",
+        args={"client_id": view.id, "lever": lever, "step": step, "reasoning": " ".join(why), "policy_ref": "pol-006",
               "confidence": 0.75 if LEVER_PRODUCT[lever] not in unpaid and lever != "withdrawals" else 0.9},
         summary=f"{step} on {name}'s {lever}",
     )
@@ -308,7 +336,7 @@ def custody_debit(view: ClientView, today: str, auto_limit: int) -> Move | None:
     return Move(
         action="propose_custody_debit",
         client_id=view.id,
-        args={"invoice_ids": ids, "reasoning": reasoning, "policy_ref": "pol-005", "confidence": 0.9},
+        args={"client_id": view.id, "invoice_ids": ids, "reasoning": reasoning, "policy_ref": "pol-005", "confidence": 0.9},
         summary=f"debit {usd(total)} from {view.client['name']}'s custody",
     )
 
@@ -321,7 +349,7 @@ def restore(view: ClientView) -> Move | None:
             return Move(
                 action="propose_restore",
                 client_id=view.id,
-                args={"lever": lever["lever"], "policy_ref": "pol-011", "confidence": 0.95,
+                args={"client_id": view.id, "lever": lever["lever"], "policy_ref": "pol-011", "confidence": 0.95,
                       "reasoning": f"Nothing is in default any more; {lever['lever']} ({lever['detail']}) goes back to normal."},
                 summary=f"restore {view.client['name']}'s {lever['lever']}",
             )
@@ -339,7 +367,7 @@ def notice_owed(view: ClientView, world: World) -> Move | None:
         return Move(
             action="propose_notice",
             client_id=view.id,
-            args={"channel": "email", "body": notice_body(view, item, world, ref), "policy_ref": "pol-007",
+            args={"client_id": view.id, "channel": "email", "body": notice_body(view, item, world, ref), "policy_ref": "pol-007",
                   "confidence": 0.95, "reasoning": f"Tell the client what changed on WI-{item['id']}, why, and how to restore it."},
             summary=f"notice to {view.client['name']} about WI-{item['id']}",
         )
@@ -358,6 +386,142 @@ def notice_body(view: ClientView, item: Row, world: World, ref: str) -> str:
         "Everything else on your account is unchanged. To restore access, pay the amount past due: "
         f"{world.platform['wire_instructions']}. Access is restored automatically once payment posts. {ref}"
     )
+
+
+def note_tag(note_id: int) -> str:
+    return f"(re RM-{note_id})"
+
+
+def answered(view: ClientView, note_id: int) -> bool:
+    tag = note_tag(note_id)
+    return any(
+        w["subject_id"] == f"rm_note:{note_id}" or (w["kind"] == "REMINDER" and tag in w["proposal_json"])
+        for w in view.work_item
+    )
+
+
+def rm_reply(view: ClientView, world: World) -> Move | None:
+    for note in sorted(view.rm_note, key=lambda n: n["id"]):
+        reading = world.readings.get(note["id"])
+        if reading is None or answered(view, note["id"]):
+            continue
+        if reading.intent == "already_paid":
+            return payment_check(view, note, reading, world)
+        if reading.intent == "exception_request":
+            return exception_case(view, note, reading, world)
+    return None
+
+
+def payment_check(view: ClientView, note: Row, reading: RmReading, world: World) -> Move:
+    today = world.today
+    name = view.client["name"]
+    defaulted = defaulted_invoices(view, today)
+    owing = owed(defaulted)
+    since = min((i["due_on"] for i in defaulted), default=today)
+    recent = [m for m in view.cash if m["value_on"] >= since]
+    quoted = (reading.payment_reference or "").upper()
+    cited = [m for m in recent if quoted and (quoted in m["bank_ref"].upper() or quoted in m["memo"].upper())]
+
+    if not defaulted:
+        finding = f"Confirmed: nothing from {name} is past due any more. Any restriction is being lifted."
+    elif view.in_transit:
+        m = view.in_transit[0]
+        finding = (
+            f"We see {usd(m['amount_cents'])} {m['rail']} {m['bank_ref']} from {m['orig_name']} sent {m['value_on']}, "
+            f"not yet posted. No further restriction while it is in transit; access is restored automatically when it posts."
+        )
+    elif unmatched := [m for m in recent if m["status"] == "posted" and m["match_status"] not in ("matched", "in_transit")]:
+        m = unmatched[0]
+        finding = (
+            f"{usd(m['amount_cents'])} {m['bank_ref']} from {m['orig_name']} arrived {m['value_on']} but could not be matched "
+            f"to invoices automatically; an accountant is reviewing it. Access is restored as soon as it is applied."
+        )
+    else:
+        applied = sum(m["amount_cents"] for m in recent if m["match_status"] == "matched")
+        claimed = f" {usd(int(reading.claimed_amount_usd * 100))} payment" if reading.claimed_amount_usd else " payment"
+        finding = (
+            f"No{claimed} from {name} has reached our bank feed since {since}"
+            f"{f' (reference {reading.payment_reference} not found)' if reading.payment_reference and not cited else ''}. "
+            f"{f'{usd(applied)} was received and applied; ' if applied else ''}{usd(owing)} is still past due "
+            f"({', '.join(i['id'] for i in defaulted)}). Restrictions stay as they are. Please ask the client for the "
+            "Fed IMAD or MT103 so we can trace the wire."
+        )
+    return Move(
+        action="propose_notice",
+        client_id=view.id,
+        args={"client_id": view.id, "channel": "rm", "body": f"{finding} {note_tag(note['id'])}", "policy_ref": "pol-007",
+              "confidence": 0.9, "reasoning": f"RM {note['author']} says {name} already paid; checked the bank feed before acting."},
+        summary=f"reply to {note['author']} on {name}'s payment",
+    )
+
+
+def exception_case(view: ClientView, note: Row, reading: RmReading, world: World) -> Move:
+    today = world.today
+    name = view.client["name"]
+    defaulted = defaulted_invoices(view, today)
+    restricted = [f"{lever['lever']} ({lever['detail']})" for lever in view.access_lever if lever["state"] in ("limited", "off")]
+    past = [p for p in view.precedent if p["decision"]]
+    facts = [
+        f"{usd(owed(defaulted))} past due on {', '.join(i['id'] for i in defaulted)}." if defaulted else "Nothing is in default today.",
+        f"Restricted now: {', '.join(restricted)}." if restricted else "No restrictions in place.",
+        f"Tier {view.client['tier']}{', strategic' if view.client['strategic'] else ''}; RM {view.client['relationship_manager']}.",
+    ]
+    if past:
+        facts.append("Precedents: " + "; ".join(f"{p['decided_on']} {p['decision']} → {p['outcome']}" for p in past[-3:]) + ".")
+    facts.append("The agent cannot grant exceptions; a controller decides. Escalation is paused while this is open.")
+    proposal = Proposal(
+        kind=WorkItemKind.NOVEL_CASE,
+        client_id=view.id,
+        subject_id=f"rm_note:{note['id']}",
+        title=f"{note['author']} asks to hold off on {name}",
+        amount_cents=owed(defaulted),
+        proposal={"rmNoteId": note["id"], "request": note["text"], "graceUntil": reading.grace_until,
+                  "reason": reading.reason, "summary": reading.summary},
+        reasoning=" ".join(facts),
+        policy_ref="pol-006",
+        confidence=0.5,
+    )
+    return Move(action="propose", client_id=view.id, args={"p": proposal}, summary=proposal.title)
+
+
+def grace_until(view: ClientView, today: str, escalation_days: int) -> str | None:
+    approved_on = {a["work_item_id"]: a["sim_date"] for a in view.approvals}
+    for item in view.work_item:
+        if item["kind"] != "NOVEL_CASE" or not item["subject_id"].startswith("rm_note:") or item["id"] not in approved_on:
+            continue
+        until = json.loads(item["proposal_json"]).get("graceUntil") or add_days(approved_on[item["id"]], escalation_days)
+        if until >= today:
+            return until
+    return None
+
+
+def precedents_due(view: ClientView, world: World) -> list[Move]:
+    known = {p["id"]: p for p in view.precedent}
+    in_default = bool(defaulted_invoices(view, world.today))
+    moves = []
+    for event in view.rejections + view.approvals:
+        item = world.work_items.get(event["work_item_id"])
+        if not item or item["kind"] not in LEARN_FROM:
+            continue
+        if item["kind"] != "NOVEL_CASE" and event["to_state"] == "APPROVED":
+            continue
+        pid = f"PRC-L-{item['id']}"
+        existing = known.get(pid)
+        if existing and (existing["outcome"] != "pending" or in_default):
+            continue
+        outcome = "pending" if in_default else f"Cured by {world.today}"
+        decision = "Approved" if event["to_state"] == "APPROVED" else "Rejected"
+        row = {
+            "id": pid, "client_id": view.id, "work_item_id": {"some": item["id"]}, "decided_on": event["sim_date"],
+            "situation": item["reasoning"][:500], "proposed": item["title"], "decision": decision,
+            "override_reason": event["detail"] if decision == "Rejected" else "", "outcome": outcome,
+            "policy_ref": item["policy_ref"], "source": "live",
+        }
+        if existing:
+            row = {**existing, "work_item_id": {"some": item["id"]}, "outcome": outcome}
+        moves.append(Move(action="upsert_precedent", client_id=view.id, args={"row": row},
+                          summary=f"{'update' if existing else 'record'} precedent {pid}: {decision.lower()} · {outcome}"))
+    return moves
 
 
 def add_days(iso: str, days: int) -> str:

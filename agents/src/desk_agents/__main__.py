@@ -7,7 +7,6 @@ from .agents.base import Agent
 from .agents.credit_analyst import CreditAnalyst
 from .config import settings
 from .stdb import SpacetimeClient
-from .world import load_world
 
 log = logging.getLogger("desk_agents")
 
@@ -28,7 +27,7 @@ async def loop(agents: list[Agent], db: SpacetimeClient) -> None:
 
 
 def dry_run(db: SpacetimeClient) -> None:
-    world = load_world(db)
+    world = AccessController(db).observe()
     moves = plan(world)
     print(f"sim date {world.today} · {len(moves)} move(s)")
     for move in moves:

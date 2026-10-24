@@ -2,6 +2,7 @@ import json
 import unittest
 
 from desk_agents.agents.access_controller import plan
+from desk_agents.pushback import RmReading
 from desk_agents.world import ClientView, World
 
 TODAY = "2026-03-20"
@@ -24,7 +25,8 @@ def capability():
 def view(products=("TRADING", "CUSTODY"), owed=(("INV-1", "TRADING", 50_000_00),), debit=False, set_off=True,
          cure="expired", cure_due="2026-03-01", tier=3, usd=0, levers=None, **extra):
     v = ClientView(
-        client={"id": "ORG-1", "name": "Acme", "legal_name": "Acme LP", "tier": tier, "strategic": False},
+        client={"id": "ORG-1", "name": "Acme", "legal_name": "Acme LP", "tier": tier, "strategic": False,
+                "relationship_manager": "Priya Nair"},
         contract={"grace_days": 10, "cure_days": 15, "cross_default": False},
         invoice=[
             {"id": i, "product": p, "due_on": "2026-02-01", "amount_cents": amt, "paid_cents": 0, "status": "open"}
@@ -47,19 +49,33 @@ def view(products=("TRADING", "CUSTODY"), owed=(("INV-1", "TRADING", 50_000_00),
     return v
 
 
-def world(v, today=TODAY):
+def event(state, sim_date, item_id, kind="RESTRICTION", detail=""):
+    return {"to_state": state, "sim_date": sim_date, "work_item_id": item_id, "work_item_kind": kind, "detail": detail}
+
+
+def item(item_id, kind, state, proposal=None, subject="ORG-1", **extra):
+    return {"id": item_id, "kind": kind, "state": state, "subject_id": subject, "proposal_json": json.dumps(proposal or {}),
+            "title": f"{kind} {item_id}", "reasoning": "why", "policy_ref": "pol-006", **extra}
+
+
+def world(v, today=TODAY, readings=None):
     return World(
         today=today,
         platform={"auto_apply_limit_cents": 50_000_00, "wire_instructions": "ACCT 1"},
         capability=capability(),
         clients={v.id: v},
         work_items={w["id"]: w for w in v.work_item},
+        readings=readings or {},
     )
 
 
+def moves(v, **kw):
+    return plan(world(v, **kw), escalation_days=7)
+
+
 def only(v, **kw):
-    moves = plan(world(v, **kw), escalation_days=7)
-    return moves[0] if moves else None
+    found = [m for m in moves(v, **kw) if m.action != "upsert_precedent"]
+    return found[0] if found else None
 
 
 class AccessControllerPlan(unittest.TestCase):
@@ -102,9 +118,9 @@ class AccessControllerPlan(unittest.TestCase):
         m = only(view(levers=levers, cure_due="2026-03-01"))
         self.assertEqual((m.args["lever"], m.args["step"]), ("withdrawals", "HOLD_AMOUNT_OWED"))
         levers[0] = {"lever": "withdrawals", "state": "limited", "detail": "$500.00 held", "work_item_id": None}
-        approved_late = [{"sim_date": "2026-03-16", "work_item_kind": "RESTRICTION"}]
+        approved_late = [event("APPROVED", "2026-03-16", 5)]
         self.assertIsNone(only(view(levers=levers, cure_due="2026-03-01", approvals=approved_late)))
-        approved = [{"sim_date": "2026-03-12", "work_item_kind": "RESTRICTION"}]
+        approved = [event("APPROVED", "2026-03-12", 5)]
         m = only(view(levers=levers, cure_due="2026-03-01", approvals=approved))
         self.assertEqual((m.args["lever"], m.args["step"]), ("trading", "NO_NEW_POSITIONS"))
 
@@ -128,11 +144,11 @@ class AccessControllerPlan(unittest.TestCase):
         self.assertIsNone(m)
 
     def test_respects_controller_rejection(self):
-        v = view(rejections=[{"sim_date": "2026-03-10", "work_item_kind": "RESTRICTION"}])
+        v = view(rejections=[event("REJECTED", "2026-03-10", 5)])
         self.assertIsNone(only(v))
 
     def test_ignores_rejection_from_earlier_episode(self):
-        v = view(rejections=[{"sim_date": "2025-11-10", "work_item_kind": "RESTRICTION"}])
+        v = view(rejections=[event("REJECTED", "2025-11-10", 5)])
         self.assertEqual(only(v).action, "propose_restriction")
 
     def test_restores_once_nothing_in_default(self):
@@ -147,17 +163,96 @@ class AccessControllerPlan(unittest.TestCase):
         self.assertIsNone(only(v))
 
     def test_skips_client_with_work_in_flight(self):
-        v = view(work_item=[{"id": 9, "kind": "RESTRICTION", "state": "PROPOSED", "proposal_json": "{}"}])
+        v = view(work_item=[item(9, "RESTRICTION", "PROPOSED")])
         self.assertIsNone(only(v))
 
     def test_tells_client_after_restriction_posts(self):
-        item = {"id": 9, "kind": "RESTRICTION", "state": "POSTED",
-                "proposal_json": json.dumps({"lever": "trading", "step": "PAUSE_OTC"})}
-        m = only(view(work_item=[item]))
+        posted = item(9, "RESTRICTION", "POSTED", {"lever": "trading", "step": "PAUSE_OTC"})
+        m = only(view(work_item=[posted]))
         self.assertEqual(m.action, "propose_notice")
         self.assertIn("(ref WI-9)", m.args["body"])
-        sent = {"id": 10, "kind": "REMINDER", "state": "POSTED", "proposal_json": json.dumps({"body": m.args["body"]})}
-        self.assertNotEqual(only(view(work_item=[item, sent])).action, "propose_notice")
+        sent = item(10, "REMINDER", "POSTED", {"body": m.args["body"]})
+        self.assertNotEqual(only(view(work_item=[posted, sent])).action, "propose_notice")
+
+
+NOTE = {"id": 4, "client_id": "ORG-1", "author": "Priya Nair", "text": "...", "work_item_id": None}
+PAID = RmReading(intent="already_paid", summary="wire sent", claimed_amount_usd=50_000.0, payment_reference="IMAD123456")
+HOLD_OFF = RmReading(intent="exception_request", summary="hold off", grace_until="2026-03-31", reason="acquisition")
+
+
+def wire(status="posted", match="matched", value_on="2026-03-02", amount=50_000_00):
+    return {"amount_cents": amount, "rail": "WIRE", "bank_ref": "WI-1", "orig_name": "ACME LP", "value_on": value_on,
+            "status": status, "match_status": match, "memo": ""}
+
+
+class RmPushback(unittest.TestCase):
+    def test_already_paid_checks_bank_feed_before_anything_else(self):
+        m = only(view(rm_note=[NOTE]), readings={4: PAID})
+        self.assertEqual((m.action, m.args["channel"]), ("propose_notice", "rm"))
+        self.assertIn("No $50,000.00 payment from Acme has reached our bank feed", m.args["body"])
+        self.assertIn("IMAD123456 not found", m.args["body"])
+        self.assertIn("(re RM-4)", m.args["body"])
+
+    def test_already_paid_finds_wire_in_transit(self):
+        transit = wire(status="pending", match="in_transit")
+        m = only(view(rm_note=[NOTE], cash=[transit], in_transit=[transit]), readings={4: PAID})
+        self.assertIn("not yet posted", m.args["body"])
+
+    def test_already_paid_finds_unmatched_cash(self):
+        m = only(view(rm_note=[NOTE], cash=[wire(match="exception")]), readings={4: PAID})
+        self.assertIn("could not be matched", m.args["body"])
+
+    def test_answered_note_is_not_answered_again(self):
+        reply = item(11, "REMINDER", "POSTED", {"body": "No payment (re RM-4)"})
+        self.assertEqual(only(view(rm_note=[NOTE], work_item=[reply]), readings={4: PAID}).action, "propose_restriction")
+
+    def test_exception_request_goes_to_controller_never_self_approved(self):
+        m = only(view(rm_note=[NOTE]), readings={4: HOLD_OFF})
+        self.assertEqual(m.action, "propose")
+        p = m.args["p"]
+        self.assertEqual((p.kind.value, p.subject_id, p.required_role.value), ("NOVEL_CASE", "rm_note:4", "CONTROLLER"))
+        self.assertEqual(p.proposal["graceUntil"], "2026-03-31")
+
+    def test_open_exception_pauses_escalation(self):
+        case = item(12, "NOVEL_CASE", "PROPOSED", subject="rm_note:4")
+        self.assertIsNone(only(view(rm_note=[NOTE], work_item=[case]), readings={4: HOLD_OFF}))
+
+    def test_approved_exception_grants_grace_until_date(self):
+        case = item(12, "NOVEL_CASE", "APPROVED", {"graceUntil": "2026-03-25"}, subject="rm_note:4")
+        approvals = [event("APPROVED", "2026-03-18", 12, kind="NOVEL_CASE")]
+        self.assertIsNone(only(view(rm_note=[NOTE], work_item=[case], approvals=approvals)))
+        self.assertEqual(only(view(rm_note=[NOTE], work_item=[case], approvals=approvals), today="2026-03-26").action,
+                         "propose_restriction")
+
+    def test_rejected_exception_resumes_escalation(self):
+        case = item(12, "NOVEL_CASE", "REJECTED", subject="rm_note:4")
+        rejections = [event("REJECTED", "2026-03-18", 12, kind="NOVEL_CASE", detail="client has broken promises before")]
+        self.assertEqual(only(view(rm_note=[NOTE], work_item=[case], rejections=rejections)).action, "propose_restriction")
+
+
+class Precedents(unittest.TestCase):
+    def test_rejection_becomes_live_precedent(self):
+        rejected = item(7, "RESTRICTION", "REJECTED")
+        v = view(work_item=[rejected], rejections=[event("REJECTED", "2026-03-10", 7, detail="Too strict for this tier")])
+        rows = [m.args["row"] for m in moves(v) if m.action == "upsert_precedent"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]["id"], rows[0]["decision"], rows[0]["override_reason"], rows[0]["outcome"], rows[0]["source"]),
+                         ("PRC-L-7", "Rejected", "Too strict for this tier", "pending", "live"))
+
+    def test_routine_approval_is_not_a_precedent(self):
+        approved = item(7, "RESTRICTION", "POSTED")
+        v = view(work_item=[approved], approvals=[event("APPROVED", "2026-03-10", 7)])
+        self.assertFalse([m for m in moves(v) if m.action == "upsert_precedent"])
+
+    def test_precedent_outcome_recorded_once_cured(self):
+        rejected = item(7, "RESTRICTION", "REJECTED")
+        existing = {"id": "PRC-L-7", "client_id": "ORG-1", "work_item_id": 7, "decision": "Rejected", "outcome": "pending"}
+        v = view(owed=(), work_item=[rejected], precedent=[existing],
+                 rejections=[event("REJECTED", "2026-03-10", 7)])
+        rows = [m.args["row"] for m in moves(v) if m.action == "upsert_precedent"]
+        self.assertEqual(rows[0]["outcome"], f"Cured by {TODAY}")
+        v.precedent = [{**existing, "outcome": rows[0]["outcome"]}]
+        self.assertFalse([m for m in moves(v) if m.action == "upsert_precedent"])
 
 
 if __name__ == "__main__":

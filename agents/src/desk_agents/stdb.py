@@ -87,6 +87,10 @@ class SpacetimeClient:
         """kind: promise_to_pay | follow_up. Resolved automatically when the sim date reaches due_on."""
         self.call("set_deadline", client_id, kind, due_on, note, work_item_id)
 
+    def upsert_precedent(self, row: dict[str, Any]) -> None:
+        """A decision worth learning from. `work_item_id` is optional: pass {"some": id} or {"none": []}."""
+        self.call("upsert_precedent", row)
+
     def decide(self, work_item_id: int, to_state: str, note: str = "") -> None:
         """APPROVED | REJECTED | NEEDS_INFO | WITHDRAWN. Denied attempts are audited, not raised."""
         self.call("transition_work_item", work_item_id, to_state, note)

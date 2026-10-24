@@ -7,7 +7,7 @@ Row = dict[str, Any]
 
 PER_CLIENT = [
     "invoice", "dispute", "contract_clause", "access_lever", "hold", "custody_holding", "position",
-    "work_item", "deadline", "payer_identity", "exploit_flag", "rm_note",
+    "work_item", "deadline", "payer_identity", "exploit_flag", "rm_note", "precedent",
 ]
 
 
@@ -27,6 +27,8 @@ class ClientView:
     payer_identity: list[Row] = field(default_factory=list)
     exploit_flag: list[Row] = field(default_factory=list)
     rm_note: list[Row] = field(default_factory=list)
+    precedent: list[Row] = field(default_factory=list)
+    cash: list[Row] = field(default_factory=list)
     in_transit: list[Row] = field(default_factory=list)
     rejections: list[Row] = field(default_factory=list)
     approvals: list[Row] = field(default_factory=list)
@@ -43,6 +45,7 @@ class World:
     capability: list[Row]
     clients: dict[str, ClientView]
     work_items: dict[int, Row]
+    readings: dict[int, Any] = field(default_factory=dict)
 
 
 def load_world(db: SpacetimeClient) -> World:
@@ -69,9 +72,10 @@ def load_world(db: SpacetimeClient) -> World:
             if view and item and row["allowed"]:
                 getattr(view, target).append({**row, "work_item_kind": item["kind"]})
 
-    pending = db.sql("SELECT * FROM cash_movement WHERE match_status = 'in_transit'")
+    incoming = [m for m in db.sql("SELECT * FROM cash_movement WHERE is_history = false") if m["direction"] == "in"]
     for view in views.values():
-        view.in_transit = [m for m in pending if m["direction"] == "in" and paid_by(view, m)]
+        view.cash = [m for m in incoming if paid_by(view, m)]
+        view.in_transit = [m for m in view.cash if m["match_status"] == "in_transit"]
 
     return World(
         today=clock["sim_date"],
