@@ -538,3 +538,4 @@ th.num .sort { width: 100%; text-align: right; }
   .cx-content { padding: 16px; }
 }
 .cx-tag.na { background: var(--surface-2); color: var(--faint); }
+.table td.ask { min-width: 260px; font-weight: 500; line-height: 1.4; }

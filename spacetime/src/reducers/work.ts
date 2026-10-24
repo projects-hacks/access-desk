@@ -1,6 +1,6 @@
 import { SenderError, t } from 'spacetimedb/server';
 import { actorOf, audit, requireRole } from '../context';
-import { isGoverned, needsHuman } from '../autonomy';
+import { needsHuman } from '../autonomy';
 import { CAN_APPROVE, CAN_POST, type Role } from '../roles';
 import { spacetimedb } from '../schema';
 import { canTransition, type WorkItemState } from '../workflow';
@@ -25,17 +25,15 @@ export const proposeWorkItem = spacetimedb.reducer(
   },
   (ctx, args) => {
     requireRole(ctx, ['AGENT', 'SYNC', 'ADMIN']);
-    // Credit proposals for tier 3 to 5 clients apply on their own unless they are a worst case
-    // (autonomy.ts); everything for tier 1 and 2 clients waits for a controller.
+    // Every agent proposal applies on its own unless autonomy.ts says a person decides (a top
+    // client, an exploit fix, or confidence under the floor). No client means none of the
+    // client rules apply.
     const client = ctx.db.client.id.find(args.clientId);
-    let reason: string | undefined = 'unknown client';
-    if (client) {
-      reason = needsHuman({
-        kind: args.kind, tier: client.tier, strategic: client.strategic, confidence: args.confidence,
-        proposal: safeJson(args.proposalJson),
-      });
-    }
-    const auto = isGoverned(args.kind) && args.requiredRole === 'CONTROLLER' && reason === undefined;
+    const reason = needsHuman({
+      kind: args.kind, tier: client?.tier ?? 5, strategic: client?.strategic ?? false, confidence: args.confidence,
+      proposal: safeJson(args.proposalJson),
+    });
+    const auto = reason === undefined;
     const state = auto ? 'APPROVED' : 'PROPOSED';
     const item = ctx.db.workItem.insert({
       id: 0n,
@@ -49,7 +47,7 @@ export const proposeWorkItem = spacetimedb.reducer(
       createdAt: ctx.timestamp,
       updatedAt: ctx.timestamp,
     });
-    const why = isGoverned(args.kind) ? (auto ? `auto-approved: tier ${client?.tier} client, a regular case` : `needs a person: ${reason}`) : '';
+    const why = auto ? 'auto-approved' : `needs a person: ${reason}`;
     audit(ctx, {
       action: auto ? 'AUTO_APPLIED' : 'PROPOSE', subjectType: 'work_item', subjectId: String(item.id), clientId: args.clientId,
       workItemId: item.id, fromState: 'NEW', toState: state, detail: why ? `${args.title} · ${why}` : args.title,

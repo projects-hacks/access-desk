@@ -122,7 +122,7 @@ export function AuditLog() {
     <section>
       <div className="screen-head">
         <div>
-          <h2>Activity</h2>
+          <h2>Audit log</h2>
           <p className="muted">
             Everything that took effect, newest first: what the agents did, and what people changed
             after them.
@@ -130,7 +130,7 @@ export function AuditLog() {
         </div>
       </div>
 
-      <div className="filters" role="toolbar" aria-label="Filter activity">
+      <div className="filters" role="toolbar" aria-label="Filter the audit log">
         <input
           type="search"
           className="search"
@@ -140,7 +140,7 @@ export function AuditLog() {
             setQuery(e.target.value);
             setLimit(PAGE);
           }}
-          aria-label="Search activity"
+          aria-label="Search the audit log"
         />
         <div className="segmented">
           <SlidingPill active={filter} className="dark" />
@@ -163,7 +163,7 @@ export function AuditLog() {
       </div>
 
       {!ready ? (
-        <div className="empty">Loading activity…</div>
+        <div className="empty">Loading the audit log…</div>
       ) : days.length === 0 ? (
         <div className="empty">
           {filter === 'people'

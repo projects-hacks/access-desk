@@ -1,8 +1,10 @@
 import { SenderError, t } from 'spacetimedb/server';
+import { lowConfidence } from '../autonomy';
 import { audit, requireRole, type Ctx } from '../context';
 import { candidates, createWorkItem, setMatchStatus } from '../payments/apply';
 import { formatUsd, planMatch } from '../payments/match';
 import { spacetimedb } from '../schema';
+import { onPaymentApproved } from './payments';
 
 const OPEN = ['PROPOSED', 'NEEDS_INFO'];
 
@@ -44,16 +46,19 @@ export const proposePaymentMatch = spacetimedb.reducer(
       ? { kind: 'bank_account', value: m.origAccount, label: `${m.origName} · pays for ${c.name}` }
       : undefined;
 
+    // The agent applies it itself; only below the confidence floor does a person confirm it.
+    const auto = !lowConfidence(confidence);
     setMatchStatus(ctx, m.id, 'proposed');
     const invoices = plan.allocations.map((a) => a.invoiceId).join(', ');
     const item = createWorkItem(ctx, {
       kind: 'PAYMENT_MATCH', clientId, subjectId: m.id, amountCents: m.amountCents,
-      title: `Confirm ${formatUsd(m.amountCents)} from ${m.origName} → ${invoices} (${c.name})`,
+      title: `${auto ? 'Matched' : 'Confirm'} ${formatUsd(m.amountCents)} from ${m.origName} → ${invoices} (${c.name})`,
       proposal: { movementId: m.id, plan, newIdentity, rmNoteId, proposedBy: 'agent' },
-      reasoning: `${reasoning} ${plan.basis}.${newIdentity ? ` Account ${m.origAccount} is added to ${c.name}'s payers on approval.` : ''}`,
-      policyRef: 'pol-004', confidence, requiredRole: 'ACCOUNTANT', autoApplied: false,
+      reasoning: `${reasoning} ${plan.basis}.${newIdentity ? ` Account ${m.origAccount} is added to ${c.name}'s payers.` : ''}`,
+      policyRef: 'pol-004', confidence, requiredRole: 'ACCOUNTANT', autoApplied: auto,
     });
     ctx.db.workItem.id.update({ ...item, boundariesJson: evidenceJson });
+    if (auto) onPaymentApproved(ctx, item.id);
   },
 );
 

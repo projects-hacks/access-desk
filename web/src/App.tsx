@@ -3,6 +3,7 @@ import { useTable } from 'spacetimedb/react';
 import { SlidingPill } from './components/SlidingPill';
 import { Splash } from './components/Splash';
 import { SessionPill, TopBar } from './components/TopBar';
+import { reasonFor } from './lib/autonomy';
 import { tables } from './module_bindings';
 import { AuditLog } from './screens/AuditLog';
 import { ClientPortal } from './screens/ClientPortal';
@@ -14,7 +15,7 @@ const SCREENS = {
   clients: { label: 'Clients', component: Clients },
   approvals: { label: 'Approvals', component: WorkQueue },
   credit: { label: 'Credit', component: CreditDesk },
-  activity: { label: 'Activity', component: AuditLog },
+  audit: { label: 'Audit log', component: AuditLog },
   portal: { label: 'Client view', component: ClientPortal },
 } as const;
 
@@ -27,11 +28,17 @@ export function App() {
     return hash in SCREENS ? (hash as ScreenKey) : 'clients';
   });
   const [items, itemsReady] = useTable(tables.workItem);
-  const [, clientsReady] = useTable(tables.client);
+  const [clients, clientsReady] = useTable(tables.client);
   // The page waits under the loader; its reveal animations start when the loader leaves.
   const [booting, setBooting] = useState(true);
+  // Same count as the Approvals tab: open items the agent asked a person about.
   const waiting = items.filter(
-    (w) => (w.state === 'PROPOSED' || w.state === 'NEEDS_INFO') && !w.autoApplied,
+    (w) =>
+      (w.state === 'PROPOSED' || w.state === 'NEEDS_INFO') &&
+      reasonFor(
+        w,
+        clients.find((c) => c.id === w.clientId),
+      ),
   ).length;
   const Screen = SCREENS[screen].component;
   return (

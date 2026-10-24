@@ -130,7 +130,7 @@ await demo.reducers.requestCustodyWithdrawal({ clientId: COBALT, amountCents: 13
 await settle();
 const cobaltReq = [...db.accessRequest.iter()].filter((a) => a.clientId === COBALT).sort((a, b) => (a.id < b.id ? 1 : -1))[0];
 check(cobaltReq?.allowedCents === 135_000_000n, 'Next $1.35M honored in full: no restriction before the cure period ends (§9.1)');
-check(flags().length === 1 && flags()[0]!.state === 'PROPOSED', 'Flagged to the controller: custody left below the amount in default', `${flags().length}`);
+check(flags().length === 1 && flags()[0]!.autoApplied, 'Flagged (an alert, no approval): custody left below the amount in default', `${flags().length}`);
 check([...db.exploitFlag.iter()].some((f) => f.clientId === COBALT && f.pattern === 'withdrawal_during_cure'), 'Exploit flag recorded for the agents');
 
 console.log('\nTime (scheduled reducer)');

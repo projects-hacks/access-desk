@@ -302,7 +302,7 @@ function flagCureWithdrawal(ctx: Ctx, name: string, clientId: string, requestId:
   createWorkItem(ctx, {
     kind: 'EXPLOIT_FLAG', clientId, subjectId: `access_request:${requestId}`, amountCents: releasedCents,
     title: `${name} withdrew ${formatUsd(releasedCents)} during its cure period`,
-    proposal: evidence, policyRef: 'pol-006', confidence: 0.9, requiredRole: 'CONTROLLER', autoApplied: false,
+    proposal: evidence, policyRef: 'pol-006', confidence: 0.9, requiredRole: 'CONTROLLER', autoApplied: true,
     reasoning: `In default on ${formatUsd(inDefaultCents)} with the cure period running until ${cure.dueOn}. The withdrawal had to be honored (§9.1), `
       + `and custody cash is now ${formatUsd(leftCents)}, below what is in default.`,
   });

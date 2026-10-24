@@ -66,14 +66,14 @@ check(quillon?.status === 'open' && quillon.paidCents === 0n, 'Quillon: ACH auto
 check(items('ORG-90689', 'PAYMENT_REVERSAL').length === 1, 'Quillon: reversal recorded as a work item');
 const dupRefs = ds.movements.filter((m) => m.caseId === 'duplicate-wire').map((m) => m.id).sort();
 const dup = cash(dupRefs[1]!);
-check(allPaid(invoices('ORG-90391', '2026-01')) && items('ORG-90391', 'REFUND').length === 1, 'Granite Bay: second wire flagged, refund proposed to controller');
+check(allPaid(invoices('ORG-90391', '2026-01')) && items('ORG-90391', 'DUPLICATE_PAYMENT').some((w) => w.autoApplied), 'Granite Bay: second wire flagged as a duplicate and kept as credit, no approval');
 check(dup?.matchStatus === 'exception' && credits('ORG-90391', 'unapplied_cash') === 5_800_000n, 'Granite Bay: duplicate held as unapplied cash');
 check(cash(ref('in-transit'))?.matchStatus === 'in_transit' && invoices('ORG-90463', '2026-01').every((i) => i.status === 'open'),
   'Ivory Lane: wire in transit, invoices untouched');
 const harbor = items('ORG-90378', 'PAYMENT_MATCH')[0];
-check(harbor?.state === 'PROPOSED' && invoices('ORG-90378', '2026-01').every((i) => i.status === 'open'),
-  'Harbor & Pine: new account → proposed for accountant, not applied', harbor?.state);
-check([...db.workItem.iter()].some((w) => w.kind === 'UNIDENTIFIED_CASH' && w.state === 'PROPOSED'), 'Unknown wallet: sent to accountant');
+check(!!harbor?.autoApplied && allPaid(invoices('ORG-90378', '2026-01')) && [...db.payerIdentity.iter()].some((p) => p.clientId === 'ORG-90378' && p.label.includes('new account')),
+  'Harbor & Pine: new account matched by name and amount, applied, account added to the CRM', harbor?.state);
+check([...db.workItem.iter()].some((w) => w.kind === 'UNIDENTIFIED_CASH' && w.autoApplied), 'Unknown wallet: parked as unapplied cash, no approval');
 const kestrel = invoices('ORG-90412', '2026-01');
 check(kestrel.filter((i) => i.status === 'open').reduce((s, i) => s + i.amountCents, 0n) === 14_820_000n && kestrel.some((i) => i.status === 'disputed'),
   'Kestrel: $148,200.00 open, overage protected as disputed');

@@ -4,7 +4,7 @@ import { Badge, StateBadge } from '../components/Badge';
 import { SlidingPill } from '../components/SlidingPill';
 import { LeverChips, stateAfter, useLevers } from '../components/LeverChips';
 import { label, money, parseJson, percent } from '../lib/format';
-import { waitingReason } from '../lib/autonomy';
+import { REASONS, reasonFor, waitingReason } from '../lib/autonomy';
 import { useSession } from '../lib/session';
 import { reducers, tables } from '../module_bindings';
 import type {
@@ -17,19 +17,21 @@ import type {
 
 const OPEN = ['PROPOSED', 'NEEDS_INFO'];
 
+/** Pills: everything waiting, one per reason a person is asked, and what people already decided. */
 const FILTERS = {
-  needs: {
-    label: 'Needs a person',
-    test: (w: WorkItem) => OPEN.includes(w.state) && !w.autoApplied,
-  },
-  auto: { label: 'Auto-applied', test: (w: WorkItem) => w.autoApplied },
-  done: { label: 'Decided', test: (w: WorkItem) => !OPEN.includes(w.state) && !w.autoApplied },
-  all: { label: 'All', test: () => true },
+  waiting: { label: 'Waiting', reason: undefined, open: true },
+  top: { label: 'Top clients', reason: 'top', open: true },
+  offboarding: { label: 'Offboarding', reason: 'offboarding', open: true },
+  exploit: { label: 'Exploit fixes', reason: 'exploit', open: true },
+  decided: { label: 'Decided', reason: undefined, open: false },
 } as const;
 
 type FilterKey = keyof typeof FILTERS;
 
-/** Items the agents and payment checking proposed; people approve the ones policy doesn't cover. */
+/**
+ * The agent acts on its own; this is the short list it asks a person about:
+ * restricting a top client, offboarding, and exploit fixes to the tier guidelines.
+ */
 export function WorkQueue() {
   const [items] = useTable(tables.workItem);
   const [clients] = useTable(tables.client);
@@ -39,14 +41,33 @@ export function WorkQueue() {
   const [clauses] = useTable(tables.contractClause);
   const [decisions] = useTable(tables.decision);
   const [audit] = useTable(tables.auditEvent);
-  const [filter, setFilter] = useState<FilterKey>('needs');
+  const [filter, setFilter] = useState<FilterKey>('waiting');
+  const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<bigint>();
 
-  const clientName = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
-  const sorted = useMemo(() => [...items].sort((a, b) => (a.id < b.id ? 1 : -1)), [items]);
-  const shown = sorted.filter(FILTERS[filter].test);
+  // Only items a person was asked about; everything the agent did alone is in the Audit log.
+  const asked = useMemo(
+    () =>
+      items
+        .filter((w) => !w.autoApplied && reasonFor(w, clientById.get(w.clientId)))
+        .sort((a, b) => (a.id < b.id ? 1 : -1)),
+    [items, clientById],
+  );
+  const test = (key: FilterKey) => (w: WorkItem) => {
+    const f = FILTERS[key];
+    if (f.open !== OPEN.includes(w.state)) return false;
+    return !f.reason || reasonFor(w, clientById.get(w.clientId)) === f.reason;
+  };
+  const shown = asked.filter((w) => {
+    if (!test(filter)(w)) return false;
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const c = clientById.get(w.clientId);
+    const text = [w.title, c?.name, c?.id, c?.segment].join(' ').toLowerCase();
+    return words.every((x) => text.includes(x));
+  });
   const open = items.find((w) => w.id === openId);
+  const openClient = open ? clientById.get(open.clientId) : undefined;
 
   return (
     <section>
@@ -54,13 +75,21 @@ export function WorkQueue() {
         <div>
           <h2>Approvals</h2>
           <p className="muted">
-            Everything the agents proposed. Policy approves routine items on its own; the rest wait
-            for a person.
+            The agent acts on its own. It only asks you to restrict a top client, offboard a client,
+            or change the tier guidelines to fix an exploit.
           </p>
         </div>
       </div>
 
       <div className="filters" role="toolbar" aria-label="Filter approvals">
+        <input
+          type="search"
+          className="search"
+          placeholder="Search clients or requests…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search approvals"
+        />
         <div className="segmented">
           <SlidingPill active={filter} className="dark" />
           {(Object.keys(FILTERS) as FilterKey[]).map((key) => (
@@ -72,7 +101,7 @@ export function WorkQueue() {
               onClick={() => setFilter(key)}
             >
               {FILTERS[key].label}
-              <span className="count">{items.filter(FILTERS[key].test).length}</span>
+              <span className="count">{asked.filter(test(key)).length}</span>
             </button>
           ))}
         </div>
@@ -80,66 +109,88 @@ export function WorkQueue() {
 
       {shown.length === 0 ? (
         <div className="empty">
-          {filter === 'needs' ? 'Nothing waiting on a person.' : 'No items here yet.'}
+          {query
+            ? `Nothing matches “${query}”.`
+            : filter === 'decided'
+              ? 'Nothing decided yet.'
+              : 'Nothing waiting. The agent handled everything else on its own; see the Audit log.'}
         </div>
       ) : (
         <div className="table-wrap">
-          <table className="table">
+          <table className="table clients">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Item</th>
                 <th>Client</th>
+                <th>Tier</th>
+                <th>What the agent wants</th>
+                <th>Why it's asking</th>
                 <th className="num">Amount</th>
-                <th className="num">Conf.</th>
                 <th>Status</th>
+                <th aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
-              {shown.map((w, i) => (
-                <tr
-                  key={String(w.id)}
-                  style={{ '--row': Math.min(i, 14) } as CSSProperties}
-                  className={`${w.id === openId ? 'selected' : ''} ${
-                    OPEN.includes(w.state) && !w.autoApplied ? 'attention' : ''
-                  }`}
-                  onClick={() => setOpenId(w.id)}
-                >
-                  <td className="mono muted">{String(w.id).padStart(3, '0')}</td>
-                  <td>
-                    <span className="tag">{label(w.kind)}</span>
-                    <div className="title">{w.title}</div>
-                  </td>
-                  <td>
-                    {w.clientId ? (
-                      <>
-                        <div>{clientName.get(w.clientId) ?? w.clientId}</div>
-                        <LeverChips
-                          states={levers.states[w.clientId] ?? {}}
-                          details={levers.details[w.clientId]}
-                        />
-                      </>
-                    ) : (
-                      <span className="muted">{noClient(w.kind)}</span>
-                    )}
-                  </td>
-                  <td className="num">{w.amountCents ? money(w.amountCents) : '—'}</td>
-                  <td className="num">
-                    <Confidence value={w.confidence} />
-                  </td>
-                  <td>
-                    <StateBadge state={w.state} />
-                    {w.autoApplied && (
-                      <div>
-                        <Badge tone="info">auto · policy</Badge>
+              {shown.map((w, i) => {
+                const c = clientById.get(w.clientId);
+                const r = reasonFor(w, c);
+                return (
+                  <tr
+                    key={String(w.id)}
+                    style={{ '--row': Math.min(i, 14) } as CSSProperties}
+                    className={w.id === openId ? 'selected' : ''}
+                    onClick={() => setOpenId(w.id)}
+                  >
+                    <td>
+                      <div className="title">{c?.name ?? noClient(w.kind)}</div>
+                      <div className="eyebrow">
+                        {c ? (
+                          <>
+                            {c.segment} · <span className="mono">{c.id}</span>
+                          </>
+                        ) : w.kind === 'POLICY_DRAFT' ? (
+                          'Guideline change'
+                        ) : (
+                          label(w.kind)
+                        )}
                       </div>
-                    )}
-                    {waitingReason(w, clientById.get(w.clientId)) && (
-                      <div className="eyebrow">{waitingReason(w, clientById.get(w.clientId))}</div>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="muted">{c ? `T${c.tier}` : '—'}</td>
+                    <td className="ask">
+                      {w.title}
+                      <div className="eyebrow">
+                        Agent {Math.round(w.confidence * 100)}% sure · {label(w.kind)}
+                      </div>
+                    </td>
+                    <td>
+                      {r && (
+                        <>
+                          <Badge tone={r === 'exploit' ? 'bad' : r === 'top' ? 'info' : 'warn'}>
+                            {REASONS[r].label}
+                          </Badge>
+                          <div className="eyebrow">{REASONS[r].note}</div>
+                        </>
+                      )}
+                    </td>
+                    <td className="num">
+                      {w.amountCents ? money(w.amountCents) : <span className="muted">—</span>}
+                    </td>
+                    <td>
+                      <StateBadge state={w.state} />
+                    </td>
+                    <td>
+                      <button
+                        className="btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenId(w.id);
+                        }}
+                      >
+                        {OPEN.includes(w.state) ? 'Review' : 'View'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -148,8 +199,8 @@ export function WorkQueue() {
       {open && (
         <Drawer
           item={open}
-          clientName={clientName.get(open.clientId)}
-          waiting={waitingReason(open, clientById.get(open.clientId))}
+          clientName={openClient?.name}
+          waiting={waitingReason(open, openClient)}
           levers={levers}
           data={{ policies, clauses, decisions, audit }}
           onClose={() => setOpenId(undefined)}
@@ -159,8 +210,9 @@ export function WorkQueue() {
   );
 }
 
-/** Items without a client: cash nobody claimed, or the books as a whole. */
+/** Items without a client: a change to a whole tier's guidelines, or platform-wide. */
 function noClient(kind: string) {
+  if (kind === 'POLICY_DRAFT') return 'All clients on the tier';
   return kind.startsWith('UNIDENTIFIED') ? 'Unknown payer' : 'Platform-wide';
 }
 
