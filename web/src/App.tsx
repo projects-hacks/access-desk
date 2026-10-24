@@ -16,7 +16,11 @@ const SCREENS = {
 type ScreenKey = keyof typeof SCREENS;
 
 export function App() {
-  const [screen, setScreen] = useState<ScreenKey>('queue');
+  // A link like /#credit opens that screen directly.
+  const [screen, setScreen] = useState<ScreenKey>(() => {
+    const hash = window.location.hash.slice(1);
+    return hash in SCREENS ? (hash as ScreenKey) : 'queue';
+  });
   const Screen = SCREENS[screen].component;
   return (
     <div className="layout">

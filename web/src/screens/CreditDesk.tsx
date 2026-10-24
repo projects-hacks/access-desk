@@ -135,6 +135,7 @@ export function CreditDesk() {
       </header>
       {error && <p className="banner bad">{error}</p>}
       <Accuracy />
+      <Feed audit={audit} items={credit} nameOf={nameOf} tierOf={(id) => clients.find((c) => c.id === id)?.tier ?? 0} />
 
       <div className="credit-grid">
         <div>
@@ -419,10 +420,18 @@ interface Backtest {
 }
 
 /** The engine replayed at past month-ends against what clients actually did (credit/backtest.py). */
+interface ClaudeBacktest {
+  decisions: number; agree: number; disagree: number; claude_right_when_disagree: number; rules_right_when_disagree: number;
+  calls: number; cost_usd: number;
+  rows: { cutoff: string; client: string; rules: string; claude: string; agree: boolean; claude_right: boolean | null; rules_right: boolean | null; late_after: number; due_after: number }[];
+}
+
 function Accuracy() {
   const [r, setR] = useState<Backtest>();
+  const [c, setC] = useState<ClaudeBacktest>();
   useEffect(() => {
     fetch('/credit-backtest.json').then((x) => (x.ok ? x.json() : undefined)).then(setR).catch(() => setR(undefined));
+    fetch('/credit-backtest-claude.json').then((x) => (x.ok ? x.json() : undefined)).then(setC).catch(() => setC(undefined));
   }, []);
   if (!r) return null;
   const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -451,12 +460,128 @@ function Accuracy() {
           <p className="big">{r.tiers.held}/{r.tiers.n}</p>
           <p>downgrades <b>{r.tiers.downgrades.held}/{r.tiers.downgrades.n}</b> · upgrades <b>{r.tiers.upgrades.held}/{r.tiers.upgrades.n}</b></p>
         </div>
+        {c && (
+          <div>
+            <h4>Claude vs the rules</h4>
+            <p className="big">{c.claude_right_when_disagree}/{c.disagree} <small>Claude right where they differed</small></p>
+            <p>rules right {c.rules_right_when_disagree}/{c.disagree} · agreed on {c.agree} of {c.decisions} decisions · {c.calls} calls, ${c.cost_usd.toFixed(2)}</p>
+          </div>
+        )}
         <div>
           <h4>Exploits</h4>
           <p className="big">{r.exploits.caught.length}/{r.exploits.planted.length} <small>caught</small></p>
           <p>{r.exploits.false_alarms.length} false alarms now{r.exploits.false_alarms_any_cutoff.length ? ` · earlier: ${r.exploits.false_alarms_any_cutoff.join(', ')}` : ''}</p>
         </div>
       </div>
+      {c && !!c.disagree && (
+        <table className="acc-diff">
+          <thead><tr><th>Month-end</th><th>Client</th><th>Rules said</th><th>Claude said</th><th>Next 90 days</th><th>Who was right</th></tr></thead>
+          <tbody>
+            {c.rows.filter((x) => !x.agree).map((x) => (
+              <tr key={`${x.cutoff}-${x.client}`}>
+                <td>{x.cutoff}</td><td>{x.client}</td><td>{x.rules}</td><td>{x.claude}</td>
+                <td>{x.late_after} of {x.due_after} invoices &gt;10 days late</td>
+                <td className={x.claude_right && !x.rules_right ? 'ok' : x.rules_right && !x.claude_right ? 'bad' : ''}>
+                  {x.claude_right && !x.rules_right ? 'Claude' : x.rules_right && !x.claude_right ? 'rules' : 'tie'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </details>
+  );
+}
+
+type AuditRow = {
+  id: bigint; at: { toDate(): Date }; actorRole: string; action: string; clientId: string; workItemId?: bigint;
+  fromState: string; toState: string; detail: string; allowed: boolean;
+};
+type ItemRow = { id: bigint; kind: string; state: string; title: string; proposalJson: string; reasoning: string; clientId: string };
+
+const FEED_ACTIONS = new Set(['PROPOSE', 'CREDIT_SCORED', 'TIER_CHANGED', 'POLICY_ACTIVATED', 'POLICY_REJECTED', 'TRANSITION']);
+
+/**
+ * Everything the agents and the controller just did, newest first, every
+ * decision already open: no clicking through clients to see why.
+ */
+function Feed({ audit, items, nameOf, tierOf }: {
+  audit: readonly AuditRow[]; items: readonly ItemRow[]; nameOf: (id: string) => string; tierOf: (id: string) => number;
+}) {
+  const itemOf = new Map(items.map((w) => [w.id, w]));
+  const rows = audit
+    .filter((a) => FEED_ACTIONS.has(a.action) && (!a.workItemId || itemOf.has(a.workItemId) || a.action === 'TIER_CHANGED'))
+    .filter((a) => a.action !== 'TRANSITION' || a.toState === 'APPROVED' || a.toState === 'REJECTED')
+    .sort((a, b) => Number(b.id - a.id))
+    .slice(0, 80);
+  const decisions = items.filter((w) => w.kind !== 'EXPLOIT_FLAG').map((w) => parse<DecisionMeta>(w.proposalJson));
+  const byClaude = decisions.filter((m) => m?.decided_by === 'claude');
+  const differs = byClaude.filter((m) => m?.choice && m.baseline
+    && (m.choice.action !== m.baseline.action || m.choice.to_tier !== m.baseline.to_tier));
+  return (
+    <section className="feed">
+      <div className="feed-head">
+        <h3>Live: what the agents are doing</h3>
+        <span className="muted">
+          {byClaude.length} decided by Claude · {decisions.length - byClaude.length} by rules · Claude differs from the rules on {differs.length}
+          {' '}· {items.filter((w) => w.kind === 'EXPLOIT_FLAG').length} exploit alerts
+        </span>
+      </div>
+      {!rows.length && <p className="muted">Waiting for the first agent cycle…</p>}
+      <ol className="feed-list">
+        {rows.map((a) => {
+          const w = a.workItemId ? itemOf.get(a.workItemId) : undefined;
+          const time = a.at.toDate().toLocaleTimeString();
+          const who = <span className={`who ${a.actorRole.toLowerCase()}`}>{a.actorRole === 'AGENT' ? 'agent' : a.actorRole.toLowerCase()}</span>;
+          if (a.action === 'CREDIT_SCORED') {
+            return <li key={String(a.id)} className="ev score"><time>{time}</time>{who}<b>{nameOf(a.clientId)}</b> scored · {a.toState}<span className="muted"> · {a.detail}</span></li>;
+          }
+          if (a.action === 'TIER_CHANGED') {
+            return <li key={String(a.id)} className={`ev tier ${a.allowed ? '' : 'denied'}`}><time>{time}</time>{who}<b>{nameOf(a.clientId)}</b> tier {a.fromState} → <b>{a.toState}</b>{a.allowed ? '' : ` refused: ${a.detail}`}</li>;
+          }
+          if (a.action === 'POLICY_ACTIVATED' || a.action === 'POLICY_REJECTED') {
+            return <li key={String(a.id)} className="ev policy"><time>{time}</time>{who}<b>{nameOf(a.clientId)}</b> policy {a.action === 'POLICY_ACTIVATED' ? 'now active' : 'rejected'}<span className="muted"> · {a.detail}</span></li>;
+          }
+          if (a.action === 'TRANSITION' && w) {
+            return <li key={String(a.id)} className={`ev verdict ${a.toState.toLowerCase()}`}><time>{time}</time>{who}<b>{a.toState === 'APPROVED' ? 'approved' : 'rejected'}</b> {w.title}{a.detail ? <span className="muted"> · “{a.detail}”</span> : ''}</li>;
+          }
+          if (a.action === 'PROPOSE' && w) return <FeedDecision key={String(a.id)} time={time} w={w} tier={tierOf(w.clientId)} />;
+          return null;
+        })}
+      </ol>
+    </section>
+  );
+}
+
+function FeedDecision({ time, w, tier }: { time: string; w: ItemRow; tier: number }) {
+  const m = parse<DecisionMeta & { from_tier?: number; severity?: string; measured?: string; decided_by?: string }>(w.proposalJson);
+  const from = m?.from_tier ?? tier;
+  if (w.kind === 'EXPLOIT_FLAG') {
+    return (
+      <li className="ev flag">
+        <time>{time}</time><span className="who agent">ExploitWatch</span>
+        <b>{w.title}</b> <span className="pill flagged">{m?.severity ?? 'alert'}</span>{m?.decided_by === 'claude' && <span className="pill by-claude">judged by Claude</span>}
+        <p>{w.reasoning}</p>
+      </li>
+    );
+  }
+  const c = m?.choice;
+  const differs = c && m?.baseline && (c.action !== m.baseline.action || c.to_tier !== m.baseline.to_tier);
+  return (
+    <li className={`ev decision ${differs ? 'differs' : ''}`}>
+      <time>{time}</time><span className="who agent">Credit Analyst</span>
+      <b>{w.title}</b>{' '}
+      <span className={`pill by-${m?.decided_by ?? 'rules'}`}>{m?.decided_by === 'claude' ? 'Claude decided' : 'rules decided'}</span>
+      {differs && <span className="pill differs">differs from rules</span>}
+      <span className={`pill ${w.state.toLowerCase()}`}>{w.state}</span>
+      <div className="vs">
+        <span>rules: <b>{m?.baseline ? actionText(m.baseline.action, from, m.baseline.to_tier) : '—'}</b></span>
+        {c && <span>Claude: <b>{actionText(c.action, from, c.to_tier)}</b>{c.policy ? ` + ${c.policy.kind === 'company_draft' ? 'new policy' : c.policy.policy_id}` : ''} · confidence {c.confidence.toFixed(2)}</span>}
+        {m?.why && <span className="muted">asked because {m.why}</span>}
+      </div>
+      {c ? <ul>{c.reasons.slice(0, 3).map((r) => <li key={r}>{r}</li>)}</ul> : <p>{w.reasoning}</p>}
+      {c?.policy && <p className="muted">Policy “{c.policy.title}”: {c.policy.terms.map(termText).join('; ')} · success when {c.policy.success_criteria.map(criterionText).join('; ')}</p>}
+      {!!c?.cited_invoice_ids.length && <p className="muted">Evidence: {c.cited_invoice_ids.join(', ')}</p>}
+    </li>
   );
 }

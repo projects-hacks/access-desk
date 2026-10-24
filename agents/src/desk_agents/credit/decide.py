@@ -100,8 +100,11 @@ class DecisionUnavailable(Exception):
     """The call could not produce an answer (timeout, refusal, cut off)."""
 
 
-def claude_ask() -> Ask | None:
-    """The real call, or None with no key (then every decision falls back to the rules)."""
+def claude_ask(usage: list[Any] | None = None) -> Ask | None:
+    """
+    The real call, or None with no key (then every decision falls back to the rules).
+    `usage` collects each response's token usage (the backtest reports its cost).
+    """
     if not settings.anthropic_api_key:
         return None
     client = anthropic.Anthropic(
@@ -113,6 +116,8 @@ def claude_ask() -> Ask | None:
             model=settings.anthropic_model, max_tokens=MAX_TOKENS, messages=messages,
             output_config={"effort": "low", "format": {"type": "json_schema", "schema": SCHEMA}},
         )
+        if usage is not None:
+            usage.append(r.usage)
         if r.stop_reason != "end_turn":
             raise DecisionUnavailable(f"stop_reason {r.stop_reason}")
         return Reply("".join(b.text for b in r.content if b.type == "text"), list(r.content))

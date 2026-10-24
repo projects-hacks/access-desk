@@ -14,6 +14,7 @@ from datetime import date, timedelta
 from statistics import mean, median
 from typing import Any
 
+from .decide import Ask, Request, decide_all
 from .detectors import detect
 from .load import cut
 from .model import ClientBook
@@ -187,4 +188,96 @@ def render(r: dict[str, Any]) -> str:
     if e["false_alarms_any_cutoff"]:
         lines.append(f"  fired at some earlier month-end without being planted: "
                      f"{', '.join(e['false_alarms_any_cutoff'])}")
+    return "\n".join(lines)
+
+
+def _late_after(final_book: dict[str, Any], t: date, today: date) -> tuple[int, int]:
+    window = [i for i in final_book.values()
+              if t < i.due_on <= min(t + timedelta(days=HORIZON_DAYS), today)]
+    late = [i for i in window
+            if ((i.paid_on if i.status == "paid" and i.paid_on else today) - i.due_on).days
+            > LATE_DPD]
+    return len(late), len(window)
+
+
+def _right(action: str, current: int, to_tier: int, late: int) -> bool | None:
+    """A downgrade is right if the client went on to pay late, an upgrade if it didn't."""
+    if action != "tier_change":
+        return None
+    return late > 0 if to_tier > current else late == 0
+
+
+def backtest_claude(books: list[ClientBook], cutoffs: list[date], ask: Ask,
+                    tier_then: dict[str, int] | None = None) -> dict[str, Any]:
+    """
+    Claude decides at each past month-end from the books as they stood then, exactly as
+    the agent does today; each call's facts end at that date, so nothing leaks from later.
+    Scored against the rules where the two disagree: whoever matched what happened wins.
+    """
+    today = books[0].today
+    tier_then = tier_then or {}
+    final = {b.client.id: {i.id: i for i in b.invoices} for b in books}
+    rows = []
+    for t in cutoffs:
+        if (today - t).days < 30:
+            continue  # too little afterwards to judge
+        past = [cut(b, t) for b in books]
+        past = [b.model_copy(update={"client": b.client.model_copy(update={
+            "tier": tier_then.get(b.client.id, b.client.tier)})}) for b in past]
+        scores = score_all(past)
+        reqs = []
+        for b in past:
+            flags = detect(b)
+            reqs.append(Request(book=b, scores=scores[b.client.id], flags=flags,
+                                baseline=decide(b, scores[b.client.id], flags)))
+        outcomes = decide_all(reqs, ask)
+        for b in past:
+            o = outcomes[b.client.id]
+            if o.decided_by != "claude":
+                continue
+            late, due = _late_after(final[b.client.id], t, today)
+            if not due:
+                continue
+            r, c = o.baseline, o.final
+            rules_right, claude_right = (_right(r.action, r.current, r.to_tier, late),
+                                         _right(c.action, c.current, c.to_tier, late))
+            same = (r.action, r.to_tier) == (c.action, c.to_tier)
+            # Holding a tier is right exactly when the change the other side proposed was wrong.
+            if rules_right is None and claude_right is not None:
+                rules_right = not claude_right
+            if claude_right is None and rules_right is not None:
+                claude_right = not rules_right if not same else rules_right
+            rows.append({
+                "cutoff": t.isoformat(), "client": b.client.name,
+                "rules": f"{r.action} {r.current}->{r.to_tier}",
+                "claude": f"{c.action} {c.current}->{c.to_tier}",
+                "agree": same, "late_after": late, "due_after": due,
+                "rules_right": rules_right, "claude_right": claude_right,
+                "claude_reason": (o.choice.reasons[0] if o.choice and o.choice.reasons else ""),
+            })
+    diff = [x for x in rows if not x["agree"]]
+    return {
+        "decisions": len(rows),
+        "agree": len(rows) - len(diff),
+        "disagree": len(diff),
+        "claude_right_when_disagree": sum(bool(x["claude_right"]) for x in diff),
+        "rules_right_when_disagree": sum(bool(x["rules_right"]) for x in diff),
+        "rows": rows,
+    }
+
+
+def render_claude(r: dict[str, Any]) -> str:
+    lines = [
+        (f"Claude vs rules at past month-ends: {r['decisions']} Claude decisions,"
+        f" agreed with the rules on {r['agree']}, differed on {r['disagree']}"),
+        (f"  where they differed: Claude matched what happened {r['claude_right_when_disagree']}"
+        f" times, the rules {r['rules_right_when_disagree']}"),
+    ]
+    for x in r["rows"]:
+        if not x["agree"]:
+            winner = ("Claude right" if x["claude_right"] and not x["rules_right"]
+                      else "rules right" if x["rules_right"] and not x["claude_right"]
+                      else "both" if x["rules_right"] else "neither")
+            lines.append(f"  {x['cutoff']} {x['client']:24} rules {x['rules']:20} Claude "
+                         f"{x['claude']:20} {winner} ({x['late_after']}/{x['due_after']} late)")
     return "\n".join(lines)

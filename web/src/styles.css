@@ -105,3 +105,28 @@ main { padding: 24px; }
 .calib { display: grid; grid-template-columns: 48px 1fr 64px; gap: 6px; align-items: center; font-size: 12px; }
 .calib-bar { height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
 .calib-bar span { display: block; height: 100%; background: linear-gradient(90deg, #16a34a, #f59e0b, #dc2626); }
+
+/* Live feed */
+.feed { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
+.feed-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.feed-head h3 { margin: 0; }
+.feed-list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 560px; overflow: auto; }
+.feed-list .ev { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; font-size: 13px; animation: feed-in .6s ease-out; }
+.feed-list .ev time { color: #999; font-variant-numeric: tabular-nums; margin-right: 8px; font-size: 12px; }
+.feed-list .ev p, .feed-list .ev ul { margin: 4px 0 0 0; }
+.feed-list .ev ul { padding-left: 18px; }
+.feed-list .ev.decision { border-left: 3px solid #6366f1; }
+.feed-list .ev.decision.differs { border-left-color: #c026d3; background: #fdf4ff; }
+.feed-list .ev.flag { border-left: 3px solid #f59e0b; }
+.feed-list .ev.score { color: #555; }
+.feed-list .ev.tier { border-left: 3px solid #16a34a; }
+.feed-list .ev.tier.denied { border-left-color: #dc2626; }
+.feed-list .ev.verdict.approved { border-left: 3px solid #16a34a; }
+.feed-list .ev.verdict.rejected { border-left: 3px solid #dc2626; }
+.who { display: inline-block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; padding: 1px 6px; border-radius: 4px; background: #eef2ff; color: #3730a3; margin-right: 8px; }
+.who.controller { background: #dcfce7; color: #166534; }
+.vs { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
+.pill.differs { background: #fae8ff; color: #86198f; }
+.pill.proposed { background: #e0e7ff; color: #3730a3; }
+@keyframes feed-in { from { background: #fef9c3; } to { background: transparent; } }
+.acc-diff { margin-top: 10px; }
