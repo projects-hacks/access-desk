@@ -138,3 +138,7 @@ main { padding: 24px; }
 .credit tr.trace-row, .credit tr.trace-row:hover { background: #fafaff; cursor: default; }
 .trace-row > td { padding: 0 8px 12px; border-bottom: 2px solid #c7d2fe; }
 .trace-row .detail { margin-top: 0; border-color: #c7d2fe; }
+
+/* Auto-approval */
+.pill.auto { background: #dcfce7; color: #166534; font-weight: 600; }
+.pill.needs-person { background: #fef3c7; color: #92400e; }

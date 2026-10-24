@@ -1,5 +1,6 @@
 import { SenderError, t } from 'spacetimedb/server';
 import { actorOf, audit, requireRole } from '../context';
+import { isGoverned, needsHuman } from '../autonomy';
 import { CAN_APPROVE, CAN_POST, type Role } from '../roles';
 import { spacetimedb } from '../schema';
 import { canTransition, type WorkItemState } from '../workflow';
@@ -24,11 +25,23 @@ export const proposeWorkItem = spacetimedb.reducer(
   },
   (ctx, args) => {
     requireRole(ctx, ['AGENT', 'SYNC', 'ADMIN']);
+    // Credit proposals for tier 3 to 5 clients apply on their own unless they are a worst case
+    // (autonomy.ts); everything for tier 1 and 2 clients waits for a controller.
+    const client = ctx.db.client.id.find(args.clientId);
+    let reason: string | undefined = 'unknown client';
+    if (client) {
+      reason = needsHuman({
+        kind: args.kind, tier: client.tier, strategic: client.strategic, confidence: args.confidence,
+        proposal: safeJson(args.proposalJson),
+      });
+    }
+    const auto = isGoverned(args.kind) && args.requiredRole === 'CONTROLLER' && reason === undefined;
+    const state = auto ? 'APPROVED' : 'PROPOSED';
     const item = ctx.db.workItem.insert({
       id: 0n,
       ...args,
-      state: 'PROPOSED',
-      autoApplied: false,
+      state,
+      autoApplied: auto,
       proposedBy: ctx.sender,
       revision: 1,
       revisedFrom: undefined,
@@ -36,12 +49,23 @@ export const proposeWorkItem = spacetimedb.reducer(
       createdAt: ctx.timestamp,
       updatedAt: ctx.timestamp,
     });
+    const why = isGoverned(args.kind) ? (auto ? `auto-approved: tier ${client?.tier} client, a regular case` : `needs a person: ${reason}`) : '';
     audit(ctx, {
-      action: 'PROPOSE', subjectType: 'work_item', subjectId: String(item.id), clientId: args.clientId,
-      workItemId: item.id, fromState: 'NEW', toState: 'PROPOSED', detail: args.title, policyRef: args.policyRef,
+      action: auto ? 'AUTO_APPLIED' : 'PROPOSE', subjectType: 'work_item', subjectId: String(item.id), clientId: args.clientId,
+      workItemId: item.id, fromState: 'NEW', toState: state, detail: why ? `${args.title} · ${why}` : args.title,
+      policyRef: args.policyRef,
     });
+    if (auto) executeApproved(ctx, item.id);
   },
 );
+
+function safeJson(json: string): unknown {
+  try {
+    return JSON.parse(json);
+  } catch {
+    return {};
+  }
+}
 
 /**
  * The only way a work item changes state. Checks the transition, the caller's

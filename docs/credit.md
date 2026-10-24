@@ -121,6 +121,23 @@ Sync keeps `client.tier` once imported, like `status`, so an approved change sur
 
 On the live database payment checking has already applied two things the fixture leaves unapplied: Fieldstone's Mar 2 lump sum (`recent_late` fires, still 2→3) and Saltmarsh's Feb 19 wire for January (reliability ~75, so 4→3: 10 changes and 11 open reviews). `credit:verify` expects both once their invoices are paid.
 
+## Who approves (autonomy by tier)
+
+The module decides this itself in `propose_work_item` (`spacetime/src/autonomy.ts`), from the client's tier in the database, so an agent can't talk its way past it.
+
+| Client | What the credit agents propose |
+|---|---|
+| Tier 1 or 2, or strategic | Always waits for a controller: tier changes, reviews, company policies, exploit alerts |
+| Tier 3 to 5 | Applies at once (item created `APPROVED`, `auto_applied`, audited `AUTO_APPLIED`): tier changes, company policies, exploit alerts acknowledged |
+
+Worst cases still wait for a controller, even for tier 3 to 5:
+- a review request;
+- a move onto tier 1 or 2 (a client leaving the regular bracket) or onto **tier 5** (the strictest);
+- a company policy with a `custody_debit` or `cross_default` term (moves money or changes the contract);
+- confidence below 0.6.
+
+The limits are named constants at the top of `autonomy.ts`. The guardrails and the 30-day rejection memory apply as before; rejecting or approving by hand is only for what waits. `credit:verify` checks that nothing for a tier 1 or 2 client auto-applied and that the worst cases waited.
+
 ## Check it
 
 ```

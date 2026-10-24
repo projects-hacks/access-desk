@@ -16,7 +16,7 @@ const OPEN = new Set(['PROPOSED', 'NEEDS_INFO']);
 const KINDS = new Set(['CREDIT_REVIEW', 'POLICY_DRAFT', 'EXPLOIT_FLAG']);
 const KIND_LABEL: Record<string, string> = { CREDIT_REVIEW: 'Credit review', POLICY_DRAFT: 'Company policy', EXPLOIT_FLAG: 'Exploit flag' };
 const AUDITED = new Set([
-  'TIER_CHANGED', 'EXPLOIT_FLAGGED', 'CREDIT_SCORED', 'TRANSITION', 'PROPOSE',
+  'TIER_CHANGED', 'EXPLOIT_FLAGGED', 'CREDIT_SCORED', 'TRANSITION', 'PROPOSE', 'AUTO_APPLIED',
   'POLICY_SAVED', 'POLICY_ACTIVATED', 'POLICY_SUPERSEDED', 'POLICY_REJECTED', 'POLICY_OUTCOME',
 ]);
 
@@ -134,6 +134,7 @@ export function CreditDesk() {
           <Stat label="Profiles" value={profiles.length} />
           <Stat label="Exploit flags" value={flags.filter((f) => f.status !== 'cleared').length} />
           <Stat label="Open reviews" value={open.filter((w) => w.kind === 'CREDIT_REVIEW').length} />
+          <Stat label="Auto-approved" value={credit.filter((w) => w.autoApplied).length} />
           <Stat label="Decided" value={decided.length} />
         </div>
       </header>
@@ -173,7 +174,7 @@ export function CreditDesk() {
           {!!decided.length && <h3>Decided</h3>}
           {decided.map((w) => (
             <div key={String(w.id)} className="decided" onClick={() => setSelected(w.clientId)}>
-              <span className={`pill ${w.state.toLowerCase()}`}>{w.state}</span> {w.title}
+              <span className={`pill ${w.state.toLowerCase()}`}>{w.state}</span>{w.autoApplied && <span className="pill auto">auto</span>} {w.title}
             </div>
           ))}
         </div>
@@ -511,9 +512,9 @@ type AuditRow = {
   id: bigint; at: { toDate(): Date }; actorRole: string; action: string; clientId: string; workItemId?: bigint;
   fromState: string; toState: string; detail: string; allowed: boolean;
 };
-type ItemRow = { id: bigint; kind: string; state: string; title: string; proposalJson: string; reasoning: string; clientId: string };
+type ItemRow = { id: bigint; kind: string; state: string; title: string; proposalJson: string; reasoning: string; clientId: string; autoApplied: boolean };
 
-const FEED_ACTIONS = new Set(['PROPOSE', 'CREDIT_SCORED', 'TIER_CHANGED', 'POLICY_ACTIVATED', 'POLICY_REJECTED', 'TRANSITION']);
+const FEED_ACTIONS = new Set(['PROPOSE', 'AUTO_APPLIED', 'CREDIT_SCORED', 'TIER_CHANGED', 'POLICY_ACTIVATED', 'POLICY_REJECTED', 'TRANSITION']);
 
 /**
  * Everything the agents and the controller just did, newest first, every
@@ -559,7 +560,11 @@ function Feed({ audit, items, nameOf, tierOf }: {
           if (a.action === 'TRANSITION' && w) {
             return <li key={String(a.id)} className={`ev verdict ${a.toState.toLowerCase()}`}><time>{time}</time>{who}<b>{a.toState === 'APPROVED' ? 'approved' : 'rejected'}</b> {w.title}{a.detail ? <span className="muted"> · “{a.detail}”</span> : ''}</li>;
           }
-          if (a.action === 'PROPOSE' && w) return <FeedDecision key={String(a.id)} time={time} w={w} tier={tierOf(w.clientId)} />;
+          if ((a.action === 'PROPOSE' || a.action === 'AUTO_APPLIED') && w) {
+            // The module writes "<title> · auto-approved: ..." or "<title> · needs a person: <why>".
+            const gate = a.detail.includes(' · ') ? a.detail.slice(a.detail.indexOf(' · ') + 3) : '';
+            return <FeedDecision key={String(a.id)} time={time} w={w} tier={tierOf(w.clientId)} auto={a.action === 'AUTO_APPLIED'} gate={gate} />;
+          }
           return null;
         })}
       </ol>
@@ -567,7 +572,14 @@ function Feed({ audit, items, nameOf, tierOf }: {
   );
 }
 
-function FeedDecision({ time, w, tier }: { time: string; w: ItemRow; tier: number }) {
+/** Whether this applied on its own or is waiting for a person, and why. */
+function Gate({ auto, gate }: { auto: boolean; gate: string }) {
+  return auto
+    ? <span className="pill auto" title={gate}>auto-approved</span>
+    : <span className="pill needs-person" title={gate}>{gate.replace(/^needs a person: /, 'needs a person: ') || 'needs a person'}</span>;
+}
+
+function FeedDecision({ time, w, tier, auto, gate }: { time: string; w: ItemRow; tier: number; auto: boolean; gate: string }) {
   const m = parse<DecisionMeta & { from_tier?: number; severity?: string; measured?: string; decided_by?: string }>(w.proposalJson);
   const from = m?.from_tier ?? tier;
   if (w.kind === 'EXPLOIT_FLAG') {
@@ -575,6 +587,7 @@ function FeedDecision({ time, w, tier }: { time: string; w: ItemRow; tier: numbe
       <li className="ev flag">
         <time>{time}</time><span className="who agent">ExploitWatch</span>
         <b>{w.title}</b> <span className="pill flagged">{m?.severity ?? 'alert'}</span>{m?.decided_by === 'claude' && <span className="pill by-claude">judged by Claude</span>}
+        <Gate auto={auto} gate={gate} />
         <p>{w.reasoning}</p>
       </li>
     );
@@ -587,7 +600,7 @@ function FeedDecision({ time, w, tier }: { time: string; w: ItemRow; tier: numbe
       <b>{w.title}</b>{' '}
       <span className={`pill by-${m?.decided_by ?? 'rules'}`}>{m?.decided_by === 'claude' ? 'Claude decided' : 'rules decided'}</span>
       {differs && <span className="pill differs">differs from rules</span>}
-      <span className={`pill ${w.state.toLowerCase()}`}>{w.state}</span>
+      <Gate auto={auto} gate={gate} />
       <div className="vs">
         <span>rules: <b>{m?.baseline ? actionText(m.baseline.action, from, m.baseline.to_tier) : '—'}</b></span>
         {c && <span>Claude: <b>{actionText(c.action, from, c.to_tier)}</b>{c.policy ? ` + ${c.policy.kind === 'company_draft' ? 'new policy' : c.policy.policy_id}` : ''} · confidence {c.confidence.toFixed(2)}</span>}
