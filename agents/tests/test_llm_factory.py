@@ -8,7 +8,7 @@ import json
 import os
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -51,9 +51,9 @@ class Effort:
 class FakeClient:
     """Records every call; replays `script` as the event stream (or hangs if told to)."""
 
-    script: list[Any] = []
+    script: ClassVar[list[Any]] = []
     hang = False
-    instances: list["FakeClient"] = []
+    instances: ClassVar[list["FakeClient"]] = []
 
     def __init__(self, **kw):
         self.init_kw = kw
