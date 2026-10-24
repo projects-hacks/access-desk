@@ -5,12 +5,14 @@ import { label, money } from '../lib/format';
 import { useSession } from '../lib/session';
 import { reducers, tables } from '../module_bindings';
 import { Badge } from './Badge';
+import { MoneyTab } from './MoneyTab';
 import { Select } from './Select';
 
-export type PanelMode = 'overview' | 'access' | 'notes';
+export type PanelMode = 'overview' | 'money' | 'access' | 'notes';
 
 const MODES: { key: PanelMode; label: string }[] = [
   { key: 'overview', label: 'Overview' },
+  { key: 'money', label: 'Money' },
   { key: 'access', label: 'Change access' },
   { key: 'notes', label: 'Notes' },
 ];
@@ -61,6 +63,7 @@ export function ClientPanel({
       </div>
       <div className="drawer-body">
         {mode === 'overview' && <Overview row={row} />}
+        {mode === 'money' && <MoneyTab row={row} />}
         {mode === 'access' && <ChangeAccess row={row} />}
         {mode === 'notes' && <Notes row={row} />}
       </div>
