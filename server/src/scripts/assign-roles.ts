@@ -17,7 +17,9 @@ const services = [
   { token: env.STDB_DEMO_TOKEN, name: 'demo-controls', role: 'DEMO' },
   { token: process.env.STDB_AGENT_TOKEN, name: 'agents', role: 'AGENT' },
   // The web console approves as a controller (agents propose under their own identity).
-  { token: process.env.VITE_STDB_CONTROLLER_TOKEN, name: 'ui-controller', role: 'CONTROLLER' },
+  // Two seats, because nobody approves their own proposal: what Controller A proposes, B approves.
+  { token: process.env.VITE_STDB_CONTROLLER_TOKEN, name: 'Controller A', role: 'CONTROLLER' },
+  { token: process.env.VITE_STDB_CONTROLLER_B_TOKEN, name: 'Controller B', role: 'CONTROLLER' },
 ];
 
 for (const s of services) {
