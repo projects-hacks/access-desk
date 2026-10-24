@@ -4,7 +4,7 @@ Capital One's Nessie API is the platform's bank. All client payments land in it,
 
 - API: `https://prod-api.nessieisreal.com`, with the key as `?key=` (`NESSIE_API_KEY` in `.env`)
 - Docs: https://prod.nessieisreal.com/docs (no data dashboard; use `pnpm bank show`)
-- Platform name comes from `PLATFORM_NAME` / `PLATFORM_LEGAL_NAME` in `.env`
+- Platform name defaults to Northstar Prime; set `PLATFORM_NAME` / `PLATFORM_LEGAL_NAME` in `.env` to rename
 
 ## Commands
 
