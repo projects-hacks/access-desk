@@ -30,6 +30,7 @@ pnpm agents                 # agents loop
 ```
 
 - Shared database (SpacetimeDB on Maincloud): [docs/database.md](docs/database.md)
+- Tables, owners and conventions: [docs/schema.md](docs/schema.md)
 - Bank (Nessie): seeding, demo controls, conventions: [docs/bank.md](docs/bank.md)
 
 `pnpm typecheck` and `pnpm test` check the TypeScript packages; `cd agents && uv run ruff check` lints Python.
