@@ -21,6 +21,7 @@ const FLAGS = [
 ];
 const PATTERNS = new Set(FLAGS.map((f) => f.split(':')[0]));
 const FIELDSTONE = 'ORG-90229';
+const SALTMARSH = 'ORG-90612';
 const OPEN = new Set(['PROPOSED', 'NEEDS_INFO']);
 
 const { conn } = await connectStdb();
@@ -48,6 +49,9 @@ check(profiles.size === 30 && clients.every((c) => profiles.has(c.id)), `30 cred
 const lumpApplied = [...db.invoice.iter()]
   .filter((i) => i.clientId === FIELDSTONE && i.period < '2026-02')
   .every((i) => i.status === 'paid');
+// Saltmarsh paid January on Feb 19 (billing never applied it); once payment checking has, it earns 4 -> 3.
+const saltmarshJan = [...db.invoice.iter()].filter((i) => i.clientId === SALTMARSH && i.period === '2026-01');
+if (saltmarshJan.length && saltmarshJan.every((i) => i.status === 'paid')) KEY[SALTMARSH] = 3;
 const expectedFlags = new Set([...FLAGS, ...(lumpApplied ? [`recent_late:${FIELDSTONE}`] : [])]);
 const gotFlags = new Set(flags.map((f) => f.id));
 const missing = [...expectedFlags].filter((f) => !gotFlags.has(f));

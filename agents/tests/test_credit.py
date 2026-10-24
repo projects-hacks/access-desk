@@ -259,3 +259,22 @@ def test_fieldstone_slide_after_the_lump_sum():
     assert [f.pattern for f in flags if f.fired] == ["recent_late"]
     d = decide(after, scores["ORG-90229"], flags)
     assert (d.action, d.to_tier) == ("tier_change", 3)
+
+
+def test_saltmarsh_upgrade_once_its_feb_19_cash_is_applied():
+    """Billing never applied Saltmarsh's Feb 19 wire; payment checking does, and it earns 4 -> 3."""
+    books = load_books_from_json(FIXTURE)
+    saltmarsh = by_id(books, "ORG-90612")
+    paid = [
+        i.model_copy(update={
+            "paid_cents": i.amount_cents, "paid_on": date(2026, 2, 19), "status": "paid",
+            "payments": [Payment(value_on=date(2026, 2, 19), amount_cents=i.amount_cents)],
+        }) if i.period == "2026-01" else i
+        for i in saltmarsh.invoices
+    ]
+    after = saltmarsh.model_copy(update={"invoices": paid})
+    books = [after if b.client.id == "ORG-90612" else b for b in books]
+    s = score_all(books)["ORG-90612"]
+    d = decide(after, s, detect(after))
+    assert s.reliability > 73  # clears the 70 line by the 3-point margin
+    assert (d.action, d.to_tier) == ("tier_change", 3)

@@ -58,12 +58,14 @@ Sync keeps `client.tier` once imported, like `status`, so an approved change sur
 
 9 tier changes (Meridian, Silverline 2→1; Harbor & Pine, Granite Bay, Larkspur, Quillon 3→2; Fieldstone 2→3; Orchard 3→5; Wrenfield 4→5), 1 review (Halcyon), 20 stay (Cobalt Ridge, Ostrava, Ember held by the margin; Kestrel by `recent_late`).
 
+On the live database payment checking has already applied two things the fixture leaves unapplied: Fieldstone's Mar 2 lump sum (`recent_late` fires, still 2→3) and Saltmarsh's Feb 19 wire for January (reliability ~75, so 4→3: 10 changes and 11 open reviews). `credit:verify` expects both once their invoices are paid.
+
 ## Check it
 
 ```
 cd agents && uv run pytest                  # answer key on tests/fixtures/book.json
 pnpm credit:fixture                         # rebuild the fixture from the dataset
 pnpm demo:reset && pnpm sync && pnpm agents # one cycle, then:
-pnpm credit:verify                          # 30 profiles, 6 flags (+ Fieldstone after its lump sum), 10 open reviews
+pnpm credit:verify                          # 30 profiles, 6 flags (+ Fieldstone), 10 open reviews (+ Saltmarsh)
 cd agents && uv run python -m desk_agents.credit dump /tmp/books.json   # live books in fixture shape
 ```
