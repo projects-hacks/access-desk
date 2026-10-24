@@ -12,7 +12,10 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["ruff>=0.17.2"]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.2",
+]
 
 [project.scripts]
 desk-agents = "desk_agents.__main__:main"
