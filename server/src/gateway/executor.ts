@@ -59,6 +59,8 @@ export class Gateway {
     } finally {
       this.draining = false;
     }
+    // The books moved: reconcile once the queue is idle.
+    if (ran > 0) await this.conn.reducers.tieOut({ trigger: `gateway executed ${ran} command(s)` }).catch((e) => this.log(`[gateway] tie-out failed: ${e}`));
     return ran;
   }
 

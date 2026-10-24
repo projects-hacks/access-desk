@@ -4,6 +4,7 @@ import { addDays, audit, requireRole, simDate } from '../context';
 import { CAN_MOVE_CLOCK, isRole } from '../roles';
 import { spacetimedb } from '../schema';
 import { seedBaselinePolicies } from './policies';
+import { runTieOut } from '../books/tieout';
 
 /** Runs on first publish (and after a data reset). The publisher becomes ADMIN. */
 export const init = spacetimedb.init((ctx) => {
@@ -59,6 +60,7 @@ export const advanceClock = spacetimedb.reducer({ days: t.u16() }, (ctx, { days 
     }
   }
   audit(ctx, { action: 'ADVANCE_CLOCK', subjectType: 'clock', subjectId: '1', fromState: from, toState: to });
+  runTieOut(ctx, `clock advanced to ${to}`);
 });
 
 /** Demo reset: back to the morning of the demo. */

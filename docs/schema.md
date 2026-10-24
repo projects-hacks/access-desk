@@ -54,7 +54,7 @@ Rajeev owns the schema and is the only one who publishes. Others change fields o
 | `cash_movement` | id, source (nessie / chain), platform_account, direction, rail (WIRE / ACH / USDC / BOOK), amount_cents, value_on, status (pending / posted / cancelled / returned), memo, orig_name, orig_account, refs, bank_ref, reverses, raw_id, match_status, is_history | sync; match_status: payment checking | payments tab, ticker |
 | `payment_application` | id, movement_id, invoice_id, amount_cents, method (exact / referenced / split / short_fee / alias / account / overpay_credit / reversal), policy_ref, work_item_id, reversed | payment checking | invoice status, tie-out, audit |
 | `client_credit` | id, client_id, kind (unapplied_cash / overpayment / prepay), amount_cents, movement_id | payment checking, gateway | recover-first, prepay |
-| `ledger_entry` | id, journal_id, posted_on, account_code, debit_cents, credit_cents, ref, work_item_id | gateway | tie-out, audit |
+| `ledger_entry` | id (`journal:line`), journal_id, posted_on, account_code, debit_cents, credit_cents, ref, memo, source (billing / treasury / access-desk), work_item_id | sync (GL), gateway write-through | tie-out, "why?" |
 
 **Assets and exposure**
 
@@ -76,7 +76,7 @@ Rajeev owns the schema and is the only one who publishes. Others change fields o
 | `investigation_step` | id, work_item_id, seq, tool, summary, status | agents | novel case |
 | `rm_note` | id, client_id, work_item_id?, author, text, at | RM | proposals, novel case |
 | `notice` | id, client_id, work_item_id, channel (email / portal / rm), body, status (draft / sent), sent_at | gateway | notice preview, reminders |
-| `gateway_command` | id, work_item_id, action_json, status (queued / done / failed), external_ref, attempts, error | state machine (queue); gateway (result) | audit, retries |
+| `gateway_command` | id, key (idempotency), type, work_item_id, action_json, status (queued / executing / done / failed), result_json, external_ref, attempts, error, created_at, updated_at | reducers queue; gateway claims and completes | audit, tie-out, retries |
 | `access_request` | id, client_id, action (withdraw / trade / borrow / api), amount_cents, decision, allowed_cents, held_cents, reason, at | access-check route | portal, audit |
 | `deadline` | id, kind (cure_end / promise / renewal_recheck), client_id, work_item_id, due_on, status | reducers | clock advance |
 | `agent_run` | id, agent, trigger, started_at, finished_at, proposed, status, error | agents | "agent live", autonomy % |
@@ -97,9 +97,11 @@ Rajeev owns the schema and is the only one who publishes. Others change fields o
 |---|---|---|---|
 | `audit_event` | id, at, sim_date, actor, actor_role, actor_name, action, subject_type, subject_id, client_id, work_item_id, from_state, to_state, allowed, detail, policy_ref | every reducer | audit log, "why?", ticker |
 
+| `tie_out_run`, `tie_out_break` | run: sim_date, trigger, status (tied / explained / break), unexplained_cents, summary_json · break: run_id, area, kind, amount_cents, ref, detail | tie-out reducer | books status, controller |
+
 ## Next priority
 
-`payment_promise`, `tier_default`, `client_contact`, `incident`, `payment_intent`, `usage_record`, `tie_out_run`, `tie_out_break`
+`payment_promise`, `tier_default`, `client_contact`, `incident`, `payment_intent`, `usage_record`
 
 ## If time allows
 

@@ -46,6 +46,7 @@ import RemoveCashMovementReducer from "./remove_cash_movement_reducer";
 import SetClockReducer from "./set_clock_reducer";
 import SetPlatformReducer from "./set_platform_reducer";
 import SetSyncStatusReducer from "./set_sync_status_reducer";
+import TieOutReducer from "./tie_out_reducer";
 import TransitionWorkItemReducer from "./transition_work_item_reducer";
 import UpsertAccessLeverReducer from "./upsert_access_lever_reducer";
 import UpsertAssetPriceReducer from "./upsert_asset_price_reducer";
@@ -107,6 +108,8 @@ import PrecedentRow from "./precedent_table";
 import RawRecordRow from "./raw_record_table";
 import RmNoteRow from "./rm_note_table";
 import SyncSourceRow from "./sync_source_table";
+import TieOutBreakRow from "./tie_out_break_table";
+import TieOutRunRow from "./tie_out_run_table";
 import WorkItemRow from "./work_item_table";
 
 /** Type-only namespace exports for generated type groups. */
@@ -622,6 +625,31 @@ const tablesSchema = __schema({
       { name: 'sync_source_source_key', constraint: 'unique', columns: ['source'] },
     ],
   }, SyncSourceRow),
+  tieOutBreak: __table({
+    name: 'tie_out_break',
+    indexes: [
+      { accessor: 'id', name: 'tie_out_break_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'runId', name: 'tie_out_break_run_id_idx_btree', algorithm: 'btree', columns: [
+        'runId',
+      ] },
+    ],
+    constraints: [
+      { name: 'tie_out_break_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, TieOutBreakRow),
+  tieOutRun: __table({
+    name: 'tie_out_run',
+    indexes: [
+      { accessor: 'id', name: 'tie_out_run_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'tie_out_run_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, TieOutRunRow),
   workItem: __table({
     name: 'work_item',
     indexes: [
@@ -652,6 +680,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_clock", SetClockReducer),
   __reducerSchema("set_platform", SetPlatformReducer),
   __reducerSchema("set_sync_status", SetSyncStatusReducer),
+  __reducerSchema("tie_out", TieOutReducer),
   __reducerSchema("transition_work_item", TransitionWorkItemReducer),
   __reducerSchema("upsert_access_lever", UpsertAccessLeverReducer),
   __reducerSchema("upsert_asset_price", UpsertAssetPriceReducer),

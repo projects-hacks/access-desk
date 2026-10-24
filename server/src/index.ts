@@ -20,6 +20,13 @@ const log = (msg: string) => app.log.info(msg);
 const sync = new Sync(syncConn, bank, ds, platform, log);
 await sync.ready();
 
+/** Pull the bank now (called right after a demo wire is settled). */
+app.post('/sync/now', async () => {
+  const results = await sync.cash();
+  return results.map(({ source, written, errors }) => ({ source, written, errors }));
+});
+
+// Routes are registered above; the gateway below calls the platform API on this server, so listen first.
 await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
 if (env.STDB_GATEWAY_TOKEN) {
@@ -31,9 +38,3 @@ if (env.STDB_GATEWAY_TOKEN) {
   app.log.warn('STDB_GATEWAY_TOKEN not set: gateway disabled, commands will queue');
 }
 sync.start();
-
-/** Pull the bank now (called right after a demo wire is settled). */
-app.post('/sync/now', async () => {
-  const results = await sync.cash();
-  return results.map(({ source, written, errors }) => ({ source, written, errors }));
-});

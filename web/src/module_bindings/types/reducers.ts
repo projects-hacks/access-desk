@@ -18,6 +18,7 @@ import RemoveCashMovementReducer from "../remove_cash_movement_reducer";
 import SetClockReducer from "../set_clock_reducer";
 import SetPlatformReducer from "../set_platform_reducer";
 import SetSyncStatusReducer from "../set_sync_status_reducer";
+import TieOutReducer from "../tie_out_reducer";
 import TransitionWorkItemReducer from "../transition_work_item_reducer";
 import UpsertAccessLeverReducer from "../upsert_access_lever_reducer";
 import UpsertAssetPriceReducer from "../upsert_asset_price_reducer";
@@ -51,6 +52,7 @@ export type RemoveCashMovementParams = __Infer<typeof RemoveCashMovementReducer>
 export type SetClockParams = __Infer<typeof SetClockReducer>;
 export type SetPlatformParams = __Infer<typeof SetPlatformReducer>;
 export type SetSyncStatusParams = __Infer<typeof SetSyncStatusReducer>;
+export type TieOutParams = __Infer<typeof TieOutReducer>;
 export type TransitionWorkItemParams = __Infer<typeof TransitionWorkItemReducer>;
 export type UpsertAccessLeverParams = __Infer<typeof UpsertAccessLeverReducer>;
 export type UpsertAssetPriceParams = __Infer<typeof UpsertAssetPriceReducer>;

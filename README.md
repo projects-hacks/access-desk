@@ -33,6 +33,7 @@ pnpm agents                 # agents loop
 - Tables, owners and conventions: [docs/schema.md](docs/schema.md)
 - Sync from systems of record: [docs/sync.md](docs/sync.md)
 - Payment checking: [docs/payments.md](docs/payments.md)
+- Gateway, ledger and tie-out: [docs/books.md](docs/books.md)
 - 12-month history and planted patterns: [docs/history.md](docs/history.md)
 - Bank (Nessie): seeding, demo controls, conventions: [docs/bank.md](docs/bank.md)
 

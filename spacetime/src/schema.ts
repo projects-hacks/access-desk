@@ -1,5 +1,6 @@
 import { schema } from 'spacetimedb/server';
 import { auditEvent } from './tables/audit';
+import { tieOutBreak, tieOutRun } from './tables/books';
 import { assetPrice, custodyHolding, hold, loan, owedToClient, position } from './tables/assets';
 import { accessLever, capability, client, contract, contractClause, payerIdentity } from './tables/clients';
 import { creditProfile, exploitFlag, metricSnapshot, policy, precedent } from './tables/learning';
@@ -18,5 +19,6 @@ export const spacetimedb = schema({
   custodyHolding, assetPrice, hold, owedToClient, position, loan,
   workItem, decision, investigationStep, rmNote, notice, gatewayCommand, accessRequest, deadline, agentRun,
   creditProfile, policy, precedent, exploitFlag, metricSnapshot,
+  tieOutRun, tieOutBreak,
   auditEvent,
 });

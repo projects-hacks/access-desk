@@ -72,13 +72,18 @@ export class Sync {
       // After billing (it claims billing-applied cash), before live cash.
       results.push(await this.runSource('history', historyRecords(this.conn, this.ds, this.bank.map)));
       results.push(...(await this.cashOnly()));
+      await this.conn.reducers.tieOut({ trigger: 'full sync' });
       return results;
     });
   }
 
   /** Bank and chain only: what changes during the demo. */
   cash(): Promise<PassResult[]> {
-    return this.serialize(() => this.cashOnly());
+    return this.serialize(async () => {
+      const results = await this.cashOnly();
+      if (results.some((r) => r.written)) await this.conn.reducers.tieOut({ trigger: 'new bank activity' });
+      return results;
+    });
   }
 
   start(): () => void {

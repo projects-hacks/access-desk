@@ -442,6 +442,28 @@ export const SyncSource = __t.object("SyncSource", {
 });
 export type SyncSource = __Infer<typeof SyncSource>;
 
+export const TieOutBreak = __t.object("TieOutBreak", {
+  id: __t.u64(),
+  runId: __t.u64(),
+  area: __t.string(),
+  kind: __t.string(),
+  amountCents: __t.i64(),
+  ref: __t.string(),
+  detail: __t.string(),
+});
+export type TieOutBreak = __Infer<typeof TieOutBreak>;
+
+export const TieOutRun = __t.object("TieOutRun", {
+  id: __t.u64(),
+  simDate: __t.string(),
+  at: __t.timestamp(),
+  trigger: __t.string(),
+  status: __t.string(),
+  unexplainedCents: __t.i64(),
+  summaryJson: __t.string(),
+});
+export type TieOutRun = __Infer<typeof TieOutRun>;
+
 export const WorkItem = __t.object("WorkItem", {
   id: __t.u64(),
   kind: __t.string(),
