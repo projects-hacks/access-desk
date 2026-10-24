@@ -440,6 +440,12 @@ class CutoffComparison(unittest.TestCase):
         self.assertEqual(full["policiesBreached"], ["pol-006", "pol-008"])
         self.assertIn("Compared with a full cutoff: Freezes all", m.args["reasoning"])
         self.assertIn("§11 (no forced close)", full["summary"])
+        self.assertEqual((c["proposed"]["approversNeeded"], full["approversNeeded"]), (0, 2))
+
+    def test_tier_one_restriction_needs_a_controller(self):
+        self.v.client["tier"] = 1
+        _, c = self.comparison(self.v)
+        self.assertEqual(c["proposed"]["approversNeeded"], 1)
 
     def test_clause_numbers_come_from_the_contract(self):
         self.v.contract_clause[-1]["clause"] = "14.2"

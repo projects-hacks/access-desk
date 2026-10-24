@@ -7,7 +7,7 @@ export function buildApp(sim: PlatformSimulator) {
   // The web app (another origin in development) calls the demo endpoints.
   app.addHook('onRequest', async (req, reply) => {
     reply.header('access-control-allow-origin', '*');
-    reply.header('access-control-allow-headers', 'content-type');
+    reply.header('access-control-allow-headers', 'content-type, x-demo-key');
     reply.header('access-control-allow-methods', 'GET, POST, OPTIONS');
     if (req.method === 'OPTIONS') return reply.code(204).send();
   });

@@ -92,12 +92,12 @@ class SpacetimeClient:
 
     def set_deadline(self, client_id: str, kind: str, due_on: str, note: str, work_item_id: int | None = None) -> None:
         """kind: promise_to_pay | follow_up. Resolved automatically when the sim date reaches due_on."""
-        self.call("set_deadline", client_id, kind, due_on, note, {"some": work_item_id} if work_item_id is not None else {"none": []})
+        self.call("set_deadline", client_id, kind, due_on, note, _option(work_item_id))
 
     def record_agent_run(
         self, agent: str, trigger: str, proposed: int, status: str, error: str | None, duration_ms: int,
     ) -> None:
-        self.call("record_agent_run", agent, trigger, proposed, status, {"some": error} if error else {"none": []}, duration_ms)
+        self.call("record_agent_run", agent, trigger, proposed, status, _option(error or None), duration_ms)
 
     def propose_payment_match(
         self, client_id: str, movement_id: str, reasoning: str, evidence_json: str, confidence: float,
@@ -105,7 +105,7 @@ class SpacetimeClient:
     ) -> None:
         """Attribute unplaced cash to a client with evidence; an accountant approves once."""
         self.call("propose_payment_match", movement_id, client_id, reasoning, evidence_json, confidence,
-                  {"some": rm_note_id} if rm_note_id is not None else {"none": []})
+                  _option(rm_note_id))
 
     def record_wait(self, client_id: str, code: str, reason: str) -> None:
         """Audits a decision not to act on a client who owes money."""
@@ -116,12 +116,48 @@ class SpacetimeClient:
         self.call("record_investigation", work_item_id, steps)
 
     def upsert_precedent(self, row: dict[str, Any]) -> None:
-        """A decision worth learning from. `work_item_id` is optional: pass {"some": id} or {"none": []}."""
+        """A decision worth learning from. `work_item_id` is optional: pass _option(id)."""
         self.call("upsert_precedent", row)
 
     def decide(self, work_item_id: int, to_state: str, note: str = "") -> None:
         """APPROVED | REJECTED | NEEDS_INFO | WITHDRAWN. Denied attempts are audited, not raised."""
         self.call("transition_work_item", work_item_id, to_state, note)
+
+    # ── Credit analyst (seat 1) ────────────────────────────────────────────
+
+    def upsert_credit_profile(
+        self, client_id: str, value_score: int, reliability_score: int, coverage_ratio: float,
+        coverage_detail: str, expected_settle_on: str | None,
+    ) -> None:
+        """Scores 0-100. Audited (CREDIT_SCORED) only when a score moves."""
+        self.call(
+            "upsert_credit_profile", client_id, value_score, reliability_score, coverage_ratio,
+            coverage_detail, _option(expected_settle_on),
+        )
+
+    def upsert_exploit_flag(
+        self, id: str, client_id: str, pattern: str, score: float, status: str, months: int,
+        evidence_json: str, proposed_fix: str,
+    ) -> None:
+        """id = `<pattern>:<client_id>`. A row a controller set to `cleared` stays cleared."""
+        self.call(
+            "upsert_exploit_flag", id, client_id, pattern, score, status, months, evidence_json,
+            proposed_fix,
+        )
+
+    def upsert_policy(
+        self, policy_id: str, version: int, status: str, title: str, rule_json: str,
+        learned_from: str, approved_by: str | None = None,
+    ) -> None:
+        """Agents may only write `draft` rows; a controller's approval activates them."""
+        self.call(
+            "upsert_policy", policy_id, version, status, title, rule_json, learned_from,
+            _option(approved_by),
+        )
+
+    def record_policy_outcome(self, policy_key: str, outcome: str) -> None:
+        """The evaluator's verdict on an active company policy, onto its live precedent."""
+        self.call("record_policy_outcome", policy_key, outcome)
 
     # ── Reads ──────────────────────────────────────────────────────────────
 
@@ -150,6 +186,11 @@ class SpacetimeClient:
 
     def close(self) -> None:
         self._http.close()
+
+
+def _option(value: Any) -> dict[str, Any]:
+    """SATS-JSON for option<T>."""
+    return {"none": []} if value is None else {"some": value}
 
 
 class ReducerError(Exception):

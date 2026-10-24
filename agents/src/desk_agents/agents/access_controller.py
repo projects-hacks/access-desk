@@ -543,7 +543,7 @@ def cutoff_comparison(
             "lever": lever, "step": step, "summary": proposed_summary,
             "custodyFrozenCents": held, "leversCut": [], "leversOpen": [lv for lv in in_use if lv != lever],
             "positionsForceClosed": 0, "hedgesForceClosed": 0, "clausesBreached": [], "policiesBreached": [],
-            "approversNeeded": 2 if (lever, step) in two_approvers else 1,
+            "approversNeeded": 2 if (lever, step) in two_approvers else 0 if auto_applies(view, policies) else 1,
         },
         "fullCutoff": {
             "summary": "; ".join(full_parts) + ".",
@@ -554,6 +554,11 @@ def cutoff_comparison(
             "approversNeeded": 2,
         },
     }
+
+
+def auto_applies(view: ClientView, policies: list[Row]) -> bool:
+    """Restrictions apply under pol-006 without a person, except for Tier 1 and strategic clients (offboarding aside)."""
+    return any(p["policy_id"] == "pol-006" for p in policies) and view.client["tier"] > 1 and not view.client["strategic"]
 
 
 def fill(invoices: list[Row], budget: int) -> list[Row]:

@@ -14,3 +14,4 @@ export { upsertPolicy } from './reducers/policies';
 export { addRmNote, recordInvestigation } from './reducers/notes';
 export { recordAgentRun, recordWait } from './reducers/runs';
 export { proposePaymentMatch } from './reducers/matches';
+export { recordPolicyOutcome, upsertCreditProfile, upsertExploitFlag } from './reducers/credit';

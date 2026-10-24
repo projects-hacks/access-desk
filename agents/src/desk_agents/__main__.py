@@ -9,6 +9,7 @@ import httpx
 from .agents.access_controller import AccessController, plan
 from .agents.base import Agent
 from .agents.credit_analyst import CreditAnalyst
+from .agents.exploit_watch import ExploitWatch
 from .config import settings
 from .stdb import ReducerError, SpacetimeClient
 
@@ -118,7 +119,9 @@ def main() -> None:
         db.close()
         return
     try:
-        asyncio.run(loop([CreditAnalyst(db), AccessController(db)], db))
+        # Credit first (its tier reviews are what tier_mismatch compares against), then
+        # exploits, then access, so a flag raised this cycle is in the queue before access acts.
+        asyncio.run(loop([CreditAnalyst(db), ExploitWatch(db), AccessController(db)], db))
     except KeyboardInterrupt:
         pass
     finally:

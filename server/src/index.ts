@@ -10,6 +10,12 @@ import { Sync } from './sync';
 import { demoRoutes } from './demo/routes';
 import { buildSeedPlan } from './integrations/nessie/seed-plan';
 
+if (!env.SERVER_HOST) {
+  console.error('This server runs sync and the gateway on the shared database, and only one may run (the hosted one).\n'
+    + 'Use the hosted API (VITE_API_URL). To run it here anyway, stop the hosted one first: pnpm dev:server');
+  process.exit(1);
+}
+
 const ds = loadDataset();
 const bank = await openBank();
 

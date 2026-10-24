@@ -11,7 +11,7 @@ The SpacetimeDB module in `spacetime/` is the system of work. Business rules liv
 - IDs are stable text from the source (`ORG-90412`, `INV-1021`, `nessie:<_id>`).
 - Derived values aren't stored: days past due, aging, unpaid totals, autonomy %, exposure.
 - Every write that changes state appends to `audit_event` in the same reducer.
-- Fields the system of work owns (client status, lever state, loan borrowing, match status, paid amounts) come from sync on first import only.
+- Fields the system of work owns (client status and tier, lever state, loan borrowing, match status, paid amounts) come from sync on first import only.
 
 ## Ownership
 
