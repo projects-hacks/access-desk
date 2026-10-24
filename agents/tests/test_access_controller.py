@@ -73,6 +73,7 @@ def moves(v, **kw):
     return plan(world(v, **kw), escalation_days=7)
 
 
+RESTRICT = "propose_restriction_with_boundaries"
 BOOKKEEPING = {"upsert_precedent", "record_investigation", "record_wait"}
 
 
@@ -89,7 +90,7 @@ def waited(v, **kw):
 class AccessControllerPlan(unittest.TestCase):
     def test_restricts_unpaid_product_gentlest_step_first(self):
         m = only(view())
-        self.assertEqual((m.action, m.args["lever"], m.args["step"]), ("propose_restriction", "trading", "PAUSE_OTC"))
+        self.assertEqual((m.action, m.args["lever"], m.args["step"]), (RESTRICT, "trading", "PAUSE_OTC"))
 
     def test_no_restriction_while_cure_period_runs(self):
         self.assertIsNone(only(view(cure="open")))
@@ -158,7 +159,7 @@ class AccessControllerPlan(unittest.TestCase):
 
     def test_ignores_rejection_from_earlier_episode(self):
         v = view(rejections=[event("REJECTED", "2025-11-10", 5)])
-        self.assertEqual(only(v).action, "propose_restriction")
+        self.assertEqual(only(v).action, RESTRICT)
 
     def test_restores_once_nothing_in_default(self):
         levers = [{"lever": "trading", "state": "limited", "detail": "OTC paused", "work_item_id": None}]
@@ -213,7 +214,7 @@ class RmPushback(unittest.TestCase):
 
     def test_answered_note_is_not_answered_again(self):
         reply = item(11, "REMINDER", "POSTED", {"body": "No payment (re RM-4)"})
-        self.assertEqual(only(view(rm_note=[NOTE], work_item=[reply]), readings={4: PAID}).action, "propose_restriction")
+        self.assertEqual(only(view(rm_note=[NOTE], work_item=[reply]), readings={4: PAID}).action, RESTRICT)
 
     def test_exception_request_goes_to_controller_never_self_approved(self):
         m = only(view(rm_note=[NOTE]), readings={4: HOLD_OFF})
@@ -231,12 +232,12 @@ class RmPushback(unittest.TestCase):
         approvals = [event("APPROVED", "2026-03-18", 12, kind="NOVEL_CASE")]
         self.assertIsNone(only(view(rm_note=[NOTE], work_item=[case], approvals=approvals)))
         self.assertEqual(only(view(rm_note=[NOTE], work_item=[case], approvals=approvals), today="2026-03-26").action,
-                         "propose_restriction")
+                         RESTRICT)
 
     def test_rejected_exception_resumes_escalation(self):
         case = item(12, "NOVEL_CASE", "REJECTED", subject="rm_note:4")
         rejections = [event("REJECTED", "2026-03-18", 12, kind="NOVEL_CASE", detail="client has broken promises before")]
-        self.assertEqual(only(view(rm_note=[NOTE], work_item=[case], rejections=rejections)).action, "propose_restriction")
+        self.assertEqual(only(view(rm_note=[NOTE], work_item=[case], rejections=rejections)).action, RESTRICT)
 
 
 class Precedents(unittest.TestCase):
@@ -318,7 +319,7 @@ class MaterialEvent(unittest.TestCase):
         v = cobalt(work_item=[case], approvals=[event("APPROVED", "2026-03-05", 20, kind="NOVEL_CASE")])
         v.deadline[0].update(status="expired")
         m = only(v, today="2026-03-15")
-        self.assertEqual((m.action, m.args["lever"], m.args["step"]), ("propose_restriction", "withdrawals", "HOLD_AMOUNT_OWED"))
+        self.assertEqual((m.action, m.args["lever"], m.args["step"]), (RESTRICT, "withdrawals", "HOLD_AMOUNT_OWED"))
         v.access_lever[0].update(state="limited", detail="$61,400.00 held")
         self.assertIsNone(only(v, today="2026-04-01"))
 
@@ -376,6 +377,56 @@ class WhyIDidntAct(unittest.TestCase):
     def test_nothing_recorded_for_clients_who_owe_nothing(self):
         self.assertIsNone(waited(view(owed=())))
         self.assertIsNone(waited(view(owed=(), work_item=[item(9, "RESTRICTION", "PROPOSED")])))
+
+
+class CutoffComparison(unittest.TestCase):
+    def setUp(self):
+        self.v = v = view(products=("CUSTODY", "TRADING", "API"), usd=1_000_000_00,
+                                    position=[{"status": "open", "hedge_group": "H1", "notional_cents": 40_000_000_00},
+                                              {"status": "open", "hedge_group": "H1", "notional_cents": -38_000_000_00},
+                                              {"status": "open", "hedge_group": None, "notional_cents": 2_000_000_00},
+                                              {"status": "closed", "hedge_group": None, "notional_cents": 9_000_000_00}])
+        v.contract_clause.append({"kind": "no_forced_close", "clause": "11", "allowed": True,
+                                            "text": "The platform will not force-close client positions to recover fees."})
+        v.custody_holding.append({"asset": "BTC", "value_cents": 9_000_000_00})
+
+    def comparison(self, v):
+        w = world(v)
+        w.policies = [{"policy_id": "pol-006", "title": "", "rule_json": ""}, {"policy_id": "pol-008", "title": "", "rule_json": ""}]
+        m = next(m for m in plan(w, escalation_days=7) if m.action == RESTRICT)
+        return m, json.loads(m.args["boundaries_json"])[0]
+
+    def test_structured_side_by_side(self):
+        m, c = self.comparison(self.v)
+        self.assertEqual(c["kind"], "cutoff_comparison")
+        self.assertEqual((c["proposed"]["step"], c["proposed"]["positionsForceClosed"], c["proposed"]["custodyFrozenCents"]),
+                         ("PAUSE_OTC", 0, 0))
+        full = c["fullCutoff"]
+        self.assertEqual((full["positionsForceClosed"], full["hedgesForceClosed"], full["notionalCents"]), (3, 2, 80_000_000_00))
+        self.assertEqual(full["estimatedUnwindCostCents"], 400_000_00)
+        self.assertEqual(full["custodyFrozenCents"], 10_000_000_00)
+        self.assertEqual(full["frozenToOwed"], 200.0)
+        self.assertEqual([b["clause"] for b in full["clausesBreached"]], ["11"])
+        self.assertEqual(full["policiesBreached"], ["pol-006", "pol-008"])
+        self.assertIn("Compared with a full cutoff: Freezes all", m.args["reasoning"])
+        self.assertIn("§11 (no forced close)", full["summary"])
+
+    def test_clause_numbers_come_from_the_contract(self):
+        self.v.contract_clause[-1]["clause"] = "14.2"
+        _, c = self.comparison(self.v)
+        self.assertIn("§14.2 (no forced close)", c["fullCutoff"]["summary"])
+
+    def test_hold_shows_share_of_custody(self):
+        flag = [{"status": "open", "pattern": "withdrawal_during_cure"}]
+        self.v.exploit_flag = flag
+        _, c = self.comparison(self.v)
+        self.assertEqual(c["proposed"]["custodyFrozenCents"], 50_000_00)
+        self.assertIn("Hold $50,000.00 of withdrawals (0.5% of $10,000,000.00 custody)", c["proposed"]["summary"])
+
+    def test_falls_back_to_plain_reducer_until_published(self):
+        m = only(self.v)
+        self.assertEqual(m.fallback.action, "propose_restriction")
+        self.assertNotIn("boundaries_json", m.fallback.args)
 
 
 if __name__ == "__main__":

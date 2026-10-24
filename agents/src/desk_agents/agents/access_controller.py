@@ -51,6 +51,7 @@ class Move:
     client_id: str
     args: dict[str, Any]
     summary: str
+    fallback: "Move | None" = None
 
 
 @dataclass
@@ -89,7 +90,7 @@ class AccessController(Agent):
 
     def execute(self, move: Move) -> bool:
         if move.action in self.unavailable:
-            return False
+            return self.execute(move.fallback) if move.fallback else False
         try:
             getattr(self.db, move.action)(**move.args)
             log.info("[%s] %s %s: %s", self.name, move.action, move.client_id, move.summary)
@@ -99,7 +100,10 @@ class AccessController(Agent):
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 self.unavailable.add(move.action)
-                log.warning("[%s] %s is not published in this database yet; skipping it", self.name, move.action)
+                log.warning("[%s] %s is not published in this database yet; %s", self.name, move.action,
+                            f"using {move.fallback.action}" if move.fallback else "skipping it")
+                if move.fallback:
+                    return self.execute(move.fallback)
             else:
                 log.warning("[%s] %s %s failed: %s", self.name, move.action, move.client_id, e)
         return False
@@ -169,7 +173,8 @@ def next_move(
         note = f": \u201c{rejected['detail']}\u201d" if rejected.get("detail") else ""
         return Wait("controller_rejected", f"A controller rejected a restriction on {rejected['sim_date']}{note}. "
                                            "Not escalating again until the client cures.")
-    return restriction(view, today, ladder, escalation_days, only_levers=agreed_levers(view))
+    return restriction(view, today, ladder, escalation_days, only_levers=agreed_levers(view),
+                       capability=world.capability, policies=world.policies)
 
 
 def open_work(view: ClientView) -> str | None:
@@ -318,6 +323,7 @@ def usable_steps(view: ClientView, lever: str, ladder: dict[str, list[str]]) -> 
 
 def restriction(
     view: ClientView, today: str, ladder: dict[str, list[str]], escalation_days: int, only_levers: set[str] | None = None,
+    capability: list[Row] = (), policies: list[Row] = (),
 ) -> Move | Wait | None:
     overdue = overdue_invoices(view, today)
     if not overdue:
@@ -387,13 +393,108 @@ def restriction(
         why.append(f"{lever} is the product that is unpaid; {step} is the gentlest step not yet taken.")
     if lever == "trading" and hedged(view):
         why.append("Open hedged positions: never close-only (pol-008); existing hedges stay intact.")
+    comparison = cutoff_comparison(view, lever, step, amount, capability, policies)
+    why.append(f"Compared with a full cutoff: {comparison['fullCutoff']['summary']}")
+    args = {"client_id": view.id, "lever": lever, "step": step, "reasoning": " ".join(why), "policy_ref": "pol-006",
+            "confidence": 0.75 if LEVER_PRODUCT[lever] not in unpaid and lever != "withdrawals" else 0.9}
+    summary = f"{step} on {name}'s {lever}"
     return Move(
-        action="propose_restriction",
+        action="propose_restriction_with_boundaries",
         client_id=view.id,
-        args={"client_id": view.id, "lever": lever, "step": step, "reasoning": " ".join(why), "policy_ref": "pol-006",
-              "confidence": 0.75 if LEVER_PRODUCT[lever] not in unpaid and lever != "withdrawals" else 0.9},
-        summary=f"{step} on {name}'s {lever}",
+        args={**args, "boundaries_json": json.dumps([comparison])},
+        summary=summary,
+        fallback=Move(action="propose_restriction", client_id=view.id, args=args, summary=summary),
     )
+
+
+LEVER_WORDS = {"withdrawals": "withdrawals", "trading": "trading", "api": "API access", "financing": "financing"}
+PROPOSAL_WORDS = {
+    "REQUIRE_PREPAY": "Require prepayment for new API usage",
+    "RATE_LIMIT": "Rate-limit API access",
+    "READ_ONLY": "Set API access to read-only",
+    "PAUSE_OTC": "Pause OTC trading",
+    "NO_NEW_POSITIONS": "Stop new positions (closing and hedging still allowed)",
+    "CLOSE_ONLY": "Set trading to close-only",
+    "NO_NEW_BORROWING": "Pause new borrowing",
+    "LOWER_LINE": "Lower the credit line",
+}
+
+
+def listed(items: list[str]) -> str:
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def plural(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def cutoff_comparison(
+    view: ClientView, lever: str, step: str, owed_cents: int, capability: list[Row], policies: list[Row],
+) -> dict[str, Any]:
+    """The proposed step next to what a full cutoff of the account would do, from the client's own data."""
+    custody = sum(h["value_cents"] for h in view.custody_holding)
+    held = owed_cents if (lever, step) == ("withdrawals", "HOLD_AMOUNT_OWED") else 0
+    in_use = [lv["lever"] for lv in view.access_lever if lv["state"] != "not_used"]
+    positions = [p for p in view.position if p["status"] == "open"]
+    hedges = [p for p in positions if p.get("hedge_group")]
+    notional = sum(abs(p["notional_cents"]) for p in positions)
+    bps = settings.unwind_cost_bps
+    unwind = notional * bps // 10_000
+    two_approvers = {(c["lever"], c["step"]) for c in capability if c.get("two_approvers")}
+    active = {p["policy_id"] for p in policies}
+
+    breaches = []
+    no_close = clause(view, "no_forced_close")
+    if no_close and no_close["allowed"] and positions:
+        breaches.append({"clause": no_close["clause"], "kind": no_close["kind"], "text": no_close["text"]})
+    broken = [pid for pid, applies in (("pol-006", custody > owed_cents), ("pol-008", bool(hedges))) if applies and pid in active]
+
+    kept = [LEVER_WORDS.get(lv, lv) for lv in in_use if lv != lever]
+    proposed_parts = [
+        f"Hold {usd(held)} of withdrawals" + (f" ({held * 100 / custody:.1f}% of {usd(custody)} custody)" if custody else "")
+        if held else PROPOSAL_WORDS.get(step, step.replace("_", " ").lower()),
+        f"{listed(kept)} unaffected" if kept else "nothing else changes",
+    ]
+    if positions:
+        proposed_parts.append(f"{plural(len(positions), 'open position')} untouched")
+    proposed_summary = "; ".join(proposed_parts) + "."
+    cut = [LEVER_WORDS.get(lv, lv) for lv in in_use if lv != "withdrawals"]
+    full_parts = []
+    if custody:
+        full_parts.append(f"freezes all {usd(custody)} of custody"
+                          + (f" ({custody / owed_cents:,.0f}× the {usd(owed_cents)} owed)" if owed_cents else ""))
+    if cut:
+        full_parts.append("cuts " + listed(cut))
+    if positions:
+        full_parts.append(
+            f"force-closes {plural(len(positions), 'open position')}"
+            f"{f' incl. {len(hedges)} hedged' if hedges else ''} ({usd(notional)} notional, est. {usd(unwind)} "
+            f"unwind cost at {bps} bps)"
+        )
+    if breaches or broken:
+        full_parts.append("breaches " + listed(
+            [f"§{b['clause']} ({b['kind'].replace('_', ' ')})" for b in breaches] + broken))
+    full_parts.append("needs two approvers")
+    full_parts[0] = full_parts[0][0].upper() + full_parts[0][1:]
+    return {
+        "kind": "cutoff_comparison",
+        "owedCents": owed_cents,
+        "assumptions": {"unwindCostBps": bps},
+        "proposed": {
+            "lever": lever, "step": step, "summary": proposed_summary,
+            "custodyFrozenCents": held, "leversCut": [], "leversOpen": [lv for lv in in_use if lv != lever],
+            "positionsForceClosed": 0, "hedgesForceClosed": 0, "clausesBreached": [], "policiesBreached": [],
+            "approversNeeded": 2 if (lever, step) in two_approvers else 1,
+        },
+        "fullCutoff": {
+            "summary": "; ".join(full_parts) + ".",
+            "custodyFrozenCents": custody, "frozenToOwed": round(custody / owed_cents, 1) if owed_cents else None,
+            "leversCut": in_use, "leversOpen": [],
+            "positionsForceClosed": len(positions), "hedgesForceClosed": len(hedges), "notionalCents": notional,
+            "estimatedUnwindCostCents": unwind, "clausesBreached": breaches, "policiesBreached": broken,
+            "approversNeeded": 2,
+        },
+    }
 
 
 def fill(invoices: list[Row], budget: int) -> list[Row]:

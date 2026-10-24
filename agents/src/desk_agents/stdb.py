@@ -67,6 +67,13 @@ class SpacetimeClient:
         """
         self.call("propose_restriction", client_id, lever, step, reasoning, policy_ref, confidence)
 
+    def propose_restriction_with_boundaries(
+        self, client_id: str, lever: str, step: str, reasoning: str, policy_ref: str, boundaries_json: str,
+        confidence: float = 0.9,
+    ) -> None:
+        """propose_restriction plus structured context (e.g. the full-cutoff comparison) in boundaries_json."""
+        self.call("propose_restriction_with_boundaries", client_id, lever, step, reasoning, policy_ref, confidence, boundaries_json)
+
     def propose_restore(
         self, client_id: str, lever: str, reasoning: str, policy_ref: str = "pol-011", confidence: float = 0.9,
     ) -> None:

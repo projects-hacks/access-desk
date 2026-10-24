@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     agent_interval_seconds: float = 15.0
     watch_seconds: float = 1.0
     escalation_days: int = 7
+    unwind_cost_bps: int = 50
 
 
 settings = Settings()

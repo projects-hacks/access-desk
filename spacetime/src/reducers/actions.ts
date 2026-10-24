@@ -74,7 +74,7 @@ export function canAutoApply(ctx: Ctx, kind: string, clientId: string, amountCen
 /** Create the work item; execute right away when policy allows. */
 function propose(ctx: Ctx, w: {
   kind: string; clientId: string; title: string; amountCents: bigint; proposal: Record<string, unknown>;
-  reasoning: string; policyRef: string; clausesCited: string[]; confidence: number;
+  reasoning: string; policyRef: string; clausesCited: string[]; confidence: number; boundariesJson?: string;
 }) {
   requireRole(ctx, PROPOSERS);
   const auto = canAutoApply(ctx, w.kind, w.clientId, w.amountCents);
@@ -83,7 +83,9 @@ function propose(ctx: Ctx, w: {
     proposal: w.proposal, reasoning: w.reasoning, policyRef: w.policyRef, confidence: w.confidence,
     requiredRole: 'CONTROLLER', autoApplied: auto,
   });
-  if (w.clausesCited.length) ctx.db.workItem.id.update({ ...item, clausesCited: w.clausesCited });
+  if (w.clausesCited.length || w.boundariesJson) {
+    ctx.db.workItem.id.update({ ...item, clausesCited: w.clausesCited, boundariesJson: w.boundariesJson ?? item.boundariesJson });
+  }
   if (auto) executeApproved(ctx, item.id);
   return item;
 }
@@ -131,50 +133,75 @@ export const proposeCustodyDebit = spacetimedb.reducer(
 /** Restrict one lever by one step of the platform's ladder. Never more than owed; never halts a hedged book. */
 export const proposeRestriction = spacetimedb.reducer(
   { clientId: t.string(), lever: t.string(), step: t.string(), reasoning: t.string(), policyRef: t.string(), confidence: t.f32() },
-  (ctx, { clientId, lever, step, reasoning, policyRef, confidence }) => {
-    const c = client(ctx, clientId);
-    if (!(LEVERS as readonly string[]).includes(lever)) throw new SenderError(`unknown lever ${lever}`);
-    const current = ctx.db.accessLever.id.find(`${clientId}:${lever}`);
-    if (!current || current.state === 'not_used') throw new SenderError(`${lever} is not part of ${c.name}'s contract`);
-    const capabilityOk = [...ctx.db.capability.iter()].some((k) => k.lever === lever && k.step === step);
-    if (!capabilityOk) throw new SenderError(`the platform cannot ${step} on ${lever}`);
-    if (step === 'FULL_FREEZE') throw new SenderError('a full freeze needs two approvers; propose a hold of the amount owed instead');
+  (ctx, args) => restrict(ctx, args),
+);
 
-    const overdue = overdueInvoices(ctx, clientId);
-    if (!overdue.length) throw new SenderError(`${c.name} has nothing overdue`);
-    const owed = overdue.reduce((s, i) => s + i.amountCents - i.paidCents, 0n);
-    const contract = ctx.db.contract.clientId.find(clientId);
-    const products = new Set(overdue.map((i) => i.product));
-    const leverProduct: Record<string, string> = { withdrawals: 'CUSTODY', trading: 'TRADING', api: 'API', financing: 'FINANCING' };
-    const setOff = clause(ctx, clientId, 'set_off');
-    const cited: string[] = [];
-    if (lever === 'withdrawals') {
-      if (!setOff?.allowed) throw new SenderError('no set-off right: withdrawals cannot be held');
-      cited.push(setOff.clause);
-    } else if (!products.has(leverProduct[lever]!) && !contract?.crossDefault) {
-      throw new SenderError(`nothing overdue on ${lever}, and the contract has no cross-default`);
+/**
+ * The same proposal, carrying structured context for the console (for example
+ * what a full cutoff would do instead) in the work item's boundaries.
+ */
+export const proposeRestrictionWithBoundaries = spacetimedb.reducer(
+  {
+    clientId: t.string(), lever: t.string(), step: t.string(), reasoning: t.string(), policyRef: t.string(), confidence: t.f32(),
+    boundariesJson: t.string(),
+  },
+  (ctx, { boundariesJson, ...args }) => {
+    try {
+      JSON.parse(boundariesJson);
+    } catch {
+      throw new SenderError('boundariesJson must be JSON');
     }
-    const hedged = [...ctx.db.position.clientId.filter(clientId)].some((p) => p.status === 'open' && p.hedgeGroup);
-    if (lever === 'trading' && hedged && step === 'CLOSE_ONLY') throw new SenderError('pol-008: never force a hedged book to close-only; propose NO_NEW_POSITIONS');
-    // §9.1: no restriction until a default notice has gone out and the cure period has run.
-    const cure = clause(ctx, clientId, 'cure');
-    if (cure?.allowed) {
-      const s = cureState(ctx, clientId);
-      const days = contract?.cureDays ?? 0;
-      if (s.state === 'none') throw new SenderError(`§${cure.clause}: no default notice yet; send one (propose_notice), then the ${days}-day cure period runs`);
-      if (s.state === 'running') throw new SenderError(`§${cure.clause}: cure period runs until ${s.dueOn} (notice of ${s.startedOn})`);
-      cited.push(cure.clause);
-    }
-
-    const isHold = lever === 'withdrawals' && step === 'HOLD_AMOUNT_OWED';
-    propose(ctx, {
-      kind: 'RESTRICTION', clientId, amountCents: isHold ? owed : 0n, policyRef, clausesCited: cited,
-      title: isHold ? `Hold ${formatUsd(owed)} of ${c.name}'s withdrawals` : `${step.replace(/_/g, ' ').toLowerCase()} on ${c.name}'s ${lever}`,
-      proposal: { lever, step, amountCents: isHold ? owed : 0n, invoiceIds: overdue.map((i) => i.id), clause: cited[0] ?? '' },
-      reasoning, confidence,
-    });
+    restrict(ctx, args, boundariesJson);
   },
 );
+
+function restrict(
+  ctx: Ctx,
+  { clientId, lever, step, reasoning, policyRef, confidence }: { clientId: string; lever: string; step: string; reasoning: string; policyRef: string; confidence: number },
+  boundariesJson?: string,
+) {
+  const c = client(ctx, clientId);
+  if (!(LEVERS as readonly string[]).includes(lever)) throw new SenderError(`unknown lever ${lever}`);
+  const current = ctx.db.accessLever.id.find(`${clientId}:${lever}`);
+  if (!current || current.state === 'not_used') throw new SenderError(`${lever} is not part of ${c.name}'s contract`);
+  const capabilityOk = [...ctx.db.capability.iter()].some((k) => k.lever === lever && k.step === step);
+  if (!capabilityOk) throw new SenderError(`the platform cannot ${step} on ${lever}`);
+  if (step === 'FULL_FREEZE') throw new SenderError('a full freeze needs two approvers; propose a hold of the amount owed instead');
+
+  const overdue = overdueInvoices(ctx, clientId);
+  if (!overdue.length) throw new SenderError(`${c.name} has nothing overdue`);
+  const owed = overdue.reduce((s, i) => s + i.amountCents - i.paidCents, 0n);
+  const contract = ctx.db.contract.clientId.find(clientId);
+  const products = new Set(overdue.map((i) => i.product));
+  const leverProduct: Record<string, string> = { withdrawals: 'CUSTODY', trading: 'TRADING', api: 'API', financing: 'FINANCING' };
+  const setOff = clause(ctx, clientId, 'set_off');
+  const cited: string[] = [];
+  if (lever === 'withdrawals') {
+    if (!setOff?.allowed) throw new SenderError('no set-off right: withdrawals cannot be held');
+    cited.push(setOff.clause);
+  } else if (!products.has(leverProduct[lever]!) && !contract?.crossDefault) {
+    throw new SenderError(`nothing overdue on ${lever}, and the contract has no cross-default`);
+  }
+  const hedged = [...ctx.db.position.clientId.filter(clientId)].some((p) => p.status === 'open' && p.hedgeGroup);
+  if (lever === 'trading' && hedged && step === 'CLOSE_ONLY') throw new SenderError('pol-008: never force a hedged book to close-only; propose NO_NEW_POSITIONS');
+  // §9.1: no restriction until a default notice has gone out and the cure period has run.
+  const cure = clause(ctx, clientId, 'cure');
+  if (cure?.allowed) {
+    const s = cureState(ctx, clientId);
+    const days = contract?.cureDays ?? 0;
+    if (s.state === 'none') throw new SenderError(`§${cure.clause}: no default notice yet; send one (propose_notice), then the ${days}-day cure period runs`);
+    if (s.state === 'running') throw new SenderError(`§${cure.clause}: cure period runs until ${s.dueOn} (notice of ${s.startedOn})`);
+    cited.push(cure.clause);
+  }
+
+  const isHold = lever === 'withdrawals' && step === 'HOLD_AMOUNT_OWED';
+  propose(ctx, {
+    kind: 'RESTRICTION', clientId, amountCents: isHold ? owed : 0n, policyRef, clausesCited: cited,
+    title: isHold ? `Hold ${formatUsd(owed)} of ${c.name}'s withdrawals` : `${step.replace(/_/g, ' ').toLowerCase()} on ${c.name}'s ${lever}`,
+    proposal: { lever, step, amountCents: isHold ? owed : 0n, invoiceIds: overdue.map((i) => i.id), clause: cited[0] ?? '' },
+    reasoning, confidence, boundariesJson,
+  });
+}
 
 /** Give access back on one lever (releases holds on withdrawals). */
 export const proposeRestore = spacetimedb.reducer(
