@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useReducer, useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { config } from '../lib/config';
 import { reducers, tables } from '../module_bindings';
@@ -51,7 +51,7 @@ interface Choice {
 interface DecisionMeta {
   decided_by?: 'claude' | 'rules';
   why?: string;
-  baseline?: { action: string; to_tier: number; policy_ref: string; confidence: number };
+  baseline?: { action: string; to_tier: number; policy_ref: string; confidence: number; reasons?: string[] };
   choice?: Choice | null;
   guardrails?: string[];
   rejected_attempts?: { violations: string[]; error: string }[];
@@ -134,6 +134,7 @@ export function CreditDesk() {
         </div>
       </header>
       {error && <p className="banner bad">{error}</p>}
+      <Accuracy />
 
       <div className="credit-grid">
         <div>
@@ -230,20 +231,14 @@ export function CreditDesk() {
                   </div>
                 );
               })()}
-              {(() => {
-                const review = credit.filter((w) => w.clientId === client.id && w.kind === 'CREDIT_REVIEW').at(-1);
-                const b = review && parse<ReviewProposal>(review.proposalJson)?.breakdown;
-                if (!b) return null;
-                return (
-                  <dl className="breakdown">
-                    {(['lateness', 'frequency', 'severity', 'pieces', 'disputes'] as const).map((k) => (
-                      <div key={k}><dt>{k}</dt><dd>−{(b[k] ?? 0).toFixed(1)}</dd></div>
-                    ))}
-                    <div><dt>raw</dt><dd>{b.raw?.toFixed(1)}</dd></div>
-                    <div><dt>months</dt><dd>{b.periods}</dd></div>
-                  </dl>
-                );
-              })()}
+              <Trace
+                client={client}
+                profile={profileOf.get(client.id)}
+                flags={flagsOf.get(client.id) ?? []}
+                item={credit.filter((w) => w.clientId === client.id && w.kind !== 'EXPLOIT_FLAG').at(-1)}
+                review={credit.filter((w) => w.clientId === client.id && w.kind === 'CREDIT_REVIEW').at(-1)}
+                note={(id) => audit.filter((a) => a.workItemId === id && a.action === 'TRANSITION' && a.allowed).at(-1)?.detail ?? ''}
+              />
               {(flagsOf.get(client.id) ?? []).map((f) => {
                 const evidence = parse<Evidence[]>(f.evidenceJson) ?? [];
                 return (
@@ -325,5 +320,143 @@ function Bar({ value }: { value: number | undefined }) {
       <span className={`fill ${tone}`} style={{ width: `${value}%` }} />
       <span className="num">{value}</span>
     </span>
+  );
+}
+
+
+/**
+ * How one client was decided, step by step: the evidence the scores were built
+ * from, the patterns, the rules' answer, the guardrails, Claude's decision and
+ * where it stands with the controller.
+ */
+function Trace({ client, profile, flags, item, review, note }: {
+  client: { id: string; name: string; tier: number; strategic: boolean };
+  profile: { reliabilityScore: number; valueScore: number; coverageRatio: number; coverageDetail: string; expectedSettleOn?: string } | undefined;
+  flags: { id: string; pattern: string; status: string; score: number; months: number }[];
+  item: { id: bigint; kind: string; state: string; proposalJson: string; title: string } | undefined;
+  review: { proposalJson: string } | undefined;
+  note: (id: bigint) => string;
+}) {
+  const meta = item ? parse<DecisionMeta & ReviewProposal>(item.proposalJson) : undefined;
+  const b = (review && parse<ReviewProposal>(review.proposalJson)?.breakdown) ?? meta?.breakdown;
+  const choice = meta?.choice;
+  const from = meta?.from_tier ?? client.tier;
+  const shrink = b ? `(${b.periods} × ${b.raw?.toFixed(1)} + 3 × 70) ÷ ${(b.periods ?? 0) + 3}` : '';
+  return (
+    <ol className="trace">
+      <li>
+        <h4>Evidence <span className="muted">deterministic, from the books</span></h4>
+        {!profile && <p className="muted">Not scored yet.</p>}
+        {profile && b && (
+          <div className="waterfall">
+            <span>100</span>
+            {(['lateness', 'frequency', 'severity', 'pieces', 'disputes'] as const).map((k) => (
+              <span key={k} className={(b[k] ?? 0) > 0 ? 'minus' : 'zero'}>− {(b[k] ?? 0).toFixed(1)} <small>{k}</small></span>
+            ))}
+            <span>= {b.raw?.toFixed(1)} <small>raw</small></span>
+            <span>→ {shrink} = <b>{profile.reliabilityScore}</b> <small>reliability</small></span>
+          </div>
+        )}
+        {profile && b?.size !== undefined && (
+          <p>Value <b>{profile.valueScore}</b> = {b.size.toFixed(1)} <small>size of fees billed</small> + {b.breadth?.toFixed(1)} <small>{b.products} of 4 products</small></p>
+        )}
+        {profile && !b && <p>Reliability <b>{profile.reliabilityScore}</b> · value <b>{profile.valueScore}</b></p>}
+        {profile && <p>Coverage <b>{profile.coverageRatio.toFixed(2)}×</b>: {profile.coverageDetail} Expected to settle {profile.expectedSettleOn ?? '—'}{b?.median_lag !== undefined ? ` (typical lag ${b.median_lag} days)` : ''}.</p>}
+      </li>
+      <li>
+        <h4>Patterns <span className="muted">exploit detectors</span></h4>
+        {flags.length
+          ? <p>{flags.map((f) => <span key={f.id} className={`pill ${f.status}`}>{f.pattern} · {f.months} mo · {f.score.toFixed(2)}</span>)}</p>
+          : <p className="muted">No pattern fired.</p>}
+      </li>
+      <li>
+        <h4>Rules' answer <span className="muted">formula tier and guardrails</span></h4>
+        {meta?.baseline
+          ? <>
+              <p><b>{actionText(meta.baseline.action, from, meta.baseline.to_tier)}</b>{meta.baseline.policy_ref ? ` (${meta.baseline.policy_ref})` : ''}</p>
+              {!!meta.baseline.reasons?.length && <ul>{meta.baseline.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+            </>
+          : <p><b>keep tier {client.tier}</b> <span className="muted">— nothing to decide, so Claude was not asked</span></p>}
+      </li>
+      <li>
+        <h4>Guardrails <span className="muted">what any decision must respect</span></h4>
+        {meta?.guardrails?.length ? <ul>{meta.guardrails.map((g) => <li key={g}>{g}</li>)}</ul> : <p className="muted">Not evaluated (no decision needed).</p>}
+        {meta?.rejected_attempts?.map((a, i) => (
+          <p key={i} className="bad">Rejected attempt {i + 1}: {[a.error, ...a.violations].filter(Boolean).join('; ')}</p>
+        ))}
+      </li>
+      <li>
+        <h4>Decision <span className={`pill by-${meta?.decided_by ?? 'rules'}`}>{meta?.decided_by === 'claude' ? 'Claude' : 'rules'}</span>{meta?.why && <span className="muted"> asked because: {meta.why}</span>}</h4>
+        {choice
+          ? <>
+              <p><b>{actionText(choice.action, from, choice.to_tier)}</b>{choice.policy ? ` · ${choice.policy.kind === 'company_draft' ? 'new policy' : 'policy'} ${choice.policy.policy_id}: ${choice.policy.title}` : ''} · confidence {choice.confidence.toFixed(2)}</p>
+              <ul>{choice.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+              {!!choice.policy?.terms.length && <p>Terms: {choice.policy.terms.map(termText).join('; ')}</p>}
+              {!!choice.policy?.success_criteria.length && <p>Success when: {choice.policy.success_criteria.map(criterionText).join('; ')}</p>}
+              {!!choice.cited_invoice_ids.length && <p className="muted">Cites {choice.cited_invoice_ids.join(', ')}</p>}
+            </>
+          : <p>{meta?.baseline ? `Rules decided: ${actionText(meta.baseline.action, from, meta.baseline.to_tier)}.` : `No change for ${client.name}.`}</p>}
+      </li>
+      <li>
+        <h4>Controller</h4>
+        {item
+          ? <p><span className={`pill ${item.state.toLowerCase()}`}>{item.state}</span> {item.title}{note(item.id) && item.state !== 'PROPOSED' ? <span className="muted"> · “{note(item.id)}”</span> : ''}</p>
+          : <p className="muted">Nothing waiting.</p>}
+      </li>
+    </ol>
+  );
+}
+
+interface Backtest {
+  today: string;
+  cutoffs: string[];
+  settle: { n: number; mae_days: number; median_abs_days: number; within_3_days: number; bias_days: number; naive_mae_days: number };
+  tiers: {
+    n: number; held: number; upgrades: { n: number; held: number }; downgrades: { n: number; held: number };
+    calibration: Record<string, { invoices: number; late_share: number }>;
+  };
+  exploits: { planted: string[]; caught: string[]; false_alarms: string[]; false_alarms_any_cutoff: string[]; first_seen: Record<string, string> };
+}
+
+/** The engine replayed at past month-ends against what clients actually did (credit/backtest.py). */
+function Accuracy() {
+  const [r, setR] = useState<Backtest>();
+  useEffect(() => {
+    fetch('/credit-backtest.json').then((x) => (x.ok ? x.json() : undefined)).then(setR).catch(() => setR(undefined));
+  }, []);
+  if (!r) return null;
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  return (
+    <details className="accuracy" open>
+      <summary>How accurate is it? <span className="muted">replayed at {r.cutoffs.length} month-ends ({r.cutoffs[0]} → {r.cutoffs.at(-1)}), judged on what clients did next</span></summary>
+      <div className="acc-grid">
+        <div>
+          <h4>Pay-date prediction</h4>
+          <p className="big">{r.settle.median_abs_days} <small>days median error</small></p>
+          <p>mean {r.settle.mae_days} days vs <b>{r.settle.naive_mae_days}</b> for “pays on the due date” · {pct(r.settle.within_3_days)} within 3 days · runs {r.settle.bias_days > 0 ? `${r.settle.bias_days} days optimistic` : `${-r.settle.bias_days} days early`} · {r.settle.n} predictions</p>
+        </div>
+        <div>
+          <h4>Does the tier mean anything?</h4>
+          {Object.entries(r.tiers.calibration).map(([tier, c]) => (
+            <div key={tier} className="calib">
+              <span>tier {tier}</span>
+              <span className="calib-bar"><span style={{ width: `${c.late_share * 100}%` }} /></span>
+              <span className="num">{pct(c.late_share)} late</span>
+            </div>
+          ))}
+          <p className="muted">share of invoices &gt;10 days late in the 90 days after</p>
+        </div>
+        <div>
+          <h4>Did tier calls hold?</h4>
+          <p className="big">{r.tiers.held}/{r.tiers.n}</p>
+          <p>downgrades <b>{r.tiers.downgrades.held}/{r.tiers.downgrades.n}</b> · upgrades <b>{r.tiers.upgrades.held}/{r.tiers.upgrades.n}</b></p>
+        </div>
+        <div>
+          <h4>Exploits</h4>
+          <p className="big">{r.exploits.caught.length}/{r.exploits.planted.length} <small>caught</small></p>
+          <p>{r.exploits.false_alarms.length} false alarms now{r.exploits.false_alarms_any_cutoff.length ? ` · earlier: ${r.exploits.false_alarms_any_cutoff.join(', ')}` : ''}</p>
+        </div>
+      </div>
+    </details>
   );
 }

@@ -80,3 +80,28 @@ main { padding: 24px; }
 .audit { list-style: none; padding: 0; margin: 0; font-size: 12.5px; background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; }
 .audit li { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; }
 .audit li.denied { background: #fef2f2; }
+
+/* Decision trace and accuracy */
+.trace { counter-reset: step; list-style: none; padding: 0; margin: 12px 0; }
+.trace > li { counter-increment: step; position: relative; padding: 4px 0 10px 34px; border-left: 2px solid #e5e5e5; margin-left: 11px; }
+.trace > li::before { content: counter(step); position: absolute; left: -12px; top: 2px; width: 22px; height: 22px; border-radius: 50%; background: #6366f1; color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+.trace h4 { margin: 0 0 4px; font-size: 14px; }
+.trace p, .trace ul { margin: 2px 0 4px; }
+.trace ul { padding-left: 18px; }
+.waterfall { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; font-variant-numeric: tabular-nums; margin: 4px 0; }
+.waterfall span { background: #f5f5f5; border-radius: 6px; padding: 2px 8px; }
+.waterfall .minus { background: #fef2f2; color: #991b1b; }
+.waterfall .zero { color: #999; }
+.waterfall small, .trace small { color: #777; font-size: 11px; }
+.pill.by-claude { background: #fae8ff; color: #86198f; }
+.pill.by-rules { background: #e0f2fe; color: #075985; }
+.accuracy { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
+.accuracy summary { cursor: pointer; font-weight: 600; }
+.acc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 10px; }
+.acc-grid h4 { margin: 0 0 4px; font-size: 13px; color: #555; }
+.acc-grid p { margin: 2px 0; font-size: 12.5px; }
+.big { font-size: 26px !important; font-weight: 700; }
+.big small { font-size: 12px; font-weight: 400; color: #777; }
+.calib { display: grid; grid-template-columns: 48px 1fr 64px; gap: 6px; align-items: center; font-size: 12px; }
+.calib-bar { height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+.calib-bar span { display: block; height: 100%; background: linear-gradient(90deg, #16a34a, #f59e0b, #dc2626); }

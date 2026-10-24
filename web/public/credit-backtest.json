@@ -1,0 +1,1216 @@
+{
+ "today": "2026-03-03",
+ "cutoffs": [
+  "2025-09-30",
+  "2025-10-31",
+  "2025-11-30",
+  "2025-12-31",
+  "2026-01-31",
+  "2026-02-28"
+ ],
+ "settle": {
+  "n": 48,
+  "mae_days": 6.4,
+  "median_abs_days": 2.0,
+  "within_3_days": 0.75,
+  "within_7_days": 0.75,
+  "bias_days": 6.0,
+  "naive_mae_days": 10.6,
+  "rows": [
+   {
+    "cutoff": "2025-09-30",
+    "client": "Halcyon Capital",
+    "invoice": "INV-1436",
+    "predicted": "2025-11-30",
+    "actual": "2025-12-31",
+    "error_days": 31,
+    "naive_error_days": 91
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Meridian Flow Partners",
+    "invoice": "INV-1440",
+    "predicted": "2025-10-01",
+    "actual": "2025-10-02",
+    "error_days": 1,
+    "naive_error_days": 1
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Fieldstone Quant",
+    "invoice": "INV-1455",
+    "predicted": "2025-09-30",
+    "actual": "2025-10-18",
+    "error_days": 18,
+    "naive_error_days": 18
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Copperline Treasury",
+    "invoice": "INV-1454",
+    "predicted": "2025-09-30",
+    "actual": "2025-10-03",
+    "error_days": 3,
+    "naive_error_days": 2
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Harbor & Pine Treasury",
+    "invoice": "INV-1458",
+    "predicted": "2025-10-03",
+    "actual": "2025-10-05",
+    "error_days": 2,
+    "naive_error_days": 4
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Granite Bay Holdings",
+    "invoice": "INV-1428",
+    "predicted": "2025-09-30",
+    "actual": "2025-10-01",
+    "error_days": 1,
+    "naive_error_days": 1
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Larkspur Treasury",
+    "invoice": "INV-1434",
+    "predicted": "2025-10-04",
+    "actual": "2025-10-03",
+    "error_days": -1,
+    "naive_error_days": 2
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Juniper Labs",
+    "invoice": "INV-1420",
+    "predicted": "2025-10-01",
+    "actual": "2025-10-01",
+    "error_days": 0,
+    "naive_error_days": 1
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Wrenfield Digital",
+    "invoice": "INV-1406",
+    "predicted": "2025-10-14",
+    "actual": "2025-10-14",
+    "error_days": 0,
+    "naive_error_days": 14
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Monarch Rails",
+    "invoice": "INV-1407",
+    "predicted": "2025-09-30",
+    "actual": "2025-10-16",
+    "error_days": 16,
+    "naive_error_days": 16
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Vantage Loop",
+    "invoice": "INV-1403",
+    "predicted": "2025-10-11",
+    "actual": "2025-10-09",
+    "error_days": -2,
+    "naive_error_days": 9
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Tessellate Pay",
+    "invoice": "INV-1405",
+    "predicted": "2025-10-05",
+    "actual": "2025-10-07",
+    "error_days": 2,
+    "naive_error_days": 7
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Halcyon Capital",
+    "invoice": "INV-1436",
+    "predicted": "2025-11-30",
+    "actual": "2025-12-31",
+    "error_days": 31,
+    "naive_error_days": 61
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Meridian Flow Partners",
+    "invoice": "INV-1507",
+    "predicted": "2025-11-01",
+    "actual": "2025-11-02",
+    "error_days": 1,
+    "naive_error_days": 2
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Harbor & Pine Treasury",
+    "invoice": "INV-1525",
+    "predicted": "2025-11-03",
+    "actual": "2025-11-01",
+    "error_days": -2,
+    "naive_error_days": 1
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Larkspur Treasury",
+    "invoice": "INV-1501",
+    "predicted": "2025-11-02",
+    "actual": "2025-11-04",
+    "error_days": 2,
+    "naive_error_days": 4
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Wrenfield Digital",
+    "invoice": "INV-1473",
+    "predicted": "2025-11-13",
+    "actual": "2025-11-13",
+    "error_days": 0,
+    "naive_error_days": 13
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Monarch Rails",
+    "invoice": "INV-1474",
+    "predicted": "2025-10-31",
+    "actual": "2025-11-15",
+    "error_days": 15,
+    "naive_error_days": 15
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Vantage Loop",
+    "invoice": "INV-1470",
+    "predicted": "2025-11-09",
+    "actual": "2025-11-12",
+    "error_days": 3,
+    "naive_error_days": 12
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Tessellate Pay",
+    "invoice": "INV-1472",
+    "predicted": "2025-11-04",
+    "actual": "2025-11-05",
+    "error_days": 1,
+    "naive_error_days": 5
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Halcyon Capital",
+    "invoice": "INV-1436",
+    "predicted": "2025-11-30",
+    "actual": "2025-12-31",
+    "error_days": 31,
+    "naive_error_days": 31
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Aster Point Capital",
+    "invoice": "INV-1577",
+    "predicted": "2025-11-30",
+    "actual": "2025-12-01",
+    "error_days": 1,
+    "naive_error_days": 0
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Northfold Trading",
+    "invoice": "INV-1586",
+    "predicted": "2025-11-30",
+    "actual": "2025-12-24",
+    "error_days": 24,
+    "naive_error_days": 24
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Polaris Yield Fund",
+    "invoice": "INV-1583",
+    "predicted": "2025-11-30",
+    "actual": "2025-12-14",
+    "error_days": 14,
+    "naive_error_days": 14
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Harbor & Pine Treasury",
+    "invoice": "INV-1592",
+    "predicted": "2025-12-03",
+    "actual": "2025-12-02",
+    "error_days": -1,
+    "naive_error_days": 1
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Larkspur Treasury",
+    "invoice": "INV-1568",
+    "predicted": "2025-12-04",
+    "actual": "2025-12-05",
+    "error_days": 1,
+    "naive_error_days": 4
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Ember Street Capital",
+    "invoice": "INV-1544",
+    "predicted": "2025-11-30",
+    "actual": "2025-12-01",
+    "error_days": 1,
+    "naive_error_days": 1
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Juniper Labs",
+    "invoice": "INV-1554",
+    "predicted": "2025-12-01",
+    "actual": "2025-12-01",
+    "error_days": 0,
+    "naive_error_days": 1
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Wrenfield Digital",
+    "invoice": "INV-1540",
+    "predicted": "2025-12-14",
+    "actual": "2025-12-14",
+    "error_days": 0,
+    "naive_error_days": 14
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Monarch Rails",
+    "invoice": "INV-1541",
+    "predicted": "2025-11-30",
+    "actual": "2025-12-16",
+    "error_days": 16,
+    "naive_error_days": 16
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Vantage Loop",
+    "invoice": "INV-1537",
+    "predicted": "2025-12-11",
+    "actual": "2025-12-11",
+    "error_days": 0,
+    "naive_error_days": 11
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Tessellate Pay",
+    "invoice": "INV-1539",
+    "predicted": "2025-12-06",
+    "actual": "2025-12-06",
+    "error_days": 0,
+    "naive_error_days": 6
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Harbor & Pine Treasury",
+    "invoice": "INV-1659",
+    "predicted": "2026-01-01",
+    "actual": "2026-01-03",
+    "error_days": 2,
+    "naive_error_days": 3
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Larkspur Treasury",
+    "invoice": "INV-1635",
+    "predicted": "2026-01-04",
+    "actual": "2026-01-03",
+    "error_days": -1,
+    "naive_error_days": 3
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Ivory Lane Capital",
+    "invoice": "INV-1616",
+    "predicted": "2025-12-31",
+    "actual": "2026-01-21",
+    "error_days": 21,
+    "naive_error_days": 21
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Wrenfield Digital",
+    "invoice": "INV-1607",
+    "predicted": "2026-01-13",
+    "actual": "2026-01-13",
+    "error_days": 0,
+    "naive_error_days": 13
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Monarch Rails",
+    "invoice": "INV-1608",
+    "predicted": "2025-12-31",
+    "actual": "2026-01-15",
+    "error_days": 15,
+    "naive_error_days": 15
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Tessellate Pay",
+    "invoice": "INV-1606",
+    "predicted": "2026-01-05",
+    "actual": "2026-01-04",
+    "error_days": -1,
+    "naive_error_days": 4
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Fieldstone Quant",
+    "invoice": "INV-1723",
+    "predicted": "2026-01-31",
+    "actual": "2026-03-02",
+    "error_days": 30,
+    "naive_error_days": 30
+   },
+   {
+    "cutoff": "2026-02-28",
+    "client": "Aster Point Capital",
+    "invoice": "INV-1779",
+    "predicted": "2026-03-02",
+    "actual": "2026-03-01",
+    "error_days": -1,
+    "naive_error_days": -2
+   },
+   {
+    "cutoff": "2026-02-28",
+    "client": "Meridian Flow Partners",
+    "invoice": "INV-1776",
+    "predicted": "2026-03-03",
+    "actual": "2026-03-03",
+    "error_days": 0,
+    "naive_error_days": 0
+   },
+   {
+    "cutoff": "2026-02-28",
+    "client": "Silverline Markets",
+    "invoice": "INV-1782",
+    "predicted": "2026-02-28",
+    "actual": "2026-03-02",
+    "error_days": 2,
+    "naive_error_days": 2
+   },
+   {
+    "cutoff": "2026-02-28",
+    "client": "Northfold Trading",
+    "invoice": "INV-1788",
+    "predicted": "2026-02-28",
+    "actual": "2026-03-02",
+    "error_days": 2,
+    "naive_error_days": 2
+   },
+   {
+    "cutoff": "2026-02-28",
+    "client": "Fieldstone Quant",
+    "invoice": "INV-1723",
+    "predicted": "2026-02-28",
+    "actual": "2026-03-02",
+    "error_days": 2,
+    "naive_error_days": 2
+   },
+   {
+    "cutoff": "2026-02-28",
+    "client": "Basalt Global Macro",
+    "invoice": "INV-1799",
+    "predicted": "2026-02-28",
+    "actual": "2026-03-02",
+    "error_days": 2,
+    "naive_error_days": 2
+   },
+   {
+    "cutoff": "2026-02-28",
+    "client": "Cinder Peak Partners",
+    "invoice": "INV-1804",
+    "predicted": "2026-02-28",
+    "actual": "2026-03-02",
+    "error_days": 2,
+    "naive_error_days": 2
+   },
+   {
+    "cutoff": "2026-02-28",
+    "client": "Copperline Treasury",
+    "invoice": "INV-1790",
+    "predicted": "2026-03-02",
+    "actual": "2026-03-02",
+    "error_days": 0,
+    "naive_error_days": -1
+   },
+   {
+    "cutoff": "2026-02-28",
+    "client": "Ostrava Digital Assets",
+    "invoice": "INV-1802",
+    "predicted": "2026-02-28",
+    "actual": "2026-03-03",
+    "error_days": 3,
+    "naive_error_days": 3
+   }
+  ]
+ },
+ "tiers": {
+  "n": 77,
+  "held": 46,
+  "upgrades": {
+   "n": 67,
+   "held": 36
+  },
+  "downgrades": {
+   "n": 10,
+   "held": 10
+  },
+  "rows": [
+   {
+    "cutoff": "2025-09-30",
+    "client": "Meridian Flow Partners",
+    "call": "2 -> 1",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 9,
+    "held": true
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Silverline Markets",
+    "call": "2 -> 1",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 9,
+    "held": true
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Northfold Trading",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 6,
+    "held": false
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Cobalt Ridge Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Harbor & Pine Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 3,
+    "held": true
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Granite Bay Holdings",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Larkspur Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Kestrel Quant",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 6,
+    "due_after": 9,
+    "held": false
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Ostrava Digital Assets",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Ivory Lane Capital",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 3,
+    "due_after": 9,
+    "held": false
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Orchard Treasury",
+    "call": "3 -> 5",
+    "kind": "downgrade",
+    "late_after": 6,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Quillon Systems",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 3,
+    "held": true
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Lantern Payments",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 3,
+    "held": true
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Wrenfield Digital",
+    "call": "4 -> 5",
+    "kind": "downgrade",
+    "late_after": 3,
+    "due_after": 3,
+    "held": true
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Monarch Rails",
+    "call": "4 -> 3",
+    "kind": "upgrade",
+    "late_after": 3,
+    "due_after": 6,
+    "held": false
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Vantage Loop",
+    "call": "5 -> 4",
+    "kind": "upgrade",
+    "late_after": 6,
+    "due_after": 6,
+    "held": false
+   },
+   {
+    "cutoff": "2025-09-30",
+    "client": "Tessellate Pay",
+    "call": "5 -> 4",
+    "kind": "upgrade",
+    "late_after": 3,
+    "due_after": 3,
+    "held": false
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Meridian Flow Partners",
+    "call": "2 -> 1",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Silverline Markets",
+    "call": "2 -> 1",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 9,
+    "held": true
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Northfold Trading",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 6,
+    "held": false
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Cobalt Ridge Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Harbor & Pine Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 2,
+    "held": true
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Granite Bay Holdings",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Larkspur Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 4,
+    "held": true
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Kestrel Quant",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 6,
+    "due_after": 9,
+    "held": false
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Ostrava Digital Assets",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Ivory Lane Capital",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 3,
+    "due_after": 9,
+    "held": false
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Orchard Treasury",
+    "call": "3 -> 5",
+    "kind": "downgrade",
+    "late_after": 6,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Quillon Systems",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 3,
+    "held": true
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Lantern Payments",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 1,
+    "due_after": 3,
+    "held": false
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Wrenfield Digital",
+    "call": "4 -> 5",
+    "kind": "downgrade",
+    "late_after": 3,
+    "due_after": 3,
+    "held": true
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Monarch Rails",
+    "call": "4 -> 3",
+    "kind": "upgrade",
+    "late_after": 4,
+    "due_after": 6,
+    "held": false
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Vantage Loop",
+    "call": "5 -> 4",
+    "kind": "upgrade",
+    "late_after": 6,
+    "due_after": 6,
+    "held": false
+   },
+   {
+    "cutoff": "2025-10-31",
+    "client": "Tessellate Pay",
+    "call": "5 -> 4",
+    "kind": "upgrade",
+    "late_after": 3,
+    "due_after": 3,
+    "held": false
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Meridian Flow Partners",
+    "call": "2 -> 1",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 9,
+    "held": true
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Silverline Markets",
+    "call": "2 -> 1",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 9,
+    "held": true
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Northfold Trading",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Cobalt Ridge Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 6,
+    "held": false
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Harbor & Pine Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 3,
+    "held": true
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Granite Bay Holdings",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Larkspur Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Ostrava Digital Assets",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 6,
+    "held": false
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Ivory Lane Capital",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 6,
+    "due_after": 9,
+    "held": false
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Orchard Treasury",
+    "call": "3 -> 5",
+    "kind": "downgrade",
+    "late_after": 6,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Quillon Systems",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 3,
+    "held": true
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Lantern Payments",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 3,
+    "held": false
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Wrenfield Digital",
+    "call": "4 -> 5",
+    "kind": "downgrade",
+    "late_after": 3,
+    "due_after": 3,
+    "held": true
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Monarch Rails",
+    "call": "4 -> 3",
+    "kind": "upgrade",
+    "late_after": 5,
+    "due_after": 6,
+    "held": false
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Vantage Loop",
+    "call": "5 -> 4",
+    "kind": "upgrade",
+    "late_after": 6,
+    "due_after": 6,
+    "held": false
+   },
+   {
+    "cutoff": "2025-11-30",
+    "client": "Tessellate Pay",
+    "call": "5 -> 4",
+    "kind": "upgrade",
+    "late_after": 3,
+    "due_after": 3,
+    "held": false
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Meridian Flow Partners",
+    "call": "2 -> 1",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Silverline Markets",
+    "call": "2 -> 1",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 6,
+    "held": true
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Cobalt Ridge Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 4,
+    "held": false
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Harbor & Pine Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 2,
+    "held": true
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Granite Bay Holdings",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 4,
+    "held": true
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Larkspur Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 4,
+    "held": true
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Ostrava Digital Assets",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 4,
+    "held": false
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Orchard Treasury",
+    "call": "3 -> 5",
+    "kind": "downgrade",
+    "late_after": 4,
+    "due_after": 4,
+    "held": true
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Quillon Systems",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 2,
+    "held": true
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Lantern Payments",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 2,
+    "held": false
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Wrenfield Digital",
+    "call": "4 -> 5",
+    "kind": "downgrade",
+    "late_after": 2,
+    "due_after": 2,
+    "held": true
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Monarch Rails",
+    "call": "4 -> 3",
+    "kind": "upgrade",
+    "late_after": 4,
+    "due_after": 4,
+    "held": false
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Vantage Loop",
+    "call": "5 -> 4",
+    "kind": "upgrade",
+    "late_after": 4,
+    "due_after": 4,
+    "held": false
+   },
+   {
+    "cutoff": "2025-12-31",
+    "client": "Tessellate Pay",
+    "call": "5 -> 4",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 2,
+    "held": false
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Meridian Flow Partners",
+    "call": "2 -> 1",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 3,
+    "held": true
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Silverline Markets",
+    "call": "2 -> 1",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 3,
+    "held": true
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Cobalt Ridge Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 2,
+    "held": false
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Harbor & Pine Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 1,
+    "held": true
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Granite Bay Holdings",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 2,
+    "held": true
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Larkspur Treasury",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 2,
+    "held": true
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Ostrava Digital Assets",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 2,
+    "held": false
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Ember Street Capital",
+    "call": "4 -> 3",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 2,
+    "held": false
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Orchard Treasury",
+    "call": "3 -> 5",
+    "kind": "downgrade",
+    "late_after": 2,
+    "due_after": 2,
+    "held": true
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Quillon Systems",
+    "call": "3 -> 2",
+    "kind": "upgrade",
+    "late_after": 0,
+    "due_after": 1,
+    "held": true
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Wrenfield Digital",
+    "call": "4 -> 5",
+    "kind": "downgrade",
+    "late_after": 1,
+    "due_after": 1,
+    "held": true
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Monarch Rails",
+    "call": "4 -> 3",
+    "kind": "upgrade",
+    "late_after": 2,
+    "due_after": 2,
+    "held": false
+   },
+   {
+    "cutoff": "2026-01-31",
+    "client": "Tessellate Pay",
+    "call": "5 -> 4",
+    "kind": "upgrade",
+    "late_after": 1,
+    "due_after": 1,
+    "held": false
+   }
+  ],
+  "calibration": {
+   "1": {
+    "invoices": 146,
+    "late_share": 0.0
+   },
+   "2": {
+    "invoices": 411,
+    "late_share": 0.173
+   },
+   "3": {
+    "invoices": 82,
+    "late_share": 0.72
+   },
+   "4": {
+    "invoices": 112,
+    "late_share": 0.75
+   },
+   "5": {
+    "invoices": 38,
+    "late_share": 1.0
+   }
+  }
+ },
+ "exploits": {
+  "planted": [
+   "dispute_delay:ORG-90518",
+   "partial_reset:ORG-90744",
+   "pays_restricted_only:ORG-90758",
+   "quarter_end:ORG-90101",
+   "recent_late:ORG-90412",
+   "restriction_eve:ORG-90677"
+  ],
+  "caught": [
+   "dispute_delay:ORG-90518",
+   "partial_reset:ORG-90744",
+   "pays_restricted_only:ORG-90758",
+   "quarter_end:ORG-90101",
+   "recent_late:ORG-90412",
+   "restriction_eve:ORG-90677"
+  ],
+  "missed": [],
+  "false_alarms": [],
+  "false_alarms_any_cutoff": [
+   "recent_late:ORG-90101"
+  ],
+  "also_real": [],
+  "first_seen": {
+   "dispute_delay:ORG-90518": "2025-09-30",
+   "partial_reset:ORG-90744": "2025-09-30",
+   "pays_restricted_only:ORG-90758": "2025-09-30",
+   "quarter_end:ORG-90101": "2025-09-30",
+   "recent_late:ORG-90101": "2025-09-30",
+   "recent_late:ORG-90412": "2025-12-31",
+   "restriction_eve:ORG-90677": "2025-09-30"
+  }
+ }
+}
