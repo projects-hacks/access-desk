@@ -1,46 +1,10 @@
 """
-The plain-English paragraph on each proposal. Claude only rewords numbers the
-engine already computed; with no key, or on any error, a template says the same.
+The plain-English paragraph on a proposal the rules decided. When Claude
+decides (decide.py), its own reasons are the paragraph; this template is the
+fallback and uses only numbers the engine computed.
 """
 
-import json
-import logging
-
-import anthropic
-
-from ..config import settings
 from .model import Flag, Scores, TierDecision
-
-log = logging.getLogger("desk_agents.credit")
-
-TIMEOUT_SECONDS = 20.0
-MAX_WORDS = 120
-
-PROMPT = """You write the reasoning paragraph on a credit-tier proposal a controller will \
-approve or reject. Use only the facts in the JSON below. Cite invoice ids from the evidence. \
-Do not introduce any number that is not in the JSON. At most {words} words, plain prose, \
-no headings or lists.
-
-{facts}"""
-
-
-def facts(decision: TierDecision, scores: Scores, flags: list[Flag]) -> dict:
-    fired = [f for f in flags if f.fired]
-    return {
-        "decision": decision.model_dump(mode="json"),
-        "reliability": round(scores.reliability, 1),
-        "value": round(scores.value, 1),
-        "coverage_ratio": round(scores.coverage_ratio, 2),
-        "coverage_detail": scores.coverage_detail,
-        "expected_settle_on": scores.expected_settle_on.isoformat()
-        if scores.expected_settle_on else None,
-        "breakdown": {k: round(v, 2) for k, v in scores.breakdown.items()},
-        "flags": [
-            {"pattern": f.pattern, "measured": f.measured,
-             "evidence_invoice_ids": [e.invoice_id for e in f.evidence]}
-            for f in fired
-        ],
-    }
 
 
 def template(decision: TierDecision, scores: Scores, flags: list[Flag]) -> str:
@@ -73,29 +37,3 @@ def template(decision: TierDecision, scores: Scores, flags: list[Flag]) -> str:
 
 def _sentence(text: str) -> str:
     return text[:1].upper() + text[1:] + "."
-
-
-def explain(decision: TierDecision, scores: Scores, flags: list[Flag],
-            use_claude: bool = True) -> str:
-    fallback = template(decision, scores, flags)
-    if not use_claude or not settings.anthropic_api_key:
-        return fallback
-    try:
-        client = anthropic.Anthropic(
-            api_key=settings.anthropic_api_key, timeout=TIMEOUT_SECONDS, max_retries=0,
-        )
-        response = client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=2000,
-            output_config={"effort": "low"},
-            messages=[{"role": "user", "content": PROMPT.format(
-                words=MAX_WORDS, facts=json.dumps(facts(decision, scores, flags), indent=1),
-            )}],
-        )
-        if response.stop_reason != "end_turn":
-            return fallback
-        text = " ".join(b.text for b in response.content if b.type == "text").strip()
-        return text or fallback
-    except Exception:
-        log.exception("reasoning fell back to the template for %s", decision.client_id)
-        return fallback
