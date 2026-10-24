@@ -5,7 +5,7 @@ description = "Credit analyst and access controller agents"
 requires-python = ">=3.11"
 dependencies = [
   "anthropic>=2.3.0",
-  "droid-sdk>=0.5.0",
+  "droid-sdk[mcp]>=0.5.0",
   "httpx>=0.28.1",
   "pydantic>=2.14.1",
   "pydantic-settings>=2.16.1",
