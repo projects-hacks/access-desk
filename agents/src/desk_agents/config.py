@@ -6,8 +6,8 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file="../.env", extra="ignore")
 
-    stdb_http_url: str = "http://localhost:3000"
-    stdb_database: str = "access-desk"
+    stdb_http_url: str = "https://maincloud.spacetimedb.com"
+    stdb_database: str = "access-desk-calhacks13"
     stdb_agent_token: str | None = None
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-opus-5-5"

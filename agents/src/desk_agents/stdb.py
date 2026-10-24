@@ -20,7 +20,10 @@ class SpacetimeClient:
     def sql(self, query: str) -> list[dict[str, Any]]:
         res = self._http.post(f"/v1/database/{self._db}/sql", content=query)
         res.raise_for_status()
-        return res.json()
+        # Response: [{schema: {elements: [{name: {some: col}}...]}, rows: [[...], ...]}]
+        result = res.json()[0]
+        cols = [e["name"]["some"] for e in result["schema"]["elements"]]
+        return [dict(zip(cols, row)) for row in result["rows"]]
 
     def call(self, reducer: str, *args: Any) -> None:
         # Reducer names are snake_case on the wire (proposeWorkItem -> propose_work_item).

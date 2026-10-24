@@ -9,14 +9,15 @@
     "dev": "pnpm --parallel --filter @access-desk/server --filter @access-desk/web dev",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
-    "stdb:start": "spacetime start",
-    "stdb:publish": "spacetime publish -s local -p spacetime access-desk",
+    "stdb:publish": "spacetime publish -s maincloud -p spacetime -y access-desk-calhacks13",
     "stdb:generate": "spacetime generate -l typescript -p spacetime -o web/src/module_bindings && spacetime generate -l typescript -p spacetime -o server/src/module_bindings",
     "agents": "cd agents && uv run desk-agents",
-    "stdb:publish:reset": "spacetime publish -s local -p spacetime --delete-data -y access-desk",
+    "stdb:publish:reset": "spacetime publish -s maincloud -p spacetime --delete-data -y access-desk-calhacks13",
     "seed:nessie": "pnpm --filter @access-desk/server seed:nessie",
     "bank": "pnpm --filter @access-desk/server bank",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "stdb:sql": "spacetime sql -s maincloud access-desk-calhacks13",
+    "stdb:logs": "spacetime logs -s maincloud -f access-desk-calhacks13"
   },
   "devDependencies": {
     "prettier": "^3.9.10",

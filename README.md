@@ -19,19 +19,17 @@ SpacetimeDB holds all state and enforces the rules. `server/`, `agents/` and `we
 
 ## Setup
 
-Requires Node 22+, pnpm, Python 3.11+ with [uv](https://docs.astral.sh/uv/), the [SpacetimeDB CLI](https://spacetimedb.com/install), and the `droid` CLI for agents.
+Requires Node 22+, pnpm, and Python 3.11+ with [uv](https://docs.astral.sh/uv/).
 
 ```bash
 pnpm install
 (cd agents && uv sync)
-cp .env.example .env        # add API keys
-pnpm stdb:start             # terminal 1: local SpacetimeDB
-pnpm stdb:publish           # publish the module
-pnpm stdb:generate          # regenerate TS bindings after schema changes
+cp .env.example .env        # already points to the shared database
 pnpm dev                    # server on :4000, web on :5173
 pnpm agents                 # agents loop
 ```
 
-Bank (Nessie) seeding, demo controls and conventions: [docs/bank.md](docs/bank.md).
+- Shared database (SpacetimeDB on Maincloud): [docs/database.md](docs/database.md)
+- Bank (Nessie): seeding, demo controls, conventions: [docs/bank.md](docs/bank.md)
 
-`pnpm typecheck` checks the TypeScript packages; `cd agents && uv run ruff check` lints Python.
+`pnpm typecheck` and `pnpm test` check the TypeScript packages; `cd agents && uv run ruff check` lints Python.

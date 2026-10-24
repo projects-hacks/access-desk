@@ -9,7 +9,8 @@
     "typecheck": "tsc -p .",
     "seed:nessie": "tsx --env-file-if-exists=../.env src/scripts/seed-nessie.ts",
     "bank": "tsx --env-file-if-exists=../.env src/scripts/bank.ts",
-    "test": "tsx --env-file-if-exists=../.env --test \"src/**/*.test.ts\""
+    "test": "tsx --env-file-if-exists=../.env --test \"src/**/*.test.ts\"",
+    "stdb:check": "tsx --env-file-if-exists=../.env src/scripts/stdb-check.ts"
   },
   "dependencies": {
     "fastify": "^5.12.7",

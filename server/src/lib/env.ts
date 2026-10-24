@@ -2,8 +2,10 @@ import { z } from 'zod';
 
 const EnvSchema = z.object({
   PORT: z.coerce.number().default(4000),
-  STDB_URI: z.string().default('ws://localhost:3000'),
-  STDB_DATABASE: z.string().default('access-desk'),
+  STDB_URI: z.string().default('wss://maincloud.spacetimedb.com'),
+  STDB_DATABASE: z.string().default('access-desk-calhacks13'),
+  /** Identity token for this service; keeps the same identity (and role) across restarts. */
+  STDB_TOKEN: z.string().optional(),
   NESSIE_API_KEY: z.string().optional(),
   NESSIE_BASE_URL: z.string().default('https://prod-api.nessieisreal.com'),
   PLATFORM_NAME: z.string().default('Northstar Prime'),

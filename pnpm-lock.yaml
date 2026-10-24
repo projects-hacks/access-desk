@@ -39,6 +39,10 @@ importers:
       spacetimedb:
         specifier: 2.13.0
         version: 2.13.0(react@19.3.1)
+    devDependencies:
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
 
   web:
     dependencies:
