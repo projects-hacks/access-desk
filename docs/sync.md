@@ -27,16 +27,15 @@ Status for each is in the `sync_source` table.
 
 - Only changed rows are written. Every golden row gets a `raw_record` with the source payload.
 - Cash dated after `clock.sim_date` is skipped; cash that disappears from the source is removed.
-- `match_status` belongs to payment checking; a re-sync never overwrites it.
+- Fields our system owns (`match_status`, client status, lever state, loan borrowing, invoice paid/status) are never overwritten by a re-sync.
 - Memo types are mapped explicitly. An unknown memo type, status or missing `ID` fails the pass loudly.
 - On-chain transfers carry no reference (`refs` is empty); matching uses wallet and amount.
 
 ## Demo reset
 
 ```bash
-pnpm bank reset                                                        # bank back to the seed
-spacetime call -s maincloud access-desk-calhacks13 set_clock '"2026-03-03"'
-pnpm sync && pnpm sync:verify
+pnpm demo:reset        # bank back to the seed, database wiped and re-published, roles, full sync
+pnpm sync:verify && pnpm payments:verify
 ```
 
 ## Settings (`.env`)

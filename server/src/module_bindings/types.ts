@@ -246,6 +246,7 @@ export const Hold = __t.object("Hold", {
   amountCents: __t.i64(),
   reason: __t.string(),
   clause: __t.string(),
+  invoiceIds: __t.array(__t.string()),
   workItemId: __t.option(__t.u64()),
   status: __t.string(),
   createdAt: __t.timestamp(),
@@ -272,6 +273,7 @@ export const Invoice = __t.object("Invoice", {
   issuedOn: __t.string(),
   dueOn: __t.string(),
   amountCents: __t.i64(),
+  sourcePaidCents: __t.i64(),
   paidCents: __t.i64(),
   status: __t.string(),
 });

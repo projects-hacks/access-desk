@@ -16,6 +16,7 @@ export default __t.row({
   amountCents: __t.i64().name("amount_cents"),
   reason: __t.string(),
   clause: __t.string(),
+  invoiceIds: __t.array(__t.string()).name("invoice_ids"),
   workItemId: __t.option(__t.u64()).name("work_item_id"),
   status: __t.string(),
   createdAt: __t.timestamp().name("created_at"),

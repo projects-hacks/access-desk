@@ -19,7 +19,10 @@
     "stdb:sql": "spacetime sql -s maincloud access-desk-calhacks13",
     "stdb:logs": "spacetime logs -s maincloud -f access-desk-calhacks13",
     "sync": "pnpm --filter @access-desk/server sync",
-    "sync:verify": "pnpm --filter @access-desk/server sync:verify"
+    "sync:verify": "pnpm --filter @access-desk/server sync:verify",
+    "stdb:roles": "pnpm --filter @access-desk/server stdb:roles",
+    "payments:verify": "pnpm --filter @access-desk/server payments:verify",
+    "demo:reset": "pnpm bank reset && pnpm stdb:publish:reset && pnpm stdb:roles && pnpm sync"
   },
   "devDependencies": {
     "prettier": "^3.9.10",

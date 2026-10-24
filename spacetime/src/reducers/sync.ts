@@ -6,7 +6,8 @@ import { accessLever, capability, client, contract, contractClause, payerIdentit
 import { assetPrice, custodyHolding, loan, owedToClient, position } from '../tables/assets';
 import { cashMovement, dispute, invoice } from '../tables/money';
 import { rawRecord, syncSource } from '../tables/sync';
-import { onCashMovement } from './payments';
+import { recomputeInvoice } from '../payments/apply';
+import { onCashMovement, onCashRemoved } from './payments';
 
 // Sync writes golden rows from systems of record. Every reducer is an idempotent upsert by primary key.
 
@@ -23,9 +24,13 @@ export const upsertRawRecord = spacetimedb.reducer({ row: rawRecord.rowType }, (
   else ctx.db.rawRecord.insert(row);
 });
 
+// Fields the system of work owns (client status, lever state, borrowing, match status, paid amounts)
+// are taken from the source on first import only; later syncs never overwrite our decisions.
+
 export const upsertClient = spacetimedb.reducer({ row: client.rowType }, (ctx, { row }) => {
   requireRole(ctx, CAN_SYNC);
-  if (ctx.db.client.id.find(row.id)) ctx.db.client.id.update(row);
+  const existing = ctx.db.client.id.find(row.id);
+  if (existing) ctx.db.client.id.update({ ...row, status: existing.status });
   else ctx.db.client.insert(row);
 });
 
@@ -56,20 +61,22 @@ export const upsertCapability = spacetimedb.reducer({ row: capability.rowType },
 /** Initial lever states come from the platform's admin console; afterwards only the gateway changes them. */
 export const upsertAccessLever = spacetimedb.reducer({ row: accessLever.rowType }, (ctx, { row }) => {
   requireRole(ctx, CAN_SYNC);
-  if (ctx.db.accessLever.id.find(row.id)) ctx.db.accessLever.id.update(row);
-  else ctx.db.accessLever.insert(row);
+  if (!ctx.db.accessLever.id.find(row.id)) ctx.db.accessLever.insert(row);
 });
 
+/** Billing's view of an invoice; paid amount and status are then recomputed with our applications. */
 export const upsertInvoice = spacetimedb.reducer({ row: invoice.rowType }, (ctx, { row }) => {
   requireRole(ctx, CAN_SYNC);
   if (ctx.db.invoice.id.find(row.id)) ctx.db.invoice.id.update(row);
   else ctx.db.invoice.insert(row);
+  recomputeInvoice(ctx, row.id);
 });
 
 export const upsertDispute = spacetimedb.reducer({ row: dispute.rowType }, (ctx, { row }) => {
   requireRole(ctx, CAN_SYNC);
   if (ctx.db.dispute.id.find(row.id)) ctx.db.dispute.id.update(row);
   else ctx.db.dispute.insert(row);
+  recomputeInvoice(ctx, row.invoiceId);
 });
 
 /**
@@ -121,7 +128,8 @@ export const upsertPosition = spacetimedb.reducer({ row: position.rowType }, (ct
 
 export const upsertLoan = spacetimedb.reducer({ row: loan.rowType }, (ctx, { row }) => {
   requireRole(ctx, CAN_SYNC);
-  if (ctx.db.loan.id.find(row.id)) ctx.db.loan.id.update(row);
+  const existing = ctx.db.loan.id.find(row.id);
+  if (existing) ctx.db.loan.id.update({ ...row, borrowingAllowed: existing.borrowingAllowed });
   else ctx.db.loan.insert(row);
 });
 
@@ -130,6 +138,7 @@ export const removeCashMovement = spacetimedb.reducer({ id: t.string() }, (ctx, 
   requireRole(ctx, CAN_SYNC);
   const existing = ctx.db.cashMovement.id.find(id);
   if (!existing) return;
+  onCashRemoved(ctx, existing);
   ctx.db.cashMovement.id.delete(id);
   audit(ctx, { action: 'CASH_REMOVED', subjectType: 'cash_movement', subjectId: id, fromState: existing.status, detail: existing.bankRef });
 });

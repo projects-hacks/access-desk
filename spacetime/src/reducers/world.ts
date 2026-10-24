@@ -3,6 +3,7 @@ import { SenderError, t } from 'spacetimedb/server';
 import { addDays, audit, requireRole, simDate } from '../context';
 import { CAN_MOVE_CLOCK, isRole } from '../roles';
 import { spacetimedb } from '../schema';
+import { seedBaselinePolicies } from './policies';
 
 /** Runs on first publish (and after a data reset). The publisher becomes ADMIN. */
 export const init = spacetimedb.init((ctx) => {
@@ -15,6 +16,7 @@ export const init = spacetimedb.init((ctx) => {
   });
   ctx.db.clock.insert({ id: 1, simDate: '2026-03-03', updatedAt: ctx.timestamp });
   ctx.db.actor.insert({ identity: ctx.sender, name: 'owner', role: 'ADMIN', clientId: undefined });
+  seedBaselinePolicies(ctx);
 });
 
 export const setPlatform = spacetimedb.reducer(

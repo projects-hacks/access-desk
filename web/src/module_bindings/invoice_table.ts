@@ -19,6 +19,7 @@ export default __t.row({
   issuedOn: __t.string().name("issued_on"),
   dueOn: __t.string().name("due_on"),
   amountCents: __t.i64().name("amount_cents"),
+  sourcePaidCents: __t.i64().name("source_paid_cents"),
   paidCents: __t.i64().name("paid_cents"),
   status: __t.string(),
 });

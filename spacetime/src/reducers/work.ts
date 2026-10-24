@@ -3,6 +3,7 @@ import { actorOf, audit, requireRole } from '../context';
 import { CAN_APPROVE, CAN_POST, type Role } from '../roles';
 import { spacetimedb } from '../schema';
 import { canTransition, type WorkItemState } from '../workflow';
+import { onPaymentApproved } from './payments';
 
 export const proposeWorkItem = spacetimedb.reducer(
   {
@@ -69,5 +70,6 @@ export const transitionWorkItem = spacetimedb.reducer(
     // Denied attempts return instead of throwing so the audit row still commits.
     if (denial) return;
     ctx.db.workItem.id.update({ ...item, state: to, updatedAt: ctx.timestamp });
+    if (to === 'APPROVED') onPaymentApproved(ctx, item.id);
   },
 );

@@ -28,6 +28,8 @@ export const hold = table(
     amountCents: t.i64(),
     reason: t.string(),
     clause: t.string(),
+    /** The invoices this hold secures; it releases when they are paid. */
+    invoiceIds: t.array(t.string()),
     workItemId: t.u64().optional(),
     status: t.string(),
     createdAt: t.timestamp(),

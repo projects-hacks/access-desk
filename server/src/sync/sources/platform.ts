@@ -66,7 +66,7 @@ export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap):
     const status = i.status === 'open' && i.paidCents > 0 ? 'partially_paid' : i.status;
     const invoice: Invoice = {
       id: i.id, clientId: i.clientId, product: i.product, label: i.label, period: i.period, issuedOn: i.issuedOn,
-      dueOn: i.dueOn, amountCents: BigInt(i.amountCents), paidCents: BigInt(i.paidCents), status,
+      dueOn: i.dueOn, amountCents: BigInt(i.amountCents), sourcePaidCents: BigInt(i.paidCents), paidCents: BigInt(i.paidCents), status,
     };
     billing.push(rec('invoice', i.id, invoice, (row) => r.upsertInvoice({ row })));
   }

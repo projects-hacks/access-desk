@@ -12,7 +12,9 @@
     "test": "tsx --env-file-if-exists=../.env --test \"src/**/*.test.ts\"",
     "stdb:check": "tsx --env-file-if-exists=../.env src/scripts/stdb-check.ts",
     "sync": "tsx --env-file-if-exists=../.env src/scripts/sync-once.ts",
-    "sync:verify": "tsx --env-file-if-exists=../.env src/scripts/sync-verify.ts"
+    "sync:verify": "tsx --env-file-if-exists=../.env src/scripts/sync-verify.ts",
+    "stdb:roles": "tsx --env-file-if-exists=../.env src/scripts/assign-roles.ts",
+    "payments:verify": "tsx --env-file-if-exists=../.env src/scripts/payments-verify.ts"
   },
   "dependencies": {
     "fastify": "^5.12.7",

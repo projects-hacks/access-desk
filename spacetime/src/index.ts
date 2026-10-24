@@ -6,3 +6,5 @@ export default spacetimedb;
 export * from './reducers/world';
 export * from './reducers/sync';
 export * from './reducers/work';
+export { placeHold } from './reducers/payments';
+export { upsertPolicy } from './reducers/policies';

@@ -36,6 +36,7 @@ import {
 // Import all reducer arg schemas
 import AdvanceClockReducer from "./advance_clock_reducer";
 import AssignRoleReducer from "./assign_role_reducer";
+import PlaceHoldReducer from "./place_hold_reducer";
 import ProposeWorkItemReducer from "./propose_work_item_reducer";
 import RecordSyncErrorReducer from "./record_sync_error_reducer";
 import RemoveCashMovementReducer from "./remove_cash_movement_reducer";
@@ -56,6 +57,7 @@ import UpsertInvoiceReducer from "./upsert_invoice_reducer";
 import UpsertLoanReducer from "./upsert_loan_reducer";
 import UpsertOwedToClientReducer from "./upsert_owed_to_client_reducer";
 import UpsertPayerIdentityReducer from "./upsert_payer_identity_reducer";
+import UpsertPolicyReducer from "./upsert_policy_reducer";
 import UpsertPositionReducer from "./upsert_position_reducer";
 import UpsertRawRecordReducer from "./upsert_raw_record_reducer";
 
@@ -610,6 +612,7 @@ const tablesSchema = __schema({
 const reducersSchema = __reducers(
   __reducerSchema("advance_clock", AdvanceClockReducer),
   __reducerSchema("assign_role", AssignRoleReducer),
+  __reducerSchema("place_hold", PlaceHoldReducer),
   __reducerSchema("propose_work_item", ProposeWorkItemReducer),
   __reducerSchema("record_sync_error", RecordSyncErrorReducer),
   __reducerSchema("remove_cash_movement", RemoveCashMovementReducer),
@@ -630,6 +633,7 @@ const reducersSchema = __reducers(
   __reducerSchema("upsert_loan", UpsertLoanReducer),
   __reducerSchema("upsert_owed_to_client", UpsertOwedToClientReducer),
   __reducerSchema("upsert_payer_identity", UpsertPayerIdentityReducer),
+  __reducerSchema("upsert_policy", UpsertPolicyReducer),
   __reducerSchema("upsert_position", UpsertPositionReducer),
   __reducerSchema("upsert_raw_record", UpsertRawRecordReducer),
 );

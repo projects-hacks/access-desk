@@ -11,6 +11,7 @@ The SpacetimeDB module in `spacetime/` is the system of work. Business rules liv
 - IDs are stable text from the source (`ORG-90412`, `INV-1021`, `nessie:<_id>`).
 - Derived values aren't stored: days past due, aging, unpaid totals, autonomy %, exposure.
 - Every write that changes state appends to `audit_event` in the same reducer.
+- Fields the system of work owns (client status, lever state, loan borrowing, match status, paid amounts) come from sync on first import only.
 
 ## Ownership
 
@@ -48,7 +49,7 @@ Rajeev owns the schema and is the only one who publishes. Others change fields o
 
 | Table | Fields | Written by | Read by |
 |---|---|---|---|
-| `invoice` | id, client_id, product, label, period, issued_on, due_on, amount_cents, paid_cents, status (open / partially_paid / paid / disputed / void) | sync; paid_cents: gateway | aging, seats 1–2, invoice lists |
+| `invoice` | id, client_id, product, label, period, issued_on, due_on, amount_cents, source_paid_cents, paid_cents, status (open / partially_paid / paid / disputed / void) | sync; paid_cents and status: payment checking | aging, seats 1–2, invoice lists |
 | `dispute` | id, invoice_id, client_id, amount_cents, reason, opened_on, status, owner | sync, RM | proposals exclude it |
 | `cash_movement` | id, source (nessie / chain), platform_account, direction, rail (WIRE / ACH / USDC / BOOK), amount_cents, value_on, status (pending / posted / cancelled / returned), memo, orig_name, orig_account, refs, bank_ref, reverses, raw_id, match_status, is_history | sync; match_status: payment checking | payments tab, ticker |
 | `payment_application` | id, movement_id, invoice_id, amount_cents, method (exact / referenced / split / short_fee / alias / account / overpay_credit / reversal), policy_ref, work_item_id, reversed | payment checking | invoice status, tie-out, audit |
@@ -61,7 +62,7 @@ Rajeev owns the schema and is the only one who publishes. Others change fields o
 |---|---|---|---|
 | `custody_holding` | id (`client:asset`), client_id, asset, quantity, value_cents | sync | coverage, custody panel |
 | `asset_price` | asset, price_cents, as_of | sync | valuation |
-| `hold` | id, client_id, amount_cents, reason, clause, work_item_id, status (active / released), created_at, released_at | gateway | portal withdrawal, release |
+| `hold` | id, client_id, amount_cents, reason, clause, invoice_ids (secured), work_item_id, status (active / released), created_at, released_at | gateway; released by payment checking | portal withdrawal, release |
 | `owed_to_client` | id, client_id, kind (staking_rewards / rebate / unsettled_proceeds), amount_cents, as_of | sync | netting |
 | `position` | id, client_id, instrument, side, notional_cents, hedge_group, status | sync | hedge protection, exposure |
 | `loan` | id, client_id, line_cents, outstanding_cents, status, borrowing_allowed | sync; borrowing_allowed: gateway | financing panel |
@@ -107,7 +108,7 @@ Rajeev owns the schema and is the only one who publishes. Others change fields o
 
 These are what make SpacetimeDB the core rather than a side database:
 
-- `record_cash_movement` → payment checking → applications → hold release → audit, in one transaction
+- `upsert_cash_movement` → payment checking → applications → hold release → audit, in one transaction ([payments.md](payments.md))
 - `transition_work_item`: state machine, role checks, no self-approval, denied attempts logged
 - `advance_clock`: moves the shared date and fires due `deadline`s
 - HTTP route `access-check`: the platform asks before a withdrawal or trade; the decision is computed next to the data

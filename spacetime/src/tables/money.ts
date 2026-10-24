@@ -11,6 +11,9 @@ export const invoice = table(
     issuedOn: t.string(),
     dueOn: t.string(),
     amountCents: t.i64(),
+    /** What the billing system has applied. */
+    sourcePaidCents: t.i64(),
+    /** Billing's amount plus our own applications not yet in billing. Status derives from this. */
     paidCents: t.i64(),
     status: t.string(),
   },
