@@ -15,16 +15,20 @@ Node 22+, pnpm, Python 3.11+ with uv, `spacetime` CLI (schema changes only).
 
 ```bash
 pnpm install && (cd agents && uv sync)
-cp .env.example .env     # points to the shared Maincloud database
-pnpm dev                 # server :4000 (sync + gateway), web :5173
+cp .env.example .env     # shared Maincloud database + hosted API (ask for the values)
+pnpm dev                 # web :5173, talking to the hosted API
 ```
+
+The API server (sync, gateway, simulated platform, demo endpoints) runs once, on Azure Container Apps, because it is the only writer to the shared database. Every push to `main` is checked (typecheck, tests) and, if green, built and deployed there by CI. Don't run a second server against the shared database: `pnpm dev:server` refuses to start unless you mean it (stop the hosted one first with `pnpm host:stop`).
 
 ## Commands
 
 | Command | |
 |---|---|
-| `pnpm sync` | One full sync pass, gateway drains, tie-out |
-| `pnpm demo:reset` | Bank and database back to Tue 2026-03-03 |
+| `pnpm demo:reset` | Bank, database and the hosted server back to Tue 2026-03-03 |
+| `pnpm demo:rebuild` | After a schema change: republish with a data reset, roles, restart the hosted server |
+| `pnpm host:restart` · `host:stop` · `host:start` | The hosted server (needs `az` access) |
+| `pnpm sync` · `pnpm actions:verify` | Run their own gateway: only with the hosted server stopped |
 | `pnpm sync:verify` · `payments:verify` · `ledger:verify` · `tieout:verify` | Check the database against sources and the answer key |
 | `pnpm bank show [ORG-xxxxx]` · `bank settle WI-5531` · `bank reset` | Nessie |
 | `pnpm seed:nessie [--apply]` | Seed the bank (dry run by default) |
@@ -32,7 +36,7 @@ pnpm dev                 # server :4000 (sync + gateway), web :5173
 | `pnpm credit:verify` · `credit:fixture` | Seat 1 output against the answer key · rebuild its test fixture |
 | `pnpm typecheck` · `pnpm test` | Checks |
 
-With `DEMO_CONTROLS=true` the server exposes `POST /demo/inject`, `/demo/settle`, `/demo/advance`, `/demo/reset` and `GET /demo/state`.
+The hosted server exposes `POST /demo/inject`, `/demo/settle`, `/demo/advance`, `/demo/clock`, `/demo/withdraw`, `/demo/reset` (header `x-demo-key`) and `GET /demo/state`.
 
 ## Docs
 

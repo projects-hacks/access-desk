@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - uses: astral-sh/setup-uv@v6
+      - name: Agents tests
+        working-directory: agents
+        run: uv sync && uv run --with pytest python -m pytest -q
+
+  # main only: build the API server image, push it, roll the one hosted instance.
+  # GitHub signs in to Azure as a managed identity (OIDC, no stored secrets) limited to access-desk-rg.
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: deploy
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      REGISTRY: accessdesk25fb09
+      IMAGE: accessdesk25fb09.azurecr.io/access-desk-server:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: f8338d8f-2c77-41f9-9900-61e5f936ef33
+          tenant-id: e85c5307-76b1-4c48-bc5d-e88373dda261
+          subscription-id: b51a8b54-faeb-472e-9c39-bfa2094956a9
+      - run: az acr login -n $REGISTRY
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}
+      - name: Roll the server
+        run: az containerapp update -n access-desk-api -g access-desk-rg --image $IMAGE -o none

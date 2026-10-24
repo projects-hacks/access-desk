@@ -43,6 +43,12 @@ const toCents = (dollars: number) => Math.round(dollars * 100);
  */
 export async function demoRoutes(app: FastifyInstance, deps: Deps) {
   const { conn, sync, bank, plan, ds, platform } = deps;
+  // Demo actions move money and can reset the shared world: callers send the team's key.
+  app.addHook('onRequest', async (req, reply) => {
+    if (req.method === 'POST' && env.DEMO_KEY && req.headers['x-demo-key'] !== env.DEMO_KEY) {
+      return reply.code(401).send({ error: 'x-demo-key header required' });
+    }
+  });
   await new Promise<void>((resolve) =>
     conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([
       tables.clock, tables.cashMovement, tables.workItem, tables.paymentApplication, tables.hold,
