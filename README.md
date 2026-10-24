@@ -32,3 +32,7 @@ pnpm dev                 # server :4000 (sync + gateway), web :5173
 | `pnpm typecheck` · `pnpm test` | Checks |
 
 With `DEMO_CONTROLS=true` the server exposes `POST /demo/inject`, `/demo/settle`, `/demo/advance`, `/demo/reset` and `GET /demo/state`.
+
+## Docs
+
+[database](docs/database.md) · [schema](docs/schema.md) · [sync](docs/sync.md) · [payment checking](docs/payments.md) · [gateway, ledger, tie-out](docs/books.md) · [history](docs/history.md) · [bank (Nessie)](docs/bank.md)
