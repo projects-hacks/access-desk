@@ -39,12 +39,10 @@ export function leverSummary(lever: string, enabled: (key: PermissionKey) => boo
 }
 
 /** Why a person (a second controller) must approve, or undefined when it applies at once. */
-export function permissionNeedsHuman(i: { tier: number; strategic: boolean; changes: { key: string; enabled: boolean }[] }): string | undefined {
+export function permissionNeedsHuman(i: { strategic: boolean; offboards: boolean; changes: { key: string; enabled: boolean }[] }): string | undefined {
   // Giving access back never waits.
   if (i.changes.every((c) => c.enabled)) return undefined;
   if (i.strategic) return 'strategic client';
-  if (i.tier <= 2) return `tier ${i.tier} client`;
-  // pol-008 in spirit: a client who can't sell can't unwind or hedge.
-  if (i.changes.some((c) => c.key === 'sell' && !c.enabled)) return 'turning off sell can trap open positions';
+  if (i.offboards) return 'turns off every permission the client has (offboarding)';
   return undefined;
 }

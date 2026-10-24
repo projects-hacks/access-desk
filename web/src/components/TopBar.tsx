@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react';
+import { seat, switchController, type Seat } from '../lib/config';
 import { demo } from '../lib/demo';
 import { simDay } from '../lib/format';
 import { useClock, usePlatform, useSession } from '../lib/session';
@@ -74,9 +75,24 @@ export function SessionPill() {
       <span className={`dot ${session.connected ? 'on' : 'off'}`} />
       <span>
         {session.connected ? 'Live' : session.error ? 'Connection error' : 'Connecting…'}
-        {' · '}
-        {session.role ? `${session.name ?? 'You'} (${session.role.toLowerCase()})` : 'read-only'}
+        {!session.role && ' · read-only'}
       </span>
+      {/* Two seats, because nobody approves their own proposal: A proposes, B approves. */}
+      {session.role && (
+        <span className="seats" role="group" aria-label="Acting as">
+          {(['a', 'b'] as Seat[]).map((s) => (
+            <button
+              key={s}
+              className={s === seat ? 'active' : ''}
+              aria-pressed={s === seat}
+              onClick={() => s !== seat && switchController(s)}
+              title={`Act as Controller ${s.toUpperCase()}`}
+            >
+              Controller {s.toUpperCase()}
+            </button>
+          ))}
+        </span>
+      )}
     </div>
   );
 }

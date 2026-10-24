@@ -91,13 +91,8 @@ check(bill?.status === 'completed', 'Nessie bill for INV-1762 completed', bill?.
 await agent.reducers.proposeCustodyDebit({ clientId: BLUEFIN, invoiceIds: ['INV-1763'], reasoning: reason, policyRef: 'pol-005', confidence: 0.9 });
 await wait(500);
 item = latestItem(BLUEFIN, 'CUSTODY_DEBIT');
-check(item?.state === 'PROPOSED', '$64,000 is over the auto-apply limit: waits for a controller', item?.state);
-await agent.reducers.transitionWorkItem({ workItemId: item!.id, toState: 'APPROVED', note: '' });
-await wait(400);
-check(db.workItem.id.find(item!.id)?.state === 'PROPOSED', 'Agent cannot approve (denied and audited)');
-await controller.reducers.transitionWorkItem({ workItemId: item!.id, toState: 'APPROVED', note: 'verify' });
 await settle();
-check(db.workItem.id.find(item!.id)?.state === 'POSTED', 'Controller approved; gateway POSTED it');
+check(!!item?.autoApplied && db.workItem.id.find(item!.id)?.state === 'POSTED', '$64,000 debit auto-applied too: only top clients and offboarding wait', `${item?.state} auto=${item?.autoApplied}`);
 
 console.log('\nRestrictions');
 r = await refused(agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 'trading', step: 'CLOSE_ONLY', reasoning: reason, policyRef: 'pol-008', confidence: 0.9 }), /hedged/);

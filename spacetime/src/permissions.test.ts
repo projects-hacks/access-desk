@@ -19,13 +19,13 @@ test('the lever is off only when its core permissions are all off', () => {
 });
 
 test('giving access back never waits for a person', () => {
-  assert.equal(permissionNeedsHuman({ tier: 1, strategic: true, changes: [{ key: 'buy', enabled: true }] }), undefined);
+  assert.equal(permissionNeedsHuman({ strategic: true, offboards: false, changes: [{ key: 'buy', enabled: true }] }), undefined);
 });
 
-test('tier 1 and 2, strategic clients and turning off sell need a second controller', () => {
+test('only strategic clients and offboarding need a second controller', () => {
   const off = [{ key: 'buy', enabled: false }];
-  assert.match(permissionNeedsHuman({ tier: 2, strategic: false, changes: off }) ?? '', /tier 2/);
-  assert.match(permissionNeedsHuman({ tier: 4, strategic: true, changes: off }) ?? '', /strategic/);
-  assert.match(permissionNeedsHuman({ tier: 4, strategic: false, changes: [{ key: 'sell', enabled: false }] }) ?? '', /sell/);
-  assert.equal(permissionNeedsHuman({ tier: 4, strategic: false, changes: off }), undefined);
+  assert.match(permissionNeedsHuman({ strategic: true, offboards: false, changes: off }) ?? '', /strategic/);
+  assert.match(permissionNeedsHuman({ strategic: false, offboards: true, changes: off }) ?? '', /offboarding/);
+  assert.equal(permissionNeedsHuman({ strategic: false, offboards: false, changes: off }), undefined);
+  assert.equal(permissionNeedsHuman({ strategic: false, offboards: false, changes: [{ key: 'sell', enabled: false }] }), undefined);
 });

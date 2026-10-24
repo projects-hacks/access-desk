@@ -4,6 +4,7 @@ import { Badge, StateBadge } from '../components/Badge';
 import { SlidingPill } from '../components/SlidingPill';
 import { LeverChips, stateAfter, useLevers } from '../components/LeverChips';
 import { label, money, parseJson, percent } from '../lib/format';
+import { waitingReason } from '../lib/autonomy';
 import { useSession } from '../lib/session';
 import { reducers, tables } from '../module_bindings';
 import type {
@@ -42,6 +43,7 @@ export function WorkQueue() {
   const [openId, setOpenId] = useState<bigint>();
 
   const clientName = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
+  const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
   const sorted = useMemo(() => [...items].sort((a, b) => (a.id < b.id ? 1 : -1)), [items]);
   const shown = sorted.filter(FILTERS[filter].test);
   const open = items.find((w) => w.id === openId);
@@ -132,8 +134,8 @@ export function WorkQueue() {
                         <Badge tone="info">auto · policy</Badge>
                       </div>
                     )}
-                    {!w.autoApplied && OPEN.includes(w.state) && (
-                      <div className="eyebrow">needs {w.requiredRole.toLowerCase()}</div>
+                    {waitingReason(w, clientById.get(w.clientId)) && (
+                      <div className="eyebrow">{waitingReason(w, clientById.get(w.clientId))}</div>
                     )}
                   </td>
                 </tr>
@@ -147,6 +149,7 @@ export function WorkQueue() {
         <Drawer
           item={open}
           clientName={clientName.get(open.clientId)}
+          waiting={waitingReason(open, clientById.get(open.clientId))}
           levers={levers}
           data={{ policies, clauses, decisions, audit }}
           onClose={() => setOpenId(undefined)}
@@ -184,12 +187,14 @@ type Proposal = {
 function Drawer({
   item,
   clientName,
+  waiting,
   levers,
   data: { policies, clauses, decisions, audit },
   onClose,
 }: {
   item: WorkItem;
   clientName?: string;
+  waiting?: string;
   levers: ReturnType<typeof useLevers>;
   data: {
     policies: readonly Policy[];
@@ -262,6 +267,7 @@ function Drawer({
       </div>
 
       <div className="drawer-body">
+        {waiting && <p className="notice info waiting">{waiting}</p>}
         <h4>Why</h4>
         <p>{item.reasoning || <span className="muted">No reasoning given.</span>}</p>
         {proposal.plan?.basis && proposal.plan.basis !== item.reasoning && (

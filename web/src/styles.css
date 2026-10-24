@@ -445,3 +445,9 @@ th.num .sort { width: 100%; text-align: right; }
 .activity-why { margin: 2px 0 0; padding: 6px 12px; border-left: 2px solid var(--accent); color: var(--text); font-size: 13px; background: var(--surface); border-radius: 0 8px 8px 0; }
 .reveal-stack .activity-day { animation: reveal-in 0.42s ease-out backwards; animation-delay: 380ms; }
 @media (max-width: 720px) { .activity-list li { grid-template-columns: 1fr; gap: 4px; } }
+.seats { display: inline-flex; gap: 2px; padding: 2px; margin-left: 4px; border-radius: 999px; background: var(--surface); }
+.seats button { font: inherit; font-size: 12px; font-weight: 500; padding: 3px 10px; border: 0; border-radius: 999px; background: none; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.seats button:hover { color: var(--text); }
+.seats button.active { background: var(--text); color: #fff; }
+.notice.info { background: var(--info-soft); color: var(--info); }
+.drawer-body > .notice.waiting:first-child { margin-top: 20px; }

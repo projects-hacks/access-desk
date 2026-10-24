@@ -4,6 +4,7 @@ import { createWorkItem, overdueCents, recomputeInvoice, releaseHoldsIfCured, wi
 import { GL, cr, dr, queueCommand, queueJournal } from '../payments/gateway';
 import { cureState, defaultedInvoices } from '../payments/deadlines';
 import { formatUsd } from '../payments/match';
+import { lowConfidence } from '../autonomy';
 import { spacetimedb } from '../schema';
 import { applyCreditReview, applyPolicyDraft } from './credit';
 import { applyPermissionChange } from './manual';
@@ -13,9 +14,10 @@ import { applyPermissionChange } from './manual';
  * contract, the platform's capabilities and policy before a work item exists.
  * Approval (or policy auto-approval) executes it through the gateway.
  *
- * Auto-approval: an active policy covers the kind and the client is not Tier 1
- * or strategic. People are kept for top clients and offboarding steps (close-only,
- * full freeze). Custody debits also stay within the auto-apply limit.
+ * Auto-approval: an active policy covers the kind, the client is not strategic
+ * (the top 0.1%) and the agent's confidence clears MIN_AUTO_CONFIDENCE (autonomy.ts).
+ * People decide only for those clients, offboarding steps (close-only, full freeze)
+ * and low-confidence proposals.
  */
 
 const PROPOSERS = ['AGENT', 'CONTROLLER', 'ADMIN'] as const;
@@ -67,12 +69,12 @@ function policyActive(ctx: Ctx, policyId: string): boolean {
   return [...ctx.db.policy.policyId.filter(policyId)].some((p) => p.status === 'active');
 }
 
-export function canAutoApply(ctx: Ctx, kind: string, clientId: string, amountCents: bigint): boolean {
+export function canAutoApply(ctx: Ctx, kind: string, clientId: string, _amountCents: bigint): boolean {
+  // Only the top clients (strategic, the hand-marked top 0.1%) wait for a person; offboarding
+  // steps are routed to a person by the caller (needsPerson).
   const policy = AUTO_POLICY[kind];
   const c = ctx.db.client.id.find(clientId);
-  const limit = ctx.db.platform.id.find(1)?.autoApplyLimitCents ?? 0n;
-  const withinLimit = kind !== 'CUSTODY_DEBIT' || amountCents <= limit;
-  return !!policy && policyActive(ctx, policy) && withinLimit && !!c && c.tier > 1 && !c.strategic;
+  return !!policy && policyActive(ctx, policy) && !!c && !c.strategic;
 }
 
 /** Create the work item; execute right away when policy allows. */
@@ -81,7 +83,8 @@ function propose(ctx: Ctx, w: {
   reasoning: string; policyRef: string; clausesCited: string[]; confidence: number; needsPerson?: boolean; boundariesJson?: string;
 }) {
   requireRole(ctx, PROPOSERS);
-  const auto = !w.needsPerson && canAutoApply(ctx, w.kind, w.clientId, w.amountCents);
+  // Below the confidence threshold the agent hands the decision to a person.
+  const auto = !w.needsPerson && !lowConfidence(w.confidence) && canAutoApply(ctx, w.kind, w.clientId, w.amountCents);
   const item = createWorkItem(ctx, {
     kind: w.kind, clientId: w.clientId, subjectId: w.clientId, title: w.title, amountCents: w.amountCents,
     proposal: w.proposal, reasoning: w.reasoning, policyRef: w.policyRef, confidence: w.confidence,
