@@ -99,6 +99,14 @@ class SpacetimeClient:
     ) -> None:
         self.call("record_agent_run", agent, trigger, proposed, status, {"some": error} if error else {"none": []}, duration_ms)
 
+    def propose_payment_match(
+        self, client_id: str, movement_id: str, reasoning: str, evidence_json: str, confidence: float,
+        rm_note_id: int | None = None,
+    ) -> None:
+        """Attribute unplaced cash to a client with evidence; an accountant approves once."""
+        self.call("propose_payment_match", movement_id, client_id, reasoning, evidence_json, confidence,
+                  {"some": rm_note_id} if rm_note_id is not None else {"none": []})
+
     def record_wait(self, client_id: str, code: str, reason: str) -> None:
         """Audits a decision not to act on a client who owes money."""
         self.call("record_wait", client_id, code, reason)

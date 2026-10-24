@@ -7,6 +7,7 @@ import {
 import { GL, cashAccount, cr, dr, isBooked, queueCommand, queueJournal } from '../payments/gateway';
 import { formatUsd, planMatch, type MatchPlan } from '../payments/match';
 import { spacetimedb } from '../schema';
+import { closeCashExceptions } from './matches';
 import { placeHoldFor } from './actions';
 
 /**
@@ -301,6 +302,7 @@ export function onPaymentApproved(ctx: Ctx, workItemId: bigint) {
   if (applied > 0n) {
     withdrawStaleProposals(ctx, item.clientId, `${m.bankRef} confirmed`);
     releaseHoldsIfCured(ctx, item.clientId, `${m.bankRef} confirmed`, item.id);
+    closeCashExceptions(ctx, m.id, `${m.bankRef} matched to ${item.clientId} (WI-${item.id})`);
   }
 }
 

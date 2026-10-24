@@ -49,6 +49,7 @@ class World:
     clients: dict[str, ClientView]
     work_items: dict[int, Row]
     readings: dict[int, Any] = field(default_factory=dict)
+    unplaced: list[Row] = field(default_factory=list)
     policies: list[Row] = field(default_factory=list)
     investigated: set[int] = field(default_factory=set)
     last_waits: dict[str, str] = field(default_factory=dict)
@@ -83,6 +84,9 @@ def load_world(db: SpacetimeClient) -> World:
     for view in views.values():
         view.cash = [m for m in incoming if paid_by(view, m)]
         view.in_transit = [m for m in view.cash if m["match_status"] == "in_transit"]
+    claimed = {m["id"] for v in views.values() for m in v.cash}
+    unplaced = [m for m in incoming
+                if m["status"] == "posted" and m["match_status"] in ("unmatched", "exception") and m["id"] not in claimed]
 
     return World(
         today=clock["sim_date"],
@@ -90,6 +94,7 @@ def load_world(db: SpacetimeClient) -> World:
         capability=db.sql("SELECT * FROM capability"),
         clients=views,
         work_items=work_items,
+        unplaced=unplaced,
         policies=db.sql("SELECT * FROM policy WHERE status = 'active'"),
         investigated={s["work_item_id"] for s in db.sql("SELECT * FROM investigation_step")},
         failed_commands={

@@ -2,7 +2,7 @@ import json
 import unittest
 
 from desk_agents.agents.access_controller import plan
-from desk_agents.pushback import RmReading
+from desk_agents.pushback import RmReading, by_keywords
 from desk_agents.world import ClientView, World
 
 TODAY = "2026-03-20"
@@ -199,9 +199,11 @@ PAID = RmReading(intent="already_paid", summary="wire sent", claimed_amount_usd=
 HOLD_OFF = RmReading(intent="exception_request", summary="hold off", grace_until="2026-03-31", reason="acquisition")
 
 
-def wire(status="posted", match="matched", value_on="2026-03-02", amount=50_000_00):
-    return {"amount_cents": amount, "rail": "WIRE", "bank_ref": "WI-1", "orig_name": "ACME LP", "value_on": value_on,
-            "status": status, "match_status": match, "memo": ""}
+def wire(status="posted", match="matched", value_on="2026-03-02", amount=50_000_00, orig="ACME LP", ref="WI-1",
+         memo="", refs=(), mid=None):
+    return {"id": mid or f"nessie:{ref}", "amount_cents": amount, "rail": "WIRE", "bank_ref": ref, "orig_name": orig,
+            "value_on": value_on, "status": status, "match_status": match, "memo": memo, "remittance": "",
+            "refs": list(refs)}
 
 
 class RmPushback(unittest.TestCase):
@@ -217,9 +219,10 @@ class RmPushback(unittest.TestCase):
         m = only(view(rm_note=[NOTE], cash=[transit], in_transit=[transit]), readings={4: PAID})
         self.assertIn("not yet posted", m.args["body"])
 
-    def test_already_paid_finds_unmatched_cash(self):
+    def test_already_paid_proposes_the_match_for_unmatched_cash(self):
         m = only(view(rm_note=[NOTE], cash=[wire(match="exception")]), readings={4: PAID})
-        self.assertIn("could not be matched", m.args["body"])
+        self.assertEqual((m.action, m.args["movement_id"], m.args["rm_note_id"]), ("propose_payment_match", "nessie:WI-1", 4))
+        self.assertIn("could not be matched", m.fallback.args["body"])
 
     def test_answered_note_is_not_answered_again(self):
         reply = item(11, "REMINDER", "POSTED", {"body": "No payment (re RM-4)"})
@@ -539,6 +542,116 @@ class ReviewFindings(unittest.TestCase):
         with self.assertLogs("desk_agents.access_controller", level="ERROR"):
             found = [m for m in plan(w, escalation_days=7) if m.action == RESTRICT]
         self.assertEqual([m.client_id for m in found], ["ORG-1"])
+
+
+class PaymentAttribution(unittest.TestCase):
+    def test_unplaced_wire_matching_the_invoices_is_proposed_with_evidence(self):
+        w = world(view(rm_note=[NOTE]), readings={4: PAID})
+        w.unplaced = [wire(match="exception", orig="ZEPHYR CAPITAL MGMT LP", ref="JD-0001")]
+        m = next(m for m in plan(w, escalation_days=7) if m.action == "propose_payment_match")
+        evidence = json.loads(m.args["evidence_json"])[0]
+        kinds = [s["kind"] for s in evidence["signals"]]
+        self.assertEqual(kinds, ["rm_says_paid", "amount_matches_invoices", "amount_matches_claim"])
+        self.assertEqual((evidence["bankRef"], evidence["invoices"]), ("JD-0001", ["INV-1"]))
+        self.assertIn("RM Priya Nair says Acme paid", m.args["reasoning"])
+
+    def test_wire_that_does_not_fit_is_not_proposed(self):
+        w = world(view(rm_note=[NOTE]), readings={4: PAID.model_copy(update={"claimed_amount_usd": None})})
+        w.unplaced = [wire(match="exception", amount=12_345_00)]
+        m = only_in(w)
+        self.assertEqual(m.action, "propose_notice")
+        self.assertIn("No payment from Acme", m.args["body"])
+
+    def test_two_equally_likely_wires_are_left_to_a_person(self):
+        w = world(view(rm_note=[NOTE]), readings={4: PAID})
+        w.unplaced = [wire(match="exception", ref="JD-0001"), wire(match="exception", ref="JD-0002")]
+        self.assertEqual(only_in(w).action, "propose_notice")
+
+    def test_reference_breaks_the_tie(self):
+        w = world(view(rm_note=[NOTE]), readings={4: PAID})
+        w.unplaced = [wire(match="exception", ref="JD-0001"), wire(match="exception", ref="JD-0002", memo="IMAD IMAD123456")]
+        m = only_in(w)
+        self.assertEqual((m.action, m.args["movement_id"]), ("propose_payment_match", "nessie:JD-0002"))
+
+    def test_rm_is_pointed_at_a_match_already_waiting(self):
+        match = item(40, "PAYMENT_MATCH", "PROPOSED", title="Confirm $50,000.00 from ACME LP → INV-1 (Acme)",
+                     required_role="ACCOUNTANT", subject="nessie:WI-1")
+        m = only(view(rm_note=[NOTE], work_item=[match]), readings={4: PAID})
+        self.assertEqual(m.args["channel"], "rm")
+        self.assertIn("waiting for an accountant to approve (WI-40)", m.args["body"])
+
+
+def only_in(w):
+    found = [m for m in plan(w, escalation_days=7) if m.action not in BOOKKEEPING]
+    return found[0] if found else None
+
+
+class InventedClient(unittest.TestCase):
+    """The demo moment with a client that exists nowhere in the dataset: other names, amounts and products."""
+
+    def run_story(self, cid, name, legal, owed_lines, sender, author, note_text, tier=4):
+        total = sum(amount for _, _, amount in owed_lines)
+        v = view(products=("CUSTODY", "API"), owed=owed_lines, tier=tier, usd=0,
+                 levers=[{"lever": "withdrawals", "state": "limited", "detail": f"{usd_text(total)} held", "work_item_id": None},
+                         {"lever": "api", "state": "limited", "detail": "Rate limited to 100 req/s", "work_item_id": None},
+                         {"lever": "trading", "state": "not_used", "detail": "", "work_item_id": None},
+                         {"lever": "financing", "state": "not_used", "detail": "", "work_item_id": None}],
+                 hold=[{"status": "active", "amount_cents": total}])
+        v.client = {**v.client, "id": cid, "name": name, "legal_name": legal, "relationship_manager": author}
+        note = {"id": 9, "client_id": cid, "author": author, "text": note_text, "work_item_id": None}
+        v.rm_note = [note]
+        reading = by_keywords(note_text)
+        incoming = wire(match="exception", amount=total, orig=sender, ref="JD-0042", memo=f"PMT DET: FEES {name.upper()}",
+                        value_on="2026-03-18")
+
+        w = world(v, readings={9: reading})
+        w.clients = {cid: v}
+        w.unplaced = [incoming]
+        step1 = only_in(w)
+        self.assertEqual((step1.action, step1.args["client_id"], step1.args["movement_id"]),
+                         ("propose_payment_match", cid, incoming["id"]))
+        evidence = json.loads(step1.args["evidence_json"])[0]
+        self.assertEqual(sorted(evidence["invoices"]), sorted(i for i, _, _ in owed_lines))
+        self.assertIn("remittance_names_client", [s["kind"] for s in evidence["signals"]])
+
+        v.work_item = [item(77, "PAYMENT_MATCH", "PROPOSED", title=f"Confirm {usd_text(total)} from {sender}",
+                            required_role="ACCOUNTANT", subject=incoming["id"])]
+        step2 = only_in(w)
+        self.assertEqual(step2.args["channel"], "rm")
+        self.assertIn("(WI-77)", step2.args["body"])
+        self.assertIn("(re RM-9)", step2.args["body"])
+
+        v.work_item = [item(77, "PAYMENT_MATCH", "POSTED", subject=incoming["id"]),
+                       item(78, "REMINDER", "POSTED", {"body": step2.args["body"]})]
+        for inv in v.invoice:
+            inv.update(paid_cents=inv["amount_cents"], paid_on="2026-03-19", status="paid")
+        v.hold = [{"status": "released", "amount_cents": total}]
+        v.access_lever[0].update(state="active", detail="Hold released · all assets withdrawable")
+        w.unplaced = []
+        step3 = only_in(w)
+        self.assertEqual((step3.action, step3.args["lever"]), ("propose_restore", "api"))
+
+        v.access_lever[1].update(state="active", detail="Restored")
+        v.work_item.append(item(79, "RESTORE", "POSTED", {"lever": "api"}))
+        step4 = only_in(w)
+        self.assertEqual(step4.action, "propose_notice")
+        self.assertIn("Payment received: your access to the API is restored. Your account is fully back to normal.", step4.args["body"])
+
+    def test_northwind(self):
+        self.run_story("ORG-77001", "Northwind Basis Fund", "Northwind Basis Fund LP",
+                       (("INV-9001", "API", 12_345_67), ("INV-9002", "CUSTODY", 8_000_00)),
+                       "HALVARD GP HOLDINGS", "Dana Whitlock",
+                       "Northwind already paid, $20,345.67 sent by their GP last week. Please don't keep them frozen.")
+
+    def test_a_different_client_and_amount(self):
+        self.run_story("ORG-55120", "Sable Harbor Treasury", "Sable Harbor Treasury Inc",
+                       (("INV-4410", "CUSTODY", 3_210_00), ("INV-4411", "API", 990_15), ("INV-4412", "API", 77_000_00)),
+                       "MERIDIAN ESCROW SERVICES", "Ken Ito",
+                       "They wired it yesterday via escrow, $81,200.15 total.", tier=2)
+
+
+def usd_text(cents):
+    return f"${cents / 100:,.2f}"
 
 
 if __name__ == "__main__":

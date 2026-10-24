@@ -3,6 +3,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
+from itertools import combinations
 from typing import Any
 
 import httpx
@@ -621,7 +622,8 @@ def notice_body(view: ClientView, item: Row, world: World, ref: str) -> str:
                   if lv["lever"] != lever and lv["state"] in ("limited", "off")]
         rest = (f" {listed(others).capitalize()} {'remains' if len(others) == 1 else 'remain'} restricted until the rest "
                 "is paid." if others else " Your account is fully back to normal.")
-        return f"Payment received: your {LEVER_WORDS.get(lever, lever)} access is restored.{rest} Thank you. {ref}"
+        target = "the API" if lever == "api" else lever
+        return f"Payment received: your access to {target} is restored.{rest} Thank you. {ref}"
     overdue = overdue_invoices(view, world.today)
     action = STEP_WORDS.get(p.get("step", ""), f"restricted {lever}")
     return (
@@ -657,6 +659,9 @@ def rm_reply(view: ClientView, world: World) -> Move | None:
     return None
 
 
+FEE_TOLERANCE_CENTS = 5_000
+
+
 def payment_check(view: ClientView, note: Row, reading: RmReading, world: World) -> Move:
     today = world.today
     name = view.client["name"]
@@ -666,6 +671,8 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
     recent = [m for m in view.cash if m["value_on"] >= since]
     quoted = (reading.payment_reference or "").upper()
     cited = [m for m in recent if quoted and (quoted in m["bank_ref"].upper() or quoted in m["memo"].upper())]
+    match = next((w for w in sorted(view.work_item, key=lambda w: w["id"])
+                  if w["kind"] == "PAYMENT_MATCH" and w["state"] in OPEN), None)
 
     if not defaulted:
         finding = f"Confirmed: nothing from {name} is past due any more. Any restriction is being lifted."
@@ -673,7 +680,12 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
         m = view.in_transit[0]
         finding = (
             f"We see {usd(m['amount_cents'])} {m['rail']} {m['bank_ref']} from {m['orig_name']} sent {m['value_on']}, "
-            f"not yet posted. No further restriction while it is in transit; access is restored automatically when it posts."
+            "not yet posted. No further restriction while it is in transit; access comes back once it posts."
+        )
+    elif match:
+        finding = (
+            f"Found it: {match['title']}. It is waiting for an accountant to approve (WI-{match['id']}); "
+            "access comes back as soon as it is applied."
         )
     elif returned := [m for m in recent if m["match_status"] == "reversed"]:
         m = returned[0]
@@ -682,11 +694,21 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
             f"{usd(m['amount_cents'])} {m['bank_ref']} from {m['orig_name']} arrived {m['value_on']} but was returned by the "
             f"bank{code}; {usd(owing)} is still past due. Please ask the client to resend."
         )
-    elif unmatched := [m for m in recent if m["status"] == "posted" and m["match_status"] in UNAPPLIED]:
-        m = unmatched[0]
-        finding = (
+    elif found := best_candidate(view, reading, note, world, since):
+        m, evidence = found
+        reply = rm_reply_move(view, note, (
             f"{usd(m['amount_cents'])} {m['bank_ref']} from {m['orig_name']} arrived {m['value_on']} but could not be matched "
-            f"to invoices automatically; an accountant is reviewing it. Access is restored as soon as it is applied."
+            "automatically; an accountant is reviewing it. Access comes back as soon as it is applied."
+        ))
+        signals = "; ".join(s["detail"] for s in evidence["signals"])
+        return Move(
+            action="propose_payment_match",
+            client_id=view.id,
+            args={"client_id": view.id, "movement_id": m["id"], "rm_note_id": note["id"],
+                  "reasoning": f"RM {note['author']} says {name} paid. Evidence: {signals}.",
+                  "evidence_json": json.dumps([evidence]), "confidence": evidence["confidence"]},
+            summary=f"match {m['bank_ref']} to {name} on {note['author']}'s word and the evidence",
+            fallback=reply,
         )
     else:
         applied = sum(m["amount_cents"] for m in recent if m["match_status"] == "matched")
@@ -698,6 +720,11 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
             f"({', '.join(i['id'] for i in defaulted)}). Restrictions stay as they are. Please ask the client for the "
             "Fed IMAD or MT103 so we can trace the wire."
         )
+    return rm_reply_move(view, note, finding)
+
+
+def rm_reply_move(view: ClientView, note: Row, finding: str) -> Move:
+    name = view.client["name"]
     return Move(
         action="propose_notice",
         client_id=view.id,
@@ -705,6 +732,72 @@ def payment_check(view: ClientView, note: Row, reading: RmReading, world: World)
               "confidence": 0.9, "reasoning": f"RM {note['author']} says {name} already paid; checked the bank feed before acting."},
         summary=f"reply to {note['author']} on {name}'s payment",
     )
+
+
+def best_candidate(
+    view: ClientView, reading: RmReading, note: Row, world: World, since: str,
+) -> tuple[Row, dict[str, Any]] | None:
+    """The unapplied or unplaced wire that is most likely this client's, if the evidence is strong enough."""
+    open_invoices = [i for i in view.invoice if i["paid_cents"] < i["amount_cents"] and i["status"] != "disputed"]
+    pool = [m for m in view.cash if m["status"] == "posted" and m["match_status"] in UNAPPLIED] + world.unplaced
+    scored = []
+    for m in pool:
+        if m["value_on"] < min((i["issued_on"] for i in open_invoices), default=since):
+            continue
+        evidence = wire_evidence(view, m, reading, note, open_invoices)
+        if evidence:
+            scored.append((evidence["confidence"], m["id"], m, evidence))
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    if not scored or (len(scored) > 1 and scored[0][0] == scored[1][0]):
+        return None
+    return scored[0][2], scored[0][3]
+
+
+def wire_evidence(view: ClientView, m: Row, reading: RmReading, note: Row, open_invoices: list[Row]) -> dict[str, Any] | None:
+    """Signals that this wire is the client's. A match needs the amount to fit and at least one more signal."""
+    amount = m["amount_cents"]
+    signals = [{"kind": "rm_says_paid", "detail": f"RM {note['author']} wrote: \u201c{note['text'][:160]}\u201d"}]
+    subset = exact_subset(amount, open_invoices)
+    claimed = int(reading.claimed_amount_usd * 100) if reading.claimed_amount_usd else None
+    if subset:
+        signals.append({"kind": "amount_matches_invoices",
+                        "detail": f"{usd(amount)} equals open invoices {', '.join(i['id'] for i in subset)}"})
+    elif claimed is not None and abs(claimed - amount) <= FEE_TOLERANCE_CENTS:
+        signals.append({"kind": "amount_matches_claim", "detail": f"{usd(amount)} is what the RM says was sent ({usd(claimed)})"})
+    else:
+        return None
+    text = " ".join(str(m.get(k) or "") for k in ("memo", "remittance", "orig_name")).upper()
+    quoted = (reading.payment_reference or "").upper()
+    if quoted and (quoted in m["bank_ref"].upper() or quoted in text):
+        signals.append({"kind": "reference", "detail": f"the RM's reference {reading.payment_reference} is on the wire"})
+    names = {view.id, view.client["name"].upper(), view.client["legal_name"].upper()}
+    named = [n for n in names if n and n in text]
+    refs = {i["id"] for i in open_invoices} & set(m.get("refs") or [])
+    if named or refs:
+        signals.append({"kind": "remittance_names_client",
+                        "detail": f"the wire mentions {', '.join(sorted(named) + sorted(refs))}"})
+    if m in view.cash:
+        signals.append({"kind": "known_sender", "detail": f"{m['orig_name']} is already on file for {view.client['name']}"})
+    if claimed is not None and subset and abs(claimed - amount) <= FEE_TOLERANCE_CENTS:
+        signals.append({"kind": "amount_matches_claim", "detail": f"the RM quoted {usd(claimed)}"})
+    if len(signals) < 3 and not subset:
+        return None
+    return {
+        "kind": "payment_attribution", "movementId": m["id"], "bankRef": m["bank_ref"], "amountCents": amount,
+        "from": m["orig_name"], "valueOn": m["value_on"], "invoices": [i["id"] for i in subset or []],
+        "signals": signals, "confidence": round(min(0.95, 0.45 + 0.15 * (len(signals) - 1)), 2),
+    }
+
+
+def exact_subset(amount: int, invoices: list[Row]) -> list[Row] | None:
+    """Oldest-first set of open invoices whose balances add up to the amount exactly (small books only)."""
+    items = sorted(invoices, key=lambda i: (i["due_on"], i["id"]))[:16]
+    balances = [i["amount_cents"] - i["paid_cents"] for i in items]
+    for size in range(1, len(items) + 1):
+        for combo in combinations(range(len(items)), size):
+            if sum(balances[k] for k in combo) == amount:
+                return [items[k] for k in combo]
+    return None
 
 
 def exception_case(view: ClientView, note: Row, reading: RmReading, world: World) -> Move:
