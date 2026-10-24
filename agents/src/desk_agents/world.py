@@ -1,6 +1,8 @@
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
+from .config import settings
 from .stdb import SpacetimeClient
 
 Row = dict[str, Any]
@@ -54,33 +56,79 @@ class World:
     investigated: set[int] = field(default_factory=set)
     last_waits: dict[str, str] = field(default_factory=dict)
     failed_commands: dict[int, str] = field(default_factory=dict)
+    changed: set[str] = field(default_factory=set)
 
 
-def load_world(db: SpacetimeClient) -> World:
-    clock = db.sql("SELECT * FROM clock")[0]
-    platform = db.sql("SELECT * FROM platform")[0]
-    views = {c["id"]: ClientView(client=c) for c in db.sql("SELECT * FROM client")}
-    for row in db.sql("SELECT * FROM contract"):
+DECISIONS = {"REJECTED": "rejections", "APPROVED": "approvals", "WITHDRAWN": "withdrawals"}
+
+
+@dataclass
+class AuditLog:
+    """The audit rows the agent learns from, read incrementally. A reset wipes the table, so it starts over."""
+
+    last_id: int = 0
+    decisions: list[Row] = field(default_factory=list)
+    waits: dict[str, str] = field(default_factory=dict)
+    changed: set[str] = field(default_factory=set)
+
+    def query(self) -> str:
+        return f"SELECT * FROM audit_event WHERE id > {self.last_id}"
+
+    def absorb(self, rows: list[Row]) -> None:
+        self.changed = set()
+        for row in sorted(rows, key=lambda r: r["id"]):
+            self.last_id = max(self.last_id, row["id"])
+            if row["action"] == "RESET_WORLD":
+                self.decisions, self.waits = [], {}
+            if row["client_id"]:
+                self.changed.add(row["client_id"])
+            if row["action"] == "AGENT_WAITED":
+                self.waits[row["client_id"]] = row["detail"]
+            elif row["to_state"] in DECISIONS and row["allowed"]:
+                self.decisions.append(row)
+
+
+def load_world(db: SpacetimeClient, audit: AuditLog | None = None) -> World:
+    """Every table the agents read. Each query is a network round trip; Maincloud serves about four at once well."""
+    audit = audit or AuditLog()
+    queries = {
+        "clock": "SELECT * FROM clock",
+        "platform": "SELECT * FROM platform",
+        "client": "SELECT * FROM client",
+        "contract": "SELECT * FROM contract",
+        "audit": audit.query(),
+        "cash": "SELECT * FROM cash_movement WHERE is_history = false",
+        "capability": "SELECT * FROM capability",
+        "policy": "SELECT * FROM policy WHERE status = 'active'",
+        "investigation": "SELECT * FROM investigation_step",
+        "failed": "SELECT * FROM gateway_command WHERE status = 'failed'",
+        **{table: f"SELECT * FROM {table}" for table in PER_CLIENT},
+    }
+    with ThreadPoolExecutor(max_workers=settings.stdb_parallel_requests) as pool:
+        results = dict(zip(queries, pool.map(db.sql, queries.values()), strict=True))
+    audit.absorb(results["audit"])
+
+    views = {c["id"]: ClientView(client=c) for c in results["client"]}
+    for row in results["contract"]:
         if row["client_id"] in views:
             views[row["client_id"]].contract = row
 
     work_items: dict[int, Row] = {}
     for table in PER_CLIENT:
-        for row in db.sql(f"SELECT * FROM {table}"):
+        for row in results[table]:
             view = views.get(row["client_id"])
             if view:
                 getattr(view, table).append(row)
             if table == "work_item":
                 work_items[row["id"]] = row
 
-    for state, target in (("REJECTED", "rejections"), ("APPROVED", "approvals"), ("WITHDRAWN", "withdrawals")):
-        for row in db.sql(f"SELECT * FROM audit_event WHERE to_state = '{state}'"):
-            view = views.get(row["client_id"])
-            item = work_items.get(row["work_item_id"] or -1)
-            if view and item and row["allowed"]:
-                getattr(view, target).append({**row, "work_item_kind": item["kind"]})
+    for row in audit.decisions:
+        view = views.get(row["client_id"])
+        item = work_items.get(row["work_item_id"] or -1)
+        if view and item:
+            getattr(view, DECISIONS[row["to_state"]]).append({**row, "work_item_kind": item["kind"]})
 
-    incoming = [m for m in db.sql("SELECT * FROM cash_movement WHERE is_history = false") if m["direction"] == "in"]
+    incoming = [m for m in results["cash"] if m["direction"] == "in"]
     for view in views.values():
         view.cash = [m for m in incoming if paid_by(view, m)]
         view.in_transit = [m for m in view.cash if m["match_status"] == "in_transit"]
@@ -89,22 +137,17 @@ def load_world(db: SpacetimeClient) -> World:
                 if m["status"] == "posted" and m["match_status"] in ("unmatched", "exception") and m["id"] not in claimed]
 
     return World(
-        today=clock["sim_date"],
-        platform=platform,
-        capability=db.sql("SELECT * FROM capability"),
+        today=results["clock"][0]["sim_date"],
+        platform=results["platform"][0],
+        capability=results["capability"],
         clients=views,
         work_items=work_items,
         unplaced=unplaced,
-        policies=db.sql("SELECT * FROM policy WHERE status = 'active'"),
-        investigated={s["work_item_id"] for s in db.sql("SELECT * FROM investigation_step")},
-        failed_commands={
-            c["work_item_id"]: c["error"] or ""
-            for c in db.sql("SELECT * FROM gateway_command WHERE status = 'failed'") if c["work_item_id"] is not None
-        },
-        last_waits={
-            e["client_id"]: e["detail"]
-            for e in sorted(db.sql("SELECT * FROM audit_event WHERE action = 'AGENT_WAITED'"), key=lambda e: e["id"])
-        },
+        policies=results["policy"],
+        investigated={s["work_item_id"] for s in results["investigation"]},
+        failed_commands={c["work_item_id"]: c["error"] or "" for c in results["failed"] if c["work_item_id"] is not None},
+        last_waits=dict(audit.waits),
+        changed=set(audit.changed),
     )
 
 
