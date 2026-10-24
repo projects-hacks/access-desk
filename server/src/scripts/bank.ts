@@ -10,9 +10,10 @@
 import { parseArgs } from 'node:util';
 import { loadDataset } from '../dataset';
 import { env } from '../lib/env';
-import { NessieClient, type NessieTransaction } from '../integrations/nessie/client';
+import { NessieClient } from '../integrations/nessie/client';
 import { readSeedMap } from '../integrations/nessie/seed-map';
 import { buildSeedPlan } from '../integrations/nessie/seed-plan';
+import { resetBank, settleWire } from '../integrations/nessie/reset';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -65,60 +66,12 @@ async function show(accountKey: string) {
   }
 }
 
-/** Posts a pending wire on both sides, as the bank would. */
 async function settle(movementId: string) {
-  for (const side of ['platform', 'counterparty'] as const) {
-    const t = plan.transactions.find((x) => x.movementId === movementId && x.side === side);
-    const id = map.transactions[`${movementId}:${side}`];
-    if (!t || !id) continue;
-    const update = t.type === 'deposit' ? nessie.updateDeposit.bind(nessie) : nessie.updateWithdrawal.bind(nessie);
-    await update(id, { status: 'completed' });
-    console.log(`${movementId} ${side}: completed`);
-  }
+  const ok = await settleWire(nessie, map, plan, movementId);
+  console.log(ok ? `${movementId}: completed on both sides` : `${movementId}: not found in run ${values.run}`);
 }
 
-/** Restores seeded statuses and deletes anything created after the seed (live demo activity). */
 async function reset() {
-  const seededTx = new Map(Object.entries(map.transactions).map(([key, id]) => [id, key]));
-  const seededBills = new Map(Object.entries(map.bills).map(([key, id]) => [id, key]));
-  const txPlan = new Map(plan.transactions.map((t) => [t.key, t]));
-  const billPlan = new Map(plan.bills.map((b) => [b.key, b]));
-  let restored = 0;
-  let deleted = 0;
-
-  await Promise.all(
-    Object.values(map.accounts).map(async (acct) => {
-      const [deposits, withdrawals, bills] = await Promise.all([
-        nessie.listDeposits(acct.id),
-        nessie.listWithdrawals(acct.id),
-        nessie.listBills(acct.id),
-      ]);
-      const check = async (t: NessieTransaction, kind: 'deposit' | 'withdrawal') => {
-        const key = seededTx.get(t._id);
-        const planned = key ? txPlan.get(key) : undefined;
-        if (!planned) {
-          await (kind === 'deposit' ? nessie.deleteDeposit(t._id) : nessie.deleteWithdrawal(t._id));
-          deleted++;
-        } else if (t.status !== planned.status || t.transaction_date !== planned.transaction_date) {
-          const body = { status: planned.status, transaction_date: planned.transaction_date };
-          await (kind === 'deposit' ? nessie.updateDeposit(t._id, body) : nessie.updateWithdrawal(t._id, body));
-          restored++;
-        }
-      };
-      for (const t of deposits) await check(t, 'deposit');
-      for (const t of withdrawals) await check(t, 'withdrawal');
-      for (const b of bills) {
-        const key = seededBills.get(b._id);
-        const planned = key ? billPlan.get(key) : undefined;
-        if (!planned) {
-          await nessie.deleteBill(b._id);
-          deleted++;
-        } else if (b.status !== planned.status) {
-          await nessie.updateBill(b._id, { status: planned.status });
-          restored++;
-        }
-      }
-    }),
-  );
+  const { restored, deleted } = await resetBank(nessie, map, plan);
   console.log(`Bank reset for run "${values.run}": ${restored} restored, ${deleted} deleted.`);
 }

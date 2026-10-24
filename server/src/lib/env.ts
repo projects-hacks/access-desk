@@ -8,6 +8,10 @@ const EnvSchema = z.object({
   STDB_TOKEN: z.string().optional(),
   /** Gateway identity (role GATEWAY): the only writer to systems of record. */
   STDB_GATEWAY_TOKEN: z.string().optional(),
+  /** Demo identity (role DEMO): moves the clock and resets the world from the demo panel. */
+  STDB_DEMO_TOKEN: z.string().optional(),
+  /** Turns on /demo/* endpoints (inject, settle, advance, reset, state). */
+  DEMO_CONTROLS: z.stringbool().default(false),
   /** Where the gateway reaches the platform's write APIs. Defaults to this server. */
   PLATFORM_API_URL: z.string().optional(),
   NESSIE_API_KEY: z.string().optional(),

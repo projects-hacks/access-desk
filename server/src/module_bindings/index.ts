@@ -43,6 +43,7 @@ import PlaceHoldReducer from "./place_hold_reducer";
 import ProposeWorkItemReducer from "./propose_work_item_reducer";
 import RecordSyncErrorReducer from "./record_sync_error_reducer";
 import RemoveCashMovementReducer from "./remove_cash_movement_reducer";
+import ResetWorldReducer from "./reset_world_reducer";
 import SetClockReducer from "./set_clock_reducer";
 import SetPlatformReducer from "./set_platform_reducer";
 import SetSyncStatusReducer from "./set_sync_status_reducer";
@@ -677,6 +678,7 @@ const reducersSchema = __reducers(
   __reducerSchema("propose_work_item", ProposeWorkItemReducer),
   __reducerSchema("record_sync_error", RecordSyncErrorReducer),
   __reducerSchema("remove_cash_movement", RemoveCashMovementReducer),
+  __reducerSchema("reset_world", ResetWorldReducer),
   __reducerSchema("set_clock", SetClockReducer),
   __reducerSchema("set_platform", SetPlatformReducer),
   __reducerSchema("set_sync_status", SetSyncStatusReducer),

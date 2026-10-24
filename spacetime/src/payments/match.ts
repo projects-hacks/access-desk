@@ -89,6 +89,8 @@ export function planMatch(
   candidates: CandidateInvoice[],
   referenced: string[],
   fullyPaidReferenced: string[],
+  /** Intermediary charges the wire itself reports (SWIFT SHA). The payer sent amount + charges. */
+  reportedChargesCents = 0n,
 ): MatchResult {
   const open = candidates.filter((c) => c.balanceCents > 0n).sort(byDue);
   const refd = open.filter((c) => referenced.includes(c.id));
@@ -132,6 +134,17 @@ export function planMatch(
           ? 'Amount matches one open invoice exactly'
           : `Amount matches ${exact.length} open invoices exactly`,
     });
+  }
+
+  // The wire reports charges taken on the way: match what the payer sent, write off the charges.
+  if (reportedChargesCents > 0n && reportedChargesCents <= SHORT_FEE_LIMIT_CENTS) {
+    const sent = exactSubset(amount + reportedChargesCents, open);
+    if (sent) {
+      return plan({
+        method: 'short_fee', allocations: fifo(amount, sent), shortCents: reportedChargesCents, usedReferences: false,
+        basis: `Amount sent matches ${sent.length === 1 ? 'one open invoice' : `${sent.length} open invoices`} exactly; intermediary charges reported on the wire`,
+      });
+    }
   }
 
   if (refd.length) {

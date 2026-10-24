@@ -1,40 +1,34 @@
 # Access Desk
 
-Autonomous credit and access desk for a multi-product financial platform. It reads from systems of record, proposes work, asks humans when needed, and writes back only through one gateway, with every step logged.
-
-## Layout
+Autonomous credit and access desk for a multi-product financial platform. It reads the platform's systems of record, matches cash, decides what needs a person, and writes back only through one gateway, with every step logged.
 
 ```
-spacetime/   SpacetimeDB module (TypeScript): tables, work-item state machine, roles, audit log
-server/      Node service (TypeScript)
-  gateway/     only writer to systems of record (authorize + execute)
-  sync/        change-only pulls from sources (billing, Nessie bank feed)
-  simulator/   simulated systems of record (billing, ledger, admin console)
-  domain/      products, restriction ladder, gateway action schemas
-agents/      Python: credit analyst and access controller (Claude, Factory Droid SDK)
-web/         React + Vite UI (work queue, controller, client portal, audit log)
+spacetime/   SpacetimeDB module: tables, payment checking, state machine, roles, gateway outbox, tie-out, audit
+server/      sync, gateway, simulated platform (billing, GL, admin, custody), Nessie bank, demo endpoints
+agents/      Python agents (read via SQL, propose via reducers)
+web/         React + Vite
 ```
 
-SpacetimeDB holds all state and enforces the rules. `server/`, `agents/` and `web/` are its clients: the web app subscribes over WebSocket, the server handles anything that touches external systems, and agents read via SQL and propose work by calling reducers over HTTP.
+## Run
 
-## Setup
-
-Requires Node 22+, pnpm, and Python 3.11+ with [uv](https://docs.astral.sh/uv/).
+Node 22+, pnpm, Python 3.11+ with uv, `spacetime` CLI (schema changes only).
 
 ```bash
-pnpm install
-(cd agents && uv sync)
-cp .env.example .env        # already points to the shared database
-pnpm dev                    # server on :4000, web on :5173
-pnpm agents                 # agents loop
+pnpm install && (cd agents && uv sync)
+cp .env.example .env     # points to the shared Maincloud database
+pnpm dev                 # server :4000 (sync + gateway), web :5173
 ```
 
-- Shared database (SpacetimeDB on Maincloud): [docs/database.md](docs/database.md)
-- Tables, owners and conventions: [docs/schema.md](docs/schema.md)
-- Sync from systems of record: [docs/sync.md](docs/sync.md)
-- Payment checking: [docs/payments.md](docs/payments.md)
-- Gateway, ledger and tie-out: [docs/books.md](docs/books.md)
-- 12-month history and planted patterns: [docs/history.md](docs/history.md)
-- Bank (Nessie): seeding, demo controls, conventions: [docs/bank.md](docs/bank.md)
+## Commands
 
-`pnpm typecheck` and `pnpm test` check the TypeScript packages; `cd agents && uv run ruff check` lints Python.
+| Command | |
+|---|---|
+| `pnpm sync` | One full sync pass, gateway drains, tie-out |
+| `pnpm demo:reset` | Bank and database back to Tue 2026-03-03 |
+| `pnpm sync:verify` · `payments:verify` · `ledger:verify` · `tieout:verify` | Check the database against sources and the answer key |
+| `pnpm bank show [ORG-xxxxx]` · `bank settle WI-5531` · `bank reset` | Nessie |
+| `pnpm seed:nessie [--apply]` | Seed the bank (dry run by default) |
+| `pnpm stdb:publish` · `stdb:generate` · `stdb:roles` | Module and bindings |
+| `pnpm typecheck` · `pnpm test` | Checks |
+
+With `DEMO_CONTROLS=true` the server exposes `POST /demo/inject`, `/demo/settle`, `/demo/advance`, `/demo/reset` and `GET /demo/state`.

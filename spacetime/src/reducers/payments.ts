@@ -82,7 +82,7 @@ function onIncoming(ctx: Ctx, m: Movement, previous: Movement | undefined) {
   });
   // No invoice numbers but the payer described what it pays (read by Claude): try those invoices first.
   const hints = readHints(m);
-  let result = planMatch(m.amountCents, cands, invoiceRefs, fullyPaid);
+  let result = planMatch(m.amountCents, cands, invoiceRefs, fullyPaid, m.chargesCents ?? 0n);
   if (!invoiceRefs.length && hints && hints.periods.length) {
     const described = cands.filter((c) => {
       const inv = ctx.db.invoice.id.find(c.id);
@@ -95,7 +95,11 @@ function onIncoming(ctx: Ctx, m: Movement, previous: Movement | undefined) {
     }
   }
   if (result.kind === 'plan' && result.plan.method === 'short_fee' && m.chargesCents === result.plan.shortCents) {
-    result.plan.basis = `Wire sent ${formatUsd(m.instructedCents ?? 0n)} with ${m.chargeBearer ?? 'SHA'} charges; an intermediary bank deducted ${formatUsd(m.chargesCents)} on the way`;
+    result.plan.basis = `${result.plan.basis}. Wire sent ${formatUsd(m.instructedCents ?? 0n)} with ${m.chargeBearer ?? 'SHA'} charges; an intermediary bank deducted ${formatUsd(m.chargesCents)} on the way`;
+  }
+  const foreignRefs = invoiceRefs.filter((id) => { const inv = ctx.db.invoice.id.find(id); return inv && inv.clientId !== payer.clientId; });
+  if (result.kind === 'plan' && foreignRefs.length) {
+    result.plan.basis = `${result.plan.basis}. Note: quoted ${foreignRefs.join(', ')}, which belong to another client`;
   }
 
   if (result.kind === 'duplicate') {

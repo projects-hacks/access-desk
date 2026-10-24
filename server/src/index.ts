@@ -7,6 +7,8 @@ import { Gateway } from './gateway/executor';
 import { openPlatform } from './platform/bootstrap';
 import { PlatformClient } from './platform/client';
 import { Sync } from './sync';
+import { demoRoutes } from './demo/routes';
+import { buildSeedPlan } from './integrations/nessie/seed-plan';
 
 const ds = loadDataset();
 const bank = await openBank();
@@ -26,12 +28,19 @@ app.post('/sync/now', async () => {
   return results.map(({ source, written, errors }) => ({ source, written, errors }));
 });
 
+let gateway: Gateway | undefined;
+if (env.DEMO_CONTROLS) {
+  if (!env.STDB_DEMO_TOKEN) throw new Error('DEMO_CONTROLS=true needs STDB_DEMO_TOKEN (role DEMO)');
+  const { conn: demoConn } = await connectStdb(env.STDB_DEMO_TOKEN);
+  await app.register(demoRoutes, { conn: demoConn, sync, gateway: () => gateway, bank, plan: buildSeedPlan(ds), ds, platform });
+}
+
 // Routes are registered above; the gateway below calls the platform API on this server, so listen first.
 await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
 if (env.STDB_GATEWAY_TOKEN) {
   const { conn: gatewayConn } = await connectStdb(env.STDB_GATEWAY_TOKEN);
-  const gateway = new Gateway(gatewayConn, new PlatformClient(env.PLATFORM_API_URL ?? `http://127.0.0.1:${env.PORT}/platform`), bank, ds, () => sync.cash(), log);
+  gateway = new Gateway(gatewayConn, new PlatformClient(env.PLATFORM_API_URL ?? `http://127.0.0.1:${env.PORT}/platform`), bank, ds, () => sync.cash(), log);
   await gateway.ready();
   gateway.start();
 } else {

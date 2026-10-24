@@ -76,3 +76,13 @@ test('helpers', () => {
   assert.equal(formatUsd(14_820_000n), '$148,200.00');
   assert.equal(formatUsd(-2500n), '-$25.00');
 });
+
+test('wrong references, but the wire reports charges: match what was sent', () => {
+  const open = [inv('L1', '2026-03-03', 2600), inv('L2', '2026-03-03', 1610), inv('F1', '2026-03-31', 2700)];
+  const r = planMatch(c(4185), open, ['X1', 'X2'], [], c(25));
+  assert.ok(r.kind === 'plan');
+  assert.equal(r.plan.method, 'short_fee');
+  assert.equal(r.plan.shortCents, c(25));
+  assert.deepEqual(r.plan.allocations.map((a) => a.invoiceId).sort(), ['L1', 'L2']);
+  assert.equal(r.plan.allocations.reduce((s, a) => s + a.amountCents, 0n), c(4185));
+});

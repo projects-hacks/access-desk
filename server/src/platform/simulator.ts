@@ -20,12 +20,19 @@ export class PlatformSimulator {
   private readonly results = new Map<string, GatewayResult>();
 
   constructor(private readonly ds: Dataset) {
-    for (const i of ds.invoices) this.invoices.set(i.id, { ...i });
-    for (const c of ds.clients) {
+    this.reset();
+  }
+
+  /** Back to the dataset baseline (used by the demo reset). */
+  reset() {
+    for (const store of [this.invoices, this.levers, this.holds, this.holdings, this.journals, this.results]) store.clear();
+    this.notices.length = 0;
+    for (const i of this.ds.invoices) this.invoices.set(i.id, { ...i });
+    for (const c of this.ds.clients) {
       for (const l of leversFor(c)) this.levers.set(l.id, { ...l });
       for (const h of holdingsFor(c)) this.holdings.set(h.id, { ...h });
     }
-    for (const j of baselineJournals(ds)) this.journals.set(j.journalId, j);
+    for (const j of baselineJournals(this.ds)) this.journals.set(j.journalId, j);
   }
 
   /** Apply a command once. Repeating a command id returns the original result without changing anything. */

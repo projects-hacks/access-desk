@@ -14,6 +14,7 @@ const identityOf = (token: string) => {
 const services = [
   { token: env.STDB_TOKEN, name: 'sync-service', role: 'SYNC' },
   { token: env.STDB_GATEWAY_TOKEN, name: 'gateway', role: 'GATEWAY' },
+  { token: env.STDB_DEMO_TOKEN, name: 'demo-controls', role: 'DEMO' },
   { token: process.env.STDB_AGENT_TOKEN, name: 'agents', role: 'AGENT' },
 ];
 

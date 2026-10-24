@@ -103,6 +103,12 @@ export class Sync {
     };
   }
 
+  /** Forget what was written, so the next pass rewrites everything (after the world is reset). */
+  resetCaches() {
+    this.writer.reset();
+    this.ledgerHashes.clear();
+  }
+
   report(r: PassResult) {
     this.log(`[sync:${r.source}] ${r.written}/${r.records} written${r.errors.length ? `, ${r.errors.length} errors: ${r.errors.slice(0, 3).join('; ')}` : ''}`);
   }
