@@ -20,6 +20,10 @@ export const ROUTES: Record<Exclude<ActionType, 'REFUND'>, string> = {
  * command id, which makes it idempotent. 422 = the platform refused (permanent).
  */
 export async function platformRoutes(app: FastifyInstance, opts: { sim: PlatformSimulator }) {
+  // Only the gateway in this process writes to the platform; the public internet never does.
+  app.addHook('onRequest', async (req, reply) => {
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip)) return reply.code(403).send({ error: 'platform APIs are internal' });
+  });
   for (const [type, path] of Object.entries(ROUTES)) {
     app.post<{ Body: { commandId: string; action: unknown } }>(path, async (req, reply) => {
       const parsed = GatewayActionSchema.safeParse(req.body?.action);

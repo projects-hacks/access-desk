@@ -10,8 +10,16 @@ const EnvSchema = z.object({
   STDB_GATEWAY_TOKEN: z.string().optional(),
   /** Demo identity (role DEMO): moves the clock and resets the world from the demo panel. */
   STDB_DEMO_TOKEN: z.string().optional(),
+  /**
+   * The server runs sync and the gateway against the shared database, so exactly
+   * one may run (the hosted one). Set only there, or locally via pnpm dev:server
+   * when the hosted one is stopped.
+   */
+  SERVER_HOST: z.stringbool().default(false),
   /** Turns on /demo/* endpoints (inject, settle, advance, reset, state). */
   DEMO_CONTROLS: z.stringbool().default(false),
+  /** When set, demo POSTs need header x-demo-key with this value (the hosted server is public). */
+  DEMO_KEY: z.string().optional(),
   /** Where the gateway reaches the platform's write APIs. Defaults to this server. */
   PLATFORM_API_URL: z.string().optional(),
   NESSIE_API_KEY: z.string().optional(),

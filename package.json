@@ -6,7 +6,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @access-desk/server --filter @access-desk/web dev",
+    "dev": "pnpm --filter @access-desk/web dev",
+    "dev:server": "SERVER_HOST=true pnpm --filter @access-desk/server dev",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
     "stdb:publish": "spacetime publish -s maincloud -p spacetime -y access-desk-calhacks13",
@@ -22,7 +23,11 @@
     "sync:verify": "pnpm --filter @access-desk/server sync:verify",
     "stdb:roles": "pnpm --filter @access-desk/server stdb:roles",
     "payments:verify": "pnpm --filter @access-desk/server payments:verify",
-    "demo:reset": "pnpm bank reset && pnpm stdb:publish:reset && pnpm stdb:roles && pnpm sync",
+    "demo:reset": "pnpm --filter @access-desk/server reset",
+    "demo:rebuild": "pnpm bank reset && pnpm stdb:publish:reset && pnpm stdb:roles && pnpm host:restart",
+    "host:restart": "az containerapp revision restart -n access-desk-api -g access-desk-rg --revision $(az containerapp show -n access-desk-api -g access-desk-rg --query properties.latestRevisionName -o tsv) -o none",
+    "host:stop": "az containerapp revision deactivate -n access-desk-api -g access-desk-rg --revision $(az containerapp show -n access-desk-api -g access-desk-rg --query properties.latestRevisionName -o tsv) -o none",
+    "host:start": "az containerapp revision activate -n access-desk-api -g access-desk-rg --revision $(az containerapp show -n access-desk-api -g access-desk-rg --query properties.latestRevisionName -o tsv) -o none",
     "ledger:verify": "pnpm --filter @access-desk/server ledger:verify",
     "tieout:verify": "pnpm --filter @access-desk/server tieout:verify",
     "actions:verify": "pnpm --filter @access-desk/server actions:verify"

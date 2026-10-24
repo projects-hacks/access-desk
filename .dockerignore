@@ -1,0 +1,10 @@
+**/node_modules
+.env
+.env.*
+.git
+web/dist
+agents
+docs
+research
+.data/*
+!.data/nessie-dev.json
