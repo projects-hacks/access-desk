@@ -50,6 +50,8 @@ interface Choice {
 /** What the agent records on every CREDIT_REVIEW and POLICY_DRAFT about how it decided. */
 interface DecisionMeta {
   decided_by?: 'claude' | 'rules';
+  provider?: string;
+  model?: string;
   why?: string;
   baseline?: { action: string; to_tier: number; policy_ref: string; confidence: number; reasons?: string[] };
   choice?: Choice | null;
@@ -290,6 +292,19 @@ export function CreditDesk() {
   );
 }
 
+type ByMeta = { decided_by?: string; provider?: string; model?: string };
+/** Pill colour key: rules, factory, or claude (the default for any model answer). */
+const byKey = (m?: ByMeta) => (m?.decided_by !== 'claude' ? 'rules' : m.provider === 'factory' ? 'factory' : 'claude');
+/** Who answered, in words; today's wording when the record has no `provider`. */
+function byLabel(m: ByMeta | undefined, long = true): string {
+  const k = byKey(m);
+  if (!m?.provider) return k === 'claude' ? (long ? 'Decided by Claude' : 'Claude') : (long ? 'Decided by rules' : 'rules');
+  const who = k === 'rules' ? 'rules' : k === 'factory' ? `Factory${m.model ? ` (${m.model})` : ''}` : 'Claude (Anthropic)';
+  return long ? `Decided by ${who}` : who;
+}
+/** The short name for "<name>: tier change" lines. */
+const modelName = (m?: ByMeta) => (m?.provider === 'factory' ? 'Factory' : 'Claude');
+
 /** Who decided, Claude's choice next to the rules' baseline, and the guardrails that applied. */
 function Decision({ meta, tier }: { meta: (DecisionMeta & { from_tier?: number }) | undefined; tier: number }) {
   if (!meta?.decided_by) return null;
@@ -301,8 +316,8 @@ function Decision({ meta, tier }: { meta: (DecisionMeta & { from_tier?: number }
   return (
     <div className="decision">
       <div>
-        <span className={`pill by-${meta.decided_by}`}>{meta.decided_by === 'claude' ? 'Decided by Claude' : 'Decided by rules'}</span>
-        {choice && <span>Claude: <b>{actionText(choice.action, from, choice.to_tier)}</b>{choice.policy ? ` · ${choice.policy.kind === 'company_draft' ? 'new' : 'cites'} ${choice.policy.policy_id}` : ''}</span>}
+        <span className={`pill by-${byKey(meta)}`}>{byLabel(meta)}</span>
+        {choice && <span>{modelName(meta)}: <b>{actionText(choice.action, from, choice.to_tier)}</b>{choice.policy ? ` · ${choice.policy.kind === 'company_draft' ? 'new' : 'cites'} ${choice.policy.policy_id}` : ''}</span>}
         {meta.baseline && <span className="muted"> · rules: {actionText(meta.baseline.action, from, meta.baseline.to_tier)}{meta.baseline.policy_ref ? ` (${meta.baseline.policy_ref})` : ''}</span>}
       </div>
       {meta.why && <p className="muted">{meta.why}</p>}
@@ -402,7 +417,7 @@ function Trace({ client, profile, flags, item, review, note }: {
         ))}
       </li>
       <li>
-        <h4>Decision <span className={`pill by-${meta?.decided_by ?? 'rules'}`}>{meta?.decided_by === 'claude' ? 'Claude' : 'rules'}</span>{meta?.why && <span className="muted"> asked because: {meta.why}</span>}</h4>
+        <h4>Decision <span className={`pill by-${byKey(meta)}`}>{byLabel(meta, false)}</span>{meta?.why && <span className="muted"> asked because: {meta.why}</span>}</h4>
         {choice
           ? <>
               <p><b>{actionText(choice.action, from, choice.to_tier)}</b>{choice.policy ? ` · ${choice.policy.kind === 'company_draft' ? 'new policy' : 'policy'} ${choice.policy.policy_id}: ${choice.policy.title}` : ''} · confidence {choice.confidence.toFixed(2)}</p>
@@ -586,7 +601,7 @@ function FeedDecision({ time, w, tier, auto, gate }: { time: string; w: ItemRow;
     return (
       <li className="ev flag">
         <time>{time}</time><span className="who agent">ExploitWatch</span>
-        <b>{w.title}</b> <span className="pill flagged">{m?.severity ?? 'alert'}</span>{m?.decided_by === 'claude' && <span className="pill by-claude">judged by Claude</span>}
+        <b>{w.title}</b> <span className="pill flagged">{m?.severity ?? 'alert'}</span>{m?.decided_by === 'claude' && <span className={`pill by-${byKey(m)}`}>judged by {modelName(m)}</span>}
         <Gate auto={auto} gate={gate} />
         <p>{w.reasoning}</p>
       </li>
@@ -598,12 +613,12 @@ function FeedDecision({ time, w, tier, auto, gate }: { time: string; w: ItemRow;
     <li className={`ev decision ${differs ? 'differs' : ''}`}>
       <time>{time}</time><span className="who agent">Credit Analyst</span>
       <b>{w.title}</b>{' '}
-      <span className={`pill by-${m?.decided_by ?? 'rules'}`}>{m?.decided_by === 'claude' ? 'Claude decided' : 'rules decided'}</span>
+      <span className={`pill by-${byKey(m)}`}>{m?.provider ? byLabel(m, false) + ' decided' : m?.decided_by === 'claude' ? 'Claude decided' : 'rules decided'}</span>
       {differs && <span className="pill differs">differs from rules</span>}
       <Gate auto={auto} gate={gate} />
       <div className="vs">
         <span>rules: <b>{m?.baseline ? actionText(m.baseline.action, from, m.baseline.to_tier) : '—'}</b></span>
-        {c && <span>Claude: <b>{actionText(c.action, from, c.to_tier)}</b>{c.policy ? ` + ${c.policy.kind === 'company_draft' ? 'new policy' : c.policy.policy_id}` : ''} · confidence {c.confidence.toFixed(2)}</span>}
+        {c && <span>{modelName(m)}: <b>{actionText(c.action, from, c.to_tier)}</b>{c.policy ? ` + ${c.policy.kind === 'company_draft' ? 'new policy' : c.policy.policy_id}` : ''} · confidence {c.confidence.toFixed(2)}</span>}
         {m?.why && <span className="muted">asked because {m.why}</span>}
       </div>
       {c ? <ul>{c.reasons.slice(0, 3).map((r) => <li key={r}>{r}</li>)}</ul> : <p>{w.reasoning}</p>}
