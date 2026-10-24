@@ -11,4 +11,4 @@ export { placeHold } from './reducers/payments';
 export * from './reducers/gateway';
 export * from './reducers/books';
 export { upsertPolicy } from './reducers/policies';
-export * from './reducers/credit';
+export { upsertCreditProfile, upsertExploitFlag } from './reducers/credit';

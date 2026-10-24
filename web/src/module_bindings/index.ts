@@ -64,8 +64,10 @@ import UpsertCashMovementReducer from "./upsert_cash_movement_reducer";
 import UpsertClientReducer from "./upsert_client_reducer";
 import UpsertContractReducer from "./upsert_contract_reducer";
 import UpsertContractClauseReducer from "./upsert_contract_clause_reducer";
+import UpsertCreditProfileReducer from "./upsert_credit_profile_reducer";
 import UpsertCustodyHoldingReducer from "./upsert_custody_holding_reducer";
 import UpsertDisputeReducer from "./upsert_dispute_reducer";
+import UpsertExploitFlagReducer from "./upsert_exploit_flag_reducer";
 import UpsertInvoiceReducer from "./upsert_invoice_reducer";
 import UpsertLedgerEntriesReducer from "./upsert_ledger_entries_reducer";
 import UpsertLoanReducer from "./upsert_loan_reducer";
@@ -726,8 +728,10 @@ const reducersSchema = __reducers(
   __reducerSchema("upsert_client", UpsertClientReducer),
   __reducerSchema("upsert_contract", UpsertContractReducer),
   __reducerSchema("upsert_contract_clause", UpsertContractClauseReducer),
+  __reducerSchema("upsert_credit_profile", UpsertCreditProfileReducer),
   __reducerSchema("upsert_custody_holding", UpsertCustodyHoldingReducer),
   __reducerSchema("upsert_dispute", UpsertDisputeReducer),
+  __reducerSchema("upsert_exploit_flag", UpsertExploitFlagReducer),
   __reducerSchema("upsert_invoice", UpsertInvoiceReducer),
   __reducerSchema("upsert_ledger_entries", UpsertLedgerEntriesReducer),
   __reducerSchema("upsert_loan", UpsertLoanReducer),
