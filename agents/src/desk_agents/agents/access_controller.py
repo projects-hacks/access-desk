@@ -10,6 +10,7 @@ import httpx
 
 from ..config import settings
 from ..models import Proposal, WorkItemKind
+from ..notices import Writer
 from ..pushback import Reader, RmReading
 from ..stdb import ReducerError
 from ..world import ClientView, Row, World, load_world
@@ -71,15 +72,18 @@ class AccessController(Agent):
 
     name = "access-controller"
 
-    def __init__(self, db, reader: Reader | None = None):
+    def __init__(self, db, reader: Reader | None = None, writer: Writer | None = None):
         super().__init__(db)
         self.reader = reader or Reader()
+        self.writer = writer or Writer()
+        self.names: dict[str, str] = {}
         self.readings: dict[int, RmReading] = {}
         self.unavailable: set[str] = set()
         self.acted = 0
 
     async def run(self) -> list[Proposal]:
         world = self.observe()
+        self.names = {cid: v.client["name"] for cid, v in world.clients.items()}
         results = [(move, self.execute(move)) for move in plan(world)]
         self.acted = sum(ok for move, ok in results if move.action not in BOOKKEEPING)
         return []
@@ -96,6 +100,8 @@ class AccessController(Agent):
     def execute(self, move: Move) -> bool:
         if move.action in self.unavailable:
             return self.execute(move.fallback) if move.fallback else False
+        if move.action == "propose_notice":
+            move = self.worded(move)
         try:
             getattr(self.db, move.action)(**move.args)
             log.info("[%s] %s %s: %s", self.name, move.action, move.client_id, move.summary)
@@ -112,6 +118,16 @@ class AccessController(Agent):
             else:
                 log.warning("[%s] %s %s failed: %s", self.name, move.action, move.client_id, e)
         return False
+
+
+    def worded(self, move: Move) -> Move:
+        args = move.args
+        context = f"Client: {self.names.get(move.client_id, move.client_id)}"
+        body, by_claude = self.writer.write(args["channel"], args["body"], context)
+        if not by_claude:
+            return move
+        reasoning = f"{args['reasoning']} Worded by Claude; every number checked against the facts."
+        return Move(move.action, move.client_id, {**args, "body": body, "reasoning": reasoning}, move.summary, move.fallback)
 
 
 def plan(world: World, escalation_days: int | None = None) -> list[Move]:
