@@ -5,7 +5,7 @@ import { GL, cr, dr, queueCommand, queueJournal } from '../payments/gateway';
 import { cureState, defaultedInvoices } from '../payments/deadlines';
 import { formatUsd } from '../payments/match';
 import { spacetimedb } from '../schema';
-import { applyCreditReview } from './credit';
+import { applyCreditReview, applyPolicyDraft } from './credit';
 
 /**
  * Actions agents (and people) can propose. Each one is checked against the
@@ -343,6 +343,10 @@ export function executeApproved(ctx: Ctx, workItemId: bigint) {
     }
     case 'CREDIT_REVIEW': {
       applyCreditReview(ctx, item.id);
+      return;
+    }
+    case 'POLICY_DRAFT': {
+      applyPolicyDraft(ctx, item.id);
       return;
     }
   }

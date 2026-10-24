@@ -1,6 +1,7 @@
 import { SenderError, t } from 'spacetimedb/server';
 import { audit, requireRole, simDate, type Ctx } from '../context';
 import { spacetimedb } from '../schema';
+import { activatePolicyDraft, activatingWorkItem, rejectPolicyDraft } from './policies';
 
 /**
  * Seat 1 (credit analyst) writes its scores and exploit flags here. Neither
@@ -69,15 +70,31 @@ export const upsertExploitFlag = spacetimedb.reducer(
 
 interface CreditProposal { action: 'tier_change' | 'review'; from_tier?: number; to_tier?: number }
 
-/** Every decision on a credit review becomes a live precedent; rejections stop the agent re-proposing for 30 sim days. */
+interface PolicyDraftProposal { policy_key?: string; decided_by?: string }
+
+/**
+ * Every decision on a credit review or policy draft becomes a live precedent;
+ * rejections stop the agent re-proposing for 30 sim days. A rejected draft is
+ * also marked rejected on the policy table.
+ */
 export function recordCreditPrecedent(ctx: Ctx, workItemId: bigint, decision: 'Approved' | 'Rejected', overrideReason: string) {
   const item = ctx.db.workItem.id.find(workItemId);
-  if (!item || item.kind !== 'CREDIT_REVIEW') return;
-  const p = JSON.parse(item.proposalJson) as CreditProposal;
+  if (!item || (item.kind !== 'CREDIT_REVIEW' && item.kind !== 'POLICY_DRAFT')) return;
+  let proposed: string;
+  if (item.kind === 'POLICY_DRAFT') {
+    const p = JSON.parse(item.proposalJson) as PolicyDraftProposal;
+    proposed = `activate ${p.policy_key ?? item.subjectId}`;
+    if (decision === 'Rejected') rejectPolicyDraft(ctx, item.id);
+  } else {
+    const p = JSON.parse(item.proposalJson) as CreditProposal;
+    proposed = p.action === 'tier_change' ? `tier ${p.from_tier} -> ${p.to_tier}` : 'review';
+  }
+  const decidedBy = (JSON.parse(item.proposalJson) as PolicyDraftProposal).decided_by;
+  const before = ctx.db.precedent.id.find(`PRC-L${item.id}`);
   const row = {
-    id: `PRC-L${item.id}`, clientId: item.clientId, workItemId: item.id, decidedOn: simDate(ctx), situation: item.title,
-    proposed: p.action === 'tier_change' ? `tier ${p.from_tier} -> ${p.to_tier}` : 'review',
-    decision, overrideReason, outcome: '', policyRef: item.policyRef, source: 'live',
+    id: `PRC-L${item.id}`, clientId: item.clientId, workItemId: item.id, decidedOn: simDate(ctx),
+    situation: decidedBy ? `${item.title} (decided by ${decidedBy})` : item.title,
+    proposed, decision, overrideReason, outcome: before?.outcome ?? '', policyRef: item.policyRef, source: 'live',
   };
   if (ctx.db.precedent.id.find(row.id)) ctx.db.precedent.id.update(row);
   else ctx.db.precedent.insert(row);
@@ -112,3 +129,35 @@ export function applyCreditReview(ctx: Ctx, workItemId: bigint) {
   }
   recordCreditPrecedent(ctx, item.id, 'Approved', '');
 }
+
+/** Approved POLICY_DRAFT: activate the company's drafted version and record the precedent. */
+export function applyPolicyDraft(ctx: Ctx, workItemId: bigint) {
+  if (activatePolicyDraft(ctx, workItemId)) recordCreditPrecedent(ctx, workItemId, 'Approved', '');
+}
+
+/**
+ * The agent's deterministic verdict on an active company policy (`passing on
+ * <date>: ...` / `failing on <date>: ...`), stored on the precedent of the
+ * approval that activated it. Audited when the verdict changes, not every day.
+ */
+export const recordPolicyOutcome = spacetimedb.reducer(
+  { policyKey: t.string(), outcome: t.string() },
+  (ctx, { policyKey, outcome }) => {
+    requireRole(ctx, WRITERS);
+    const policy = ctx.db.policy.key.find(policyKey);
+    if (!policy) throw new SenderError(`unknown policy ${policyKey}`);
+    if (policy.status !== 'active') throw new SenderError(`${policyKey} is ${policy.status}, not active`);
+    const workItemId = activatingWorkItem(policy.ruleJson);
+    const precedent = workItemId ? ctx.db.precedent.id.find(`PRC-L${workItemId}`) : undefined;
+    if (!precedent) throw new SenderError(`${policyKey} has no live precedent to record against`);
+    if (precedent.outcome === outcome) return;
+    ctx.db.precedent.id.update({ ...precedent, outcome });
+    const verdict = (s: string) => s.split(' ')[0] ?? '';
+    if (verdict(precedent.outcome) === verdict(outcome)) return;
+    audit(ctx, {
+      action: 'POLICY_OUTCOME', subjectType: 'policy', subjectId: policyKey, clientId: precedent.clientId,
+      workItemId: precedent.workItemId, fromState: verdict(precedent.outcome), toState: verdict(outcome),
+      detail: outcome, policyRef: policy.policyId,
+    });
+  },
+);

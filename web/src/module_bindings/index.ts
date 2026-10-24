@@ -45,6 +45,7 @@ import ProposeNoticeReducer from "./propose_notice_reducer";
 import ProposeRestoreReducer from "./propose_restore_reducer";
 import ProposeRestrictionReducer from "./propose_restriction_reducer";
 import ProposeWorkItemReducer from "./propose_work_item_reducer";
+import RecordPolicyOutcomeReducer from "./record_policy_outcome_reducer";
 import RecordSyncErrorReducer from "./record_sync_error_reducer";
 import RemoveCashMovementReducer from "./remove_cash_movement_reducer";
 import RequestCustodyWithdrawalReducer from "./request_custody_withdrawal_reducer";
@@ -709,6 +710,7 @@ const reducersSchema = __reducers(
   __reducerSchema("propose_restore", ProposeRestoreReducer),
   __reducerSchema("propose_restriction", ProposeRestrictionReducer),
   __reducerSchema("propose_work_item", ProposeWorkItemReducer),
+  __reducerSchema("record_policy_outcome", RecordPolicyOutcomeReducer),
   __reducerSchema("record_sync_error", RecordSyncErrorReducer),
   __reducerSchema("remove_cash_movement", RemoveCashMovementReducer),
   __reducerSchema("request_custody_withdrawal", RequestCustodyWithdrawalReducer),
