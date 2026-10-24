@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
+import { AutonomyBand } from '../components/AutonomyBand';
 import { Badge } from '../components/Badge';
 import { ClientPanel, type PanelMode } from '../components/ClientPanel';
 import { SlidingPill } from '../components/SlidingPill';
@@ -69,6 +70,8 @@ export function Clients() {
           <p className="muted">Who owes what, what the desk is doing about it, and what's next.</p>
         </div>
       </div>
+
+      <AutonomyBand />
 
       <div className="filters" role="toolbar" aria-label="Filter clients">
         <input

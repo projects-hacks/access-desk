@@ -1,6 +1,9 @@
-import { useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
+import { useTable } from 'spacetimedb/react';
+import { actor, isNews } from '../lib/bank';
+import { tables } from '../module_bindings';
 import { demo } from '../lib/demo';
-import { simDay } from '../lib/format';
+import { label, simDay } from '../lib/format';
 import { useClock, usePlatform, useSession } from '../lib/session';
 
 const CONTROLS = [
@@ -61,7 +64,27 @@ export function TopBar() {
           {busy === 'Reset' ? '…' : 'Reset'}
         </button>
       </div>
+      <AgentTicker />
       {message && <div className={`topbar-message ${message.tone}`}>{message.text}</div>}
+    </div>
+  );
+}
+
+/** The latest thing the desk did, live: each new decision or money event slides in. */
+function AgentTicker() {
+  const [audit] = useTable(tables.auditEvent);
+  const last = useMemo(
+    () => audit.reduce<(typeof audit)[number] | undefined>((best, e) => (isNews(e) && (!best || e.id > best.id) ? e : best), undefined),
+    [audit],
+  );
+  if (!last) return null;
+  return (
+    <div className="ticker" aria-live="polite">
+      <span className="ticker-dot" />
+      <span key={String(last.id)} className="ticker-text">
+        <strong>{actor(last)}</strong> · {label(last.action)}
+        {last.detail && <span className="muted"> · {last.detail}</span>}
+      </span>
     </div>
   );
 }
