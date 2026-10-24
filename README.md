@@ -36,4 +36,4 @@ With `DEMO_CONTROLS=true` the server exposes `POST /demo/inject`, `/demo/settle`
 
 ## Docs
 
-[database](docs/database.md) · [schema](docs/schema.md) · [sync](docs/sync.md) · [payment checking](docs/payments.md) · [agent actions](docs/actions.md) · [gateway, ledger, tie-out](docs/books.md) · [history](docs/history.md) · [bank (Nessie)](docs/bank.md) · [credit analyst](docs/credit.md)
+[database](docs/database.md) · [schema](docs/schema.md) · [sync](docs/sync.md) · [payment checking](docs/payments.md) · [agent actions](docs/actions.md) · [gateway, ledger, tie-out](docs/books.md) · [history](docs/history.md) · [bank (Nessie)](docs/bank.md) · [credit analyst](docs/credit.md) · [exploit watch](docs/exploits.md)
