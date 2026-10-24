@@ -19,6 +19,10 @@ Callers: AGENT, CONTROLLER, ADMIN. Generic proposals (credit reviews, novel case
 - `transition_work_item` enforces: approvers are ACCOUNTANT or CONTROLLER, `required_role = CONTROLLER` items need a controller, no one approves their own proposal. Denied attempts are audited, not thrown.
 - APPROVED → POSTED happens when the gateway has confirmed every command.
 
+## Web
+
+Reads need no token: subscribe to the tables. Approvals call `transition_work_item` as the console identity (`VITE_STDB_CONTROLLER_TOKEN`), so agents propose and the console approves under different identities. The portal's withdraw button is `POST /demo/withdraw {clientId, amount}` (dollars): it returns the decision, released and held amounts, and the Nessie wire once it's back through the feed.
+
 ## Python
 
 `agents/src/desk_agents/stdb.py`: `propose_custody_debit`, `propose_restriction`, `propose_restore`, `propose_notice`, `request_withdrawal`, `decide`, plus `open_work()` and `client_snapshot(client_id)` (every table for one client). Refusals raise `ReducerError` with the reason.

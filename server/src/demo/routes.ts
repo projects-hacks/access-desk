@@ -33,6 +33,8 @@ const InjectSchema = z.object({
   status: z.enum(['posted', 'pending']).default('posted'),
 });
 
+const WithdrawSchema = z.object({ clientId: z.string(), amount: z.number().positive().describe('Dollars requested') });
+
 const toCents = (dollars: number) => Math.round(dollars * 100);
 
 /**
@@ -44,7 +46,7 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
   await new Promise<void>((resolve) =>
     conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([
       tables.clock, tables.cashMovement, tables.workItem, tables.paymentApplication, tables.hold,
-      tables.tieOutRun, tables.gatewayCommand, tables.auditEvent,
+      tables.tieOutRun, tables.gatewayCommand, tables.auditEvent, tables.accessRequest, tables.custodyHolding,
     ]),
   );
   const db = conn.db;
@@ -134,6 +136,34 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
     await sync.cash();
     await awaitMovement(bankRef);
     return outcome(bankRef, startedAt);
+  });
+
+  /** The client portal's withdraw button: decided instantly, the released part wired through Nessie. */
+  app.post('/demo/withdraw', async (req, reply) => {
+    const parsed = WithdrawSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
+    const { clientId, amount } = parsed.data;
+    const startedAt = Date.now();
+    const before = new Set([...db.accessRequest.clientId.filter(clientId)].map((r) => r.id));
+    try {
+      await conn.reducers.requestCustodyWithdrawal({ clientId, amountCents: BigInt(toCents(amount)) });
+    } catch (e) {
+      return reply.code(422).send({ error: e instanceof Error ? e.message : String(e) });
+    }
+    const request = [...db.accessRequest.clientId.filter(clientId)].find((r) => !before.has(r.id));
+    if (!request) return reply.code(500).send({ error: 'request not visible yet' });
+    const wireRef = request.allowedCents > 0n ? `CW-${String(request.id).padStart(4, '0')}` : undefined;
+    const wire = wireRef ? await awaitMovement(wireRef, 8000) : undefined;
+    return {
+      decision: request.decision,
+      requestedCents: request.amountCents.toString(),
+      releasedCents: request.allowedCents.toString(),
+      heldCents: request.heldCents.toString(),
+      reason: request.reason,
+      wire: wireRef ? { bankRef: wireRef, seen: !!wire, matchStatus: wire?.matchStatus ?? null } : null,
+      custodyUsdCents: db.custodyHolding.id.find(`${clientId}:USD`)?.valueCents.toString() ?? null,
+      ms: Date.now() - startedAt,
+    };
   });
 
   app.post('/demo/advance', async (req, reply) => {

@@ -16,6 +16,8 @@ const services = [
   { token: env.STDB_GATEWAY_TOKEN, name: 'gateway', role: 'GATEWAY' },
   { token: env.STDB_DEMO_TOKEN, name: 'demo-controls', role: 'DEMO' },
   { token: process.env.STDB_AGENT_TOKEN, name: 'agents', role: 'AGENT' },
+  // The web console approves as a controller (agents propose under their own identity).
+  { token: process.env.VITE_STDB_CONTROLLER_TOKEN, name: 'ui-controller', role: 'CONTROLLER' },
 ];
 
 for (const s of services) {

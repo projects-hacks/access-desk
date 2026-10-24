@@ -23,7 +23,7 @@ Defaults in `.env.example` already point to the shared database. Copy it to `.en
 
 1. Get an identity: `curl -X POST https://maincloud.spacetimedb.com/v1/identity`, which returns `identity` and `token`.
 2. The database owner runs `spacetime call -s maincloud access-desk-calhacks13 assign_role '"<identity>"' '"<name>"' '"<ROLE>"' null`.
-3. Save the token in `.env`: `STDB_TOKEN` (sync, role SYNC), `STDB_GATEWAY_TOKEN` (gateway, role GATEWAY), `STDB_DEMO_TOKEN` (demo controls, role DEMO), `STDB_AGENT_TOKEN` (agents, role AGENT). After a database reset, `pnpm stdb:roles` re-assigns them. Tokens live in `.env`, never in git.
+3. Save the token in `.env`: `STDB_TOKEN` (sync, role SYNC), `STDB_GATEWAY_TOKEN` (gateway, role GATEWAY), `STDB_DEMO_TOKEN` (demo controls, role DEMO), `STDB_AGENT_TOKEN` (agents, role AGENT), `VITE_STDB_CONTROLLER_TOKEN` (web console approvals, role CONTROLLER). After a database reset, `pnpm stdb:roles` re-assigns them. Tokens live in `.env`, never in git.
 
 **Names on the wire:** tables, columns and reducers are snake_case (`work_item`, `amount_cents`, `propose_work_item`). Generated TS bindings expose them in camelCase.
 
