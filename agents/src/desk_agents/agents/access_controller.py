@@ -75,7 +75,7 @@ class AccessController(Agent):
     def __init__(self, db, reader: Reader | None = None, writer: Writer | None = None):
         super().__init__(db)
         self.reader = reader or Reader()
-        self.writer = writer or Writer()
+        self.writer = writer or Writer.from_settings()
         self.names: dict[str, str] = {}
         self.readings: dict[int, RmReading] = {}
         self.unavailable: set[str] = set()

@@ -50,9 +50,12 @@ class Writer:
     """Claude words the notice; the template is used whenever Claude is unavailable or a number doesn't check out."""
 
     def __init__(self, client: anthropic.Anthropic | None = None):
-        if client is None and settings.anthropic_api_key:
-            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        """No client means templates only; use Writer.from_settings() for Claude with the configured key."""
         self._client = client
+
+    @classmethod
+    def from_settings(cls) -> "Writer":
+        return cls(anthropic.Anthropic(api_key=settings.anthropic_api_key) if settings.anthropic_api_key else None)
 
     def write(self, channel: str, body: str, context: str) -> tuple[str, bool]:
         """Returns the text to send and whether Claude wrote it."""

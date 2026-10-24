@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     factory_timeout_seconds: float = 60.0
     agent_interval_seconds: float = 15.0
     watch_seconds: float = 1.0
+    stdb_parallel_requests: int = 4
     escalation_days: int = 7
     unwind_cost_bps: int = 50
 
