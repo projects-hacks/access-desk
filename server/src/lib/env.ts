@@ -5,7 +5,10 @@ const EnvSchema = z.object({
   STDB_URI: z.string().default('ws://localhost:3000'),
   STDB_DATABASE: z.string().default('access-desk'),
   NESSIE_API_KEY: z.string().optional(),
-  NESSIE_BASE_URL: z.string().default('http://api.nessieisreal.com'),
+  NESSIE_BASE_URL: z.string().default('https://prod-api.nessieisreal.com'),
+  PLATFORM_NAME: z.string().default('Northstar Prime'),
+  PLATFORM_LEGAL_NAME: z.string().default('Northstar Prime Ltd'),
+  SIM_DATE: z.iso.date().default('2026-03-03'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

@@ -10,9 +10,13 @@
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
     "stdb:start": "spacetime start",
-    "stdb:publish": "spacetime publish --project-path spacetime access-desk",
-    "stdb:generate": "spacetime generate --lang typescript --project-path spacetime --out-dir web/src/module_bindings && spacetime generate --lang typescript --project-path spacetime --out-dir server/src/module_bindings",
-    "agents": "cd agents && uv run desk-agents"
+    "stdb:publish": "spacetime publish -s local -p spacetime access-desk",
+    "stdb:generate": "spacetime generate -l typescript -p spacetime -o web/src/module_bindings && spacetime generate -l typescript -p spacetime -o server/src/module_bindings",
+    "agents": "cd agents && uv run desk-agents",
+    "stdb:publish:reset": "spacetime publish -s local -p spacetime --delete-data -y access-desk",
+    "seed:nessie": "pnpm --filter @access-desk/server seed:nessie",
+    "bank": "pnpm --filter @access-desk/server bank",
+    "test": "pnpm -r test"
   },
   "devDependencies": {
     "prettier": "^3.9.10",

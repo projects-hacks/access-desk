@@ -32,4 +32,6 @@ pnpm dev                    # server on :4000, web on :5173
 pnpm agents                 # agents loop
 ```
 
+Bank (Nessie) seeding, demo controls and conventions: [docs/bank.md](docs/bank.md).
+
 `pnpm typecheck` checks the TypeScript packages; `cd agents && uv run ruff check` lints Python.
