@@ -3,6 +3,7 @@ from typing import Any
 
 import httpx
 
+from .decode import decode_rows
 from .models import Proposal
 
 
@@ -19,26 +20,40 @@ class SpacetimeClient:
 
     def sql(self, query: str) -> list[dict[str, Any]]:
         res = self._http.post(f"/v1/database/{self._db}/sql", content=query)
-        res.raise_for_status()
-        # Response: [{schema: {elements: [{name: {some: col}}...]}, rows: [[...], ...]}]
-        result = res.json()[0]
-        cols = [e["name"]["some"] for e in result["schema"]["elements"]]
-        return [dict(zip(cols, row)) for row in result["rows"]]
+        _raise_for_status(res)
+        return decode_rows(res.json()[0])
 
     def call(self, reducer: str, *args: Any) -> None:
         # Reducer names are snake_case on the wire (proposeWorkItem -> propose_work_item).
         res = self._http.post(f"/v1/database/{self._db}/call/{reducer}", json=list(args))
-        res.raise_for_status()
+        _raise_for_status(res)
 
     def propose(self, p: Proposal) -> None:
         self.call(
             "propose_work_item",
             p.kind.value,
             p.client_id,
-            p.summary,
-            json.dumps(p.detail),
-            p.policy_version,
+            p.subject_id,
+            p.title,
+            p.amount_cents,
+            json.dumps(p.proposal),
+            p.reasoning,
+            p.policy_ref,
+            p.clauses_cited,
+            json.dumps(p.boundaries),
+            p.confidence,
+            p.required_role.value,
         )
 
     def close(self) -> None:
         self._http.close()
+
+
+class ReducerError(Exception):
+    """A reducer refused the call (bad role, bad state). Nothing was written."""
+
+
+def _raise_for_status(res: httpx.Response) -> None:
+    if res.status_code == 530:
+        raise ReducerError(res.text)
+    res.raise_for_status()

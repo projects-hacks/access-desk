@@ -47,8 +47,12 @@ console.log(`Sim date ${simDate} · bank ${bank.mode} run ${bank.map.run}\n\nCou
 expectCount('client', [...db.client.iter()].length, ds.clients.length);
 expectCount('contract', [...db.contract.iter()].length, ds.clients.length);
 expectCount('contract_clause', [...db.contractClause.iter()].length, ds.clients.flatMap(clausesFor).length);
-expectCount('payer_identity', [...db.payerIdentity.iter()].length,
-  ds.clients.length * 2 + ds.onchain.filter((p) => p.clientId).length + ds.affiliates.length * 2);
+// Identities: every one from the CRM must be present; accounts confirmed by an accountant may be added on top.
+const sourceIdentities = ds.clients.length * 2 + ds.onchain.filter((p) => p.clientId).length + ds.affiliates.length * 2;
+const identityRows = [...db.payerIdentity.iter()];
+const approvedAdds = identityRows.filter((p) => p.id.includes(':acct:')).length;
+expectCount('payer_identity', identityRows.length - approvedAdds, sourceIdentities);
+if (approvedAdds) console.log(`      + ${approvedAdds} confirmed by an accountant`);
 expectCount('invoice', [...db.invoice.iter()].length, ds.invoices.length);
 expectCount('dispute', [...db.dispute.iter()].length, disputes(ds).length);
 expectCount('capability', [...db.capability.iter()].length, capabilities().length);

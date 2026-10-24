@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { NessieAccount, NessieApi, NessieBill, NessieCustomer, NessieTransaction } from './client';
 import { seedBank } from './seed';
 import { emptySeedMap, type SeedMap } from './seed-map';
@@ -18,6 +17,9 @@ export class FakeNessie implements NessieApi {
   private bills = new Map<string, Bill>();
   private txs = new Map<string, Tx>();
   private nextAccountNumber = 4_000_000_000_000_000;
+  private seq = 0;
+  /** Deterministic ids, so separate processes seeding the same plan agree. */
+  private id = () => `fake${String(++this.seq).padStart(20, '0')}`;
 
   /** A fake bank already holding the full seed, plus the id map to find things in it. */
   static async seeded(plan: SeedPlan, run = 'fake'): Promise<{ bank: FakeNessie; map: SeedMap }> {
@@ -28,14 +30,14 @@ export class FakeNessie implements NessieApi {
   }
 
   async createCustomer(body: Omit<NessieCustomer, '_id'>) {
-    const customer = { _id: randomUUID(), ...body };
+    const customer = { _id: this.id(), ...body };
     this.customers.set(customer._id, customer);
     return customer;
   }
 
   async createAccount(customerId: string, body: { type: NessieAccount['type']; nickname: string }) {
     const acct: NessieAccount = {
-      _id: randomUUID(),
+      _id: this.id(),
       type: body.type,
       nickname: body.nickname,
       account_number: String(this.nextAccountNumber++),
@@ -52,7 +54,7 @@ export class FakeNessie implements NessieApi {
   }
 
   async createBill(accountId: string, body: Omit<NessieBill, '_id'>) {
-    const bill: Bill = { _id: randomUUID(), accountId, ...body };
+    const bill: Bill = { _id: this.id(), accountId, ...body };
     this.bills.set(bill._id, bill);
     return strip(bill);
   }
@@ -102,7 +104,7 @@ export class FakeNessie implements NessieApi {
   }
 
   private async createTx(accountId: string, kind: Tx['kind'], body: Omit<NessieTransaction, '_id'>) {
-    const tx: Tx = { _id: randomUUID(), accountId, kind, ...body };
+    const tx: Tx = { _id: this.id(), accountId, kind, ...body };
     this.txs.set(tx._id, tx);
     return strip(tx);
   }

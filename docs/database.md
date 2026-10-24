@@ -14,7 +14,7 @@ Only one process writes bank data: sync, run by the owner. Everyone else just co
 |---|---|
 | Web (React) | Generated bindings in `web/src/module_bindings`, with `VITE_STDB_URI` / `VITE_STDB_DATABASE` from `.env` |
 | Server (TS) | `connectStdb()` in `server/src/lib/stdb.ts`. Check it with `pnpm --filter @access-desk/server stdb:check` |
-| Agents (Python) | `SpacetimeClient` in `agents/src/desk_agents/stdb.py`, over HTTP: `sql(...)` to read, `call(reducer, *args)` to write |
+| Agents (Python) | `SpacetimeClient` in `agents/src/desk_agents/stdb.py`, over HTTP: `sql(...)` returns typed rows (options → `None`, timestamps → `datetime`, identities → hex); `call(...)` raises `ReducerError` when a reducer refuses; `propose(Proposal)` creates a work item |
 | Terminal | `pnpm stdb:sql "SELECT * FROM work_item"`, `pnpm stdb:logs` (needs the `spacetime` CLI) |
 
 Defaults in `.env.example` already point to the shared database. Copy it to `.env` and you're connected.
