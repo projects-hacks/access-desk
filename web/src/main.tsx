@@ -6,7 +6,7 @@ import { config } from './lib/config';
 import { DbConnection } from './module_bindings';
 import './styles.css';
 
-// Reads need no token; approvals run as the controller identity (VITE_STDB_CONTROLLER_TOKEN).
+// Reads need no token; approvals run as this window's controller seat (?as=a or ?as=b, see lib/config).
 const builder = DbConnection.builder().withUri(config.stdbUri).withDatabaseName(config.stdbDatabase);
 const connectionBuilder = config.stdbToken ? builder.withToken(config.stdbToken) : builder;
 

@@ -3,6 +3,9 @@
  * checks, auto-approval by policy, controller approval, the scheduled clock and
  * cure periods, gateway execution, Nessie (wire, bills, balances), books and tie-out.
  * Usage: pnpm actions:verify  (after pnpm demo:reset; run demo:reset again afterwards)
+ *
+ * With VITE_API_URL set, the hosted server's gateway executes everything (it must be
+ * the only gateway); without it, this script runs its own.
  */
 import { execFileSync } from 'node:child_process';
 import { loadDataset } from '../dataset';
@@ -24,13 +27,18 @@ const identityOf = (token: string) => JSON.parse(Buffer.from(token.split('.')[1]
 
 const ds = loadDataset();
 const bank = await openBank();
-const { conn: syncConn } = await connectStdb(env.STDB_TOKEN);
-const platform = await openPlatform(syncConn, ds);
-const sync = new Sync(syncConn, bank, ds, platform);
-await sync.ready();
-const { conn: gwConn } = await connectStdb(env.STDB_GATEWAY_TOKEN);
-const gateway = new Gateway(gwConn, new LocalPlatform(platform), bank, ds, (accounts) => sync.cash(accounts), () => {});
-await gateway.ready();
+const hosted = !!process.env.VITE_API_URL;
+const local = hosted ? undefined : await (async () => {
+  const { conn: syncConn } = await connectStdb(env.STDB_TOKEN);
+  const platform = await openPlatform(syncConn, ds);
+  const sync = new Sync(syncConn, bank, ds, platform);
+  await sync.ready();
+  const { conn: gwConn } = await connectStdb(env.STDB_GATEWAY_TOKEN);
+  const gateway = new Gateway(gwConn, new LocalPlatform(platform), bank, ds, (accounts) => sync.cash(accounts), () => {});
+  await gateway.ready();
+  return { syncConn, gwConn, gateway };
+})();
+console.log(hosted ? `Gateway: hosted (${process.env.VITE_API_URL})` : 'Gateway: local');
 const { conn: agent } = await connectStdb(process.env.STDB_AGENT_TOKEN);
 const { conn: demo } = await connectStdb(env.STDB_DEMO_TOKEN);
 // A throwaway controller identity, registered by the publisher (ADMIN).
@@ -40,10 +48,13 @@ execFileSync('spacetime', ['call', '-s', 'maincloud', env.STDB_DATABASE, 'assign
 const subscribe = (conn: DbConnection) => new Promise<void>((resolve) => conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([
   tables.workItem, tables.invoice, tables.paymentApplication, tables.ledgerEntry, tables.custodyHolding, tables.hold,
   tables.accessLever, tables.accessRequest, tables.cashMovement, tables.notice, tables.tieOutRun, tables.auditEvent,
-  tables.clock, tables.deadline, tables.bankAccount, tables.exploitFlag,
+  tables.bankAccount, tables.exploitFlag, tables.gatewayCommand,
 ]));
 await subscribe(controller);
 const db = controller.db;
+// Time on its own small subscription: a big one can lag behind fast clock ticks.
+await new Promise<void>((resolve) => demo.subscriptionBuilder().onApplied(() => resolve()).subscribe([tables.clock, tables.deadline]));
+const timeDb = demo.db;
 
 let failed = 0;
 const check = (ok: boolean, label: string, detail = '') => {
@@ -60,10 +71,17 @@ const refused = async (call: Promise<unknown>, expect: RegExp) => {
     return expect.test(msg) ? true : msg;
   }
 };
+const busy = () => [...db.gatewayCommand.iter()].some((c) => c.status === 'queued' || c.status === 'executing');
 const settle = async () => {
   await wait(400);
-  await gateway.drain();
-  await gateway.settled();
+  if (local) {
+    await local.gateway.drain();
+    await local.gateway.settled();
+  } else {
+    // The hosted gateway drains, then pulls the bank and updates bills on its own.
+    for (let t = 0; t < 60 && busy(); t++) await wait(250);
+    await wait(2_000);
+  }
   await wait(600);
 };
 const latestItem = (clientId: string, kind: string) =>
@@ -89,22 +107,16 @@ const bill = billId ? (await bank.api.listBills(bank.map.accounts[BLUEFIN]!.id))
 check(bill?.status === 'completed', 'Nessie bill for INV-1762 completed', bill?.status);
 
 await agent.reducers.proposeCustodyDebit({ clientId: BLUEFIN, invoiceIds: ['INV-1763'], reasoning: reason, policyRef: 'pol-005', confidence: 0.9 });
-await wait(500);
-item = latestItem(BLUEFIN, 'CUSTODY_DEBIT');
-check(item?.state === 'PROPOSED', '$64,000 is over the auto-apply limit: waits for a controller', item?.state);
-await agent.reducers.transitionWorkItem({ workItemId: item!.id, toState: 'APPROVED', note: '' });
-await wait(400);
-check(db.workItem.id.find(item!.id)?.state === 'PROPOSED', 'Agent cannot approve (denied and audited)');
-await controller.reducers.transitionWorkItem({ workItemId: item!.id, toState: 'APPROVED', note: 'verify' });
 await settle();
-check(db.workItem.id.find(item!.id)?.state === 'POSTED', 'Controller approved; gateway POSTED it');
+item = latestItem(BLUEFIN, 'CUSTODY_DEBIT');
+check(!!item?.autoApplied && item.state === 'POSTED', '$64,000 debit applies on its own too (no amount cap)', `${item?.state} auto=${item?.autoApplied}`);
 
 console.log('\nRestrictions');
 r = await refused(agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 'trading', step: 'CLOSE_ONLY', reasoning: reason, policyRef: 'pol-008', confidence: 0.9 }), /hedged/);
 check(r === true, 'Close-only on Kestrel refused (hedged book)', String(r));
 r = await refused(agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 'financing', step: 'NO_NEW_BORROWING', reasoning: reason, policyRef: 'pol-006', confidence: 0.9 }), /contract/);
 check(r === true, 'Financing refused: not in Kestrel\'s contract', String(r));
-const cure = () => [...db.deadline.iter()].find((d) => d.clientId === KESTREL && d.kind === 'cure_period');
+const cure = () => [...timeDb.deadline.iter()].find((d) => d.clientId === KESTREL && d.kind === 'cure_period');
 check(cure()?.status === 'open' && cure()?.dueOn === '2026-03-06', 'Kestrel notified Feb 19: cure period (§9.1) runs to Mar 6', `${cure()?.status} ${cure()?.dueOn}`);
 r = await refused(agent.reducers.proposeRestriction({ clientId: KESTREL, lever: 'withdrawals', step: 'HOLD_AMOUNT_OWED', reasoning: reason, policyRef: 'pol-006', confidence: 0.9 }), /9\.1/);
 check(r === true, 'Hold refused while the cure period runs', String(r));
@@ -125,12 +137,12 @@ console.log('\nTime (scheduled reducer)');
 await agent.reducers.setDeadline({ clientId: KESTREL, kind: 'promise_to_pay', dueOn: '2026-03-05', note: 'CFO promised a wire by Thursday', workItemId: undefined });
 await demo.reducers.setClockSpeed({ secondsPerDay: 1, runUntil: '2026-03-06' });
 // Ticks are once a second, so three sim days take three to six seconds.
-for (let t = 0; t < 80 && db.clock.id.find(1)?.secondsPerDay; t++) await wait(250);
+for (let t = 0; t < 80 && timeDb.clock.id.find(1)?.secondsPerDay; t++) await wait(250);
 await wait(500);
-const clock = db.clock.id.find(1);
+const clock = timeDb.clock.id.find(1);
 check(clock?.simDate === '2026-03-06' && clock.secondsPerDay === 0, 'Clock ran on its own to Mar 6 and paused', `${clock?.simDate} ${clock?.secondsPerDay}`);
 check(cure()?.status === 'expired', 'Cure period expired unpaid', cure()?.status);
-const promise = [...db.deadline.iter()].find((d) => d.clientId === KESTREL && d.kind === 'promise_to_pay');
+const promise = [...timeDb.deadline.iter()].find((d) => d.clientId === KESTREL && d.kind === 'promise_to_pay');
 check(promise?.status === 'broken', 'Promise to pay marked broken', promise?.status);
 await settle();
 
@@ -190,11 +202,11 @@ check(![...db.hold.iter()].some((h) => h.clientId === KESTREL && h.status === 'a
 check(db.accessLever.id.find(`${KESTREL}:withdrawals`)?.state === 'active', 'Withdrawals active again');
 
 console.log('\nBooks');
-await gwConn.reducers.tieOut({ trigger: 'actions verify' });
+await controller.reducers.tieOut({ trigger: 'actions verify' });
 await wait(800);
 const run = [...db.tieOutRun.iter()].sort((a, b) => (a.id < b.id ? 1 : -1))[0];
 check(run?.unexplainedCents === 0n, 'Tie-out: nothing unexplained after every action', `${run?.status} ${run?.unexplainedCents}`);
 
-for (const c of [syncConn, gwConn, agent, demo, controller]) c.disconnect();
+for (const c of [local?.syncConn, local?.gwConn, agent, demo, controller]) c?.disconnect();
 console.log(failed ? `\nFAILED: ${failed} checks` : '\nAll checks passed. (Run pnpm demo:reset to go back to the baseline.)');
 process.exit(failed ? 1 : 0);

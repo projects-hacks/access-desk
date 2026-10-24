@@ -35,7 +35,7 @@ A withdrawal during a running cure period is honored (§9.1), but if it leaves c
 
 ## Web
 
-Reads need no token: subscribe to the tables. Approvals call `transition_work_item` as the console identity (`VITE_STDB_CONTROLLER_TOKEN`), so agents propose and the console approves under different identities. The portal's withdraw button is `POST /demo/withdraw {clientId, amount}` (dollars): it returns the decision, released and held amounts, and the Nessie wire once it's back through the feed.
+Reads need no token: subscribe to the tables. Approvals call `transition_work_item` as the window's controller seat: Controller A (`VITE_STDB_CONTROLLER_TOKEN`) or Controller B (`VITE_STDB_CONTROLLER_B_TOKEN`), picked with `?as=a` / `?as=b`. Agents propose and either seat approves; what a seat proposes itself (console tier and permission changes on Tier 1/2 or strategic clients) needs the other seat. The portal's withdraw button is `POST /demo/withdraw {clientId, amount}` (dollars): it returns the decision, released and held amounts, and the Nessie wire once it's back through the feed.
 
 ## Python
 

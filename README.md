@@ -19,7 +19,7 @@ cp .env.example .env     # shared Maincloud database + hosted API (ask for the v
 pnpm dev                 # web :5173, talking to the hosted API
 ```
 
-The API server (sync, gateway, simulated platform, demo endpoints) runs once, on Azure Container Apps, because it is the only writer to the shared database. Every push to `main` is checked (typecheck, tests) and, if green, built and deployed there by CI. Don't run a second server against the shared database: `pnpm dev:server` refuses to start unless you mean it (stop the hosted one first with `pnpm host:stop`).
+The API server (sync, gateway, simulated platform, demo endpoints) runs once, on Azure Container Apps, because it is the only writer to the shared database. Every push to `main` is checked (typecheck, tests) and, if green, built and deployed there by CI. Don't run a second server against the shared database: `pnpm dev` starts only the web app, and the server refuses to start unless `SERVER_HOST=true` (`pnpm dev:server`).
 
 ## Commands
 
@@ -27,8 +27,9 @@ The API server (sync, gateway, simulated platform, demo endpoints) runs once, on
 |---|---|
 | `pnpm demo:reset` | Bank, database and the hosted server back to Tue 2026-03-03 |
 | `pnpm demo:rebuild` | After a schema change: republish with a data reset, roles, restart the hosted server |
-| `pnpm host:restart` · `host:stop` · `host:start` | The hosted server (needs `az` access) |
-| `pnpm sync` · `pnpm actions:verify` | Run their own gateway: only with the hosted server stopped |
+| `pnpm host:restart` | Restart the hosted server (needs `az` access) |
+| `pnpm actions:verify` | Every agent action end to end, executed by the hosted gateway |
+| `pnpm sync` | One local sync pass with its own gateway: only when no hosted server uses the database |
 | `pnpm sync:verify` · `payments:verify` · `ledger:verify` · `tieout:verify` | Check the database against sources and the answer key |
 | `pnpm bank show [ORG-xxxxx]` · `bank settle WI-5531` · `bank reset` | Nessie |
 | `pnpm seed:nessie [--apply]` | Seed the bank (dry run by default) |

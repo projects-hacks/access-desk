@@ -6,15 +6,16 @@ import { cureState, defaultedInvoices } from '../payments/deadlines';
 import { formatUsd } from '../payments/match';
 import { spacetimedb } from '../schema';
 import { applyCreditReview, applyPolicyDraft } from './credit';
+import { applyPermissionChange } from './manual';
 
 /**
  * Actions agents (and people) can propose. Each one is checked against the
  * contract, the platform's capabilities and policy before a work item exists.
  * Approval (or policy auto-approval) executes it through the gateway.
  *
- * Auto-approval: an active policy covers the kind and the client is not Tier 1
- * or strategic. People are kept for top clients and offboarding steps (close-only,
- * full freeze). Custody debits also stay within the auto-apply limit.
+ * Auto-approval: an active policy covers the kind. A person is needed only to
+ * restrict a top client (Tier 1 or strategic) and for offboarding steps
+ * (close-only, full freeze). Debits, notices and restores never wait.
  */
 
 const PROPOSERS = ['AGENT', 'CONTROLLER', 'ADMIN'] as const;
@@ -66,12 +67,11 @@ function policyActive(ctx: Ctx, policyId: string): boolean {
   return [...ctx.db.policy.policyId.filter(policyId)].some((p) => p.status === 'active');
 }
 
-export function canAutoApply(ctx: Ctx, kind: string, clientId: string, amountCents: bigint): boolean {
+export function canAutoApply(ctx: Ctx, kind: string, clientId: string): boolean {
   const policy = AUTO_POLICY[kind];
   const c = ctx.db.client.id.find(clientId);
-  const limit = ctx.db.platform.id.find(1)?.autoApplyLimitCents ?? 0n;
-  const withinLimit = kind !== 'CUSTODY_DEBIT' || amountCents <= limit;
-  return !!policy && policyActive(ctx, policy) && withinLimit && !!c && c.tier > 1 && !c.strategic;
+  const topClient = !!c && (c.tier <= 1 || c.strategic);
+  return !!policy && policyActive(ctx, policy) && !!c && !(kind === 'RESTRICTION' && topClient);
 }
 
 /** Create the work item; execute right away when policy allows. */
@@ -80,7 +80,7 @@ function propose(ctx: Ctx, w: {
   reasoning: string; policyRef: string; clausesCited: string[]; confidence: number; needsPerson?: boolean; boundariesJson?: string;
 }) {
   requireRole(ctx, PROPOSERS);
-  const auto = !w.needsPerson && canAutoApply(ctx, w.kind, w.clientId, w.amountCents);
+  const auto = !w.needsPerson && canAutoApply(ctx, w.kind, w.clientId);
   const item = createWorkItem(ctx, {
     kind: w.kind, clientId: w.clientId, subjectId: w.clientId, title: w.title, amountCents: w.amountCents,
     proposal: w.proposal, reasoning: w.reasoning, policyRef: w.policyRef, confidence: w.confidence,
@@ -379,6 +379,10 @@ export function executeApproved(ctx: Ctx, workItemId: bigint) {
     }
     case 'POLICY_DRAFT': {
       applyPolicyDraft(ctx, item.id);
+      return;
+    }
+    case 'PERMISSION_CHANGE': {
+      applyPermissionChange(ctx, item.id);
       return;
     }
   }
