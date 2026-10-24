@@ -14,8 +14,11 @@ export default __t.row({
   id: __t.string().primaryKey(),
   clientId: __t.string().name("client_id"),
   product: __t.string(),
+  label: __t.string(),
+  period: __t.string(),
+  issuedOn: __t.string().name("issued_on"),
+  dueOn: __t.string().name("due_on"),
   amountCents: __t.i64().name("amount_cents"),
   paidCents: __t.i64().name("paid_cents"),
-  dueAt: __t.timestamp().name("due_at"),
   status: __t.string(),
 });

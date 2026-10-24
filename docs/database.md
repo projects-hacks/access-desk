@@ -19,7 +19,11 @@ Only one process writes bank data: sync, run by the owner. Everyone else just co
 
 Defaults in `.env.example` already point to the shared database. Copy it to `.env` and you're connected.
 
-**Identity:** each service should keep one identity so its role sticks. Get a token once with `curl -X POST https://maincloud.spacetimedb.com/v1/identity`, then save it as `STDB_TOKEN` (server) or `STDB_AGENT_TOKEN` (agents). Without a token, every HTTP call is a new anonymous identity.
+**Identity and roles:** every reducer checks the caller's role (`actor` table). Roles: ADMIN, SYNC, GATEWAY, AGENT, ACCOUNTANT, RELATIONSHIP_MANAGER, CONTROLLER, CLIENT, VIEWER. Only ADMIN (the publisher) grants them.
+
+1. Get an identity: `curl -X POST https://maincloud.spacetimedb.com/v1/identity`, which returns `identity` and `token`.
+2. Ask Rajeev to run `spacetime call -s maincloud access-desk-calhacks13 assign_role '"<identity>"' '"<name>"' '"<ROLE>"' null`.
+3. Save the token: `STDB_TOKEN` (server, role SYNC) or `STDB_AGENT_TOKEN` (agents, role AGENT). The shared tokens are in the team's `.env`, never in git.
 
 **Names on the wire:** tables, columns and reducers are snake_case (`work_item`, `amount_cents`, `propose_work_item`). Generated TS bindings expose them in camelCase.
 

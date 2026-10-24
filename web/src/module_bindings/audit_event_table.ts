@@ -12,12 +12,19 @@ import {
 
 export default __t.row({
   id: __t.u64().primaryKey(),
-  workItemId: __t.u64().name("work_item_id"),
+  at: __t.timestamp(),
+  simDate: __t.string().name("sim_date"),
   actor: __t.identity(),
+  actorRole: __t.string().name("actor_role"),
+  actorName: __t.string().name("actor_name"),
   action: __t.string(),
+  subjectType: __t.string().name("subject_type"),
+  subjectId: __t.string().name("subject_id"),
+  clientId: __t.string().name("client_id"),
+  workItemId: __t.option(__t.u64()).name("work_item_id"),
   fromState: __t.string().name("from_state"),
   toState: __t.string().name("to_state"),
   allowed: __t.bool(),
   detail: __t.string(),
-  at: __t.timestamp(),
+  policyRef: __t.string().name("policy_ref"),
 });

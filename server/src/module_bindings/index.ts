@@ -34,28 +34,103 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
-import AdvanceSyncCursorReducer from "./advance_sync_cursor_reducer";
+import AdvanceClockReducer from "./advance_clock_reducer";
+import AssignRoleReducer from "./assign_role_reducer";
 import ProposeWorkItemReducer from "./propose_work_item_reducer";
-import RecordBankTransactionReducer from "./record_bank_transaction_reducer";
-import RegisterActorReducer from "./register_actor_reducer";
+import RecordSyncErrorReducer from "./record_sync_error_reducer";
+import SetClockReducer from "./set_clock_reducer";
+import SetPlatformReducer from "./set_platform_reducer";
+import SetSyncStatusReducer from "./set_sync_status_reducer";
 import TransitionWorkItemReducer from "./transition_work_item_reducer";
+import UpsertAccessLeverReducer from "./upsert_access_lever_reducer";
+import UpsertAssetPriceReducer from "./upsert_asset_price_reducer";
+import UpsertCapabilityReducer from "./upsert_capability_reducer";
+import UpsertCashMovementReducer from "./upsert_cash_movement_reducer";
+import UpsertClientReducer from "./upsert_client_reducer";
+import UpsertContractReducer from "./upsert_contract_reducer";
+import UpsertContractClauseReducer from "./upsert_contract_clause_reducer";
+import UpsertCustodyHoldingReducer from "./upsert_custody_holding_reducer";
+import UpsertDisputeReducer from "./upsert_dispute_reducer";
+import UpsertInvoiceReducer from "./upsert_invoice_reducer";
+import UpsertLoanReducer from "./upsert_loan_reducer";
+import UpsertOwedToClientReducer from "./upsert_owed_to_client_reducer";
+import UpsertPayerIdentityReducer from "./upsert_payer_identity_reducer";
+import UpsertPositionReducer from "./upsert_position_reducer";
+import UpsertRawRecordReducer from "./upsert_raw_record_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import AccessLeverRow from "./access_lever_table";
+import AccessRequestRow from "./access_request_table";
 import ActorRow from "./actor_table";
+import AgentRunRow from "./agent_run_table";
+import AssetPriceRow from "./asset_price_table";
 import AuditEventRow from "./audit_event_table";
-import BankTransactionRow from "./bank_transaction_table";
+import CapabilityRow from "./capability_table";
+import CashMovementRow from "./cash_movement_table";
 import ClientRow from "./client_table";
+import ClientCreditRow from "./client_credit_table";
+import ClockRow from "./clock_table";
+import ContractRow from "./contract_table";
+import ContractClauseRow from "./contract_clause_table";
+import CreditProfileRow from "./credit_profile_table";
+import CustodyHoldingRow from "./custody_holding_table";
+import DeadlineRow from "./deadline_table";
+import DecisionRow from "./decision_table";
+import DisputeRow from "./dispute_table";
+import ExploitFlagRow from "./exploit_flag_table";
+import GatewayCommandRow from "./gateway_command_table";
+import HoldRow from "./hold_table";
+import InvestigationStepRow from "./investigation_step_table";
 import InvoiceRow from "./invoice_table";
+import LedgerEntryRow from "./ledger_entry_table";
+import LoanRow from "./loan_table";
+import NoticeRow from "./notice_table";
+import OwedToClientRow from "./owed_to_client_table";
+import PayerIdentityRow from "./payer_identity_table";
+import PaymentApplicationRow from "./payment_application_table";
+import PlatformRow from "./platform_table";
 import PolicyRow from "./policy_table";
-import SyncCursorRow from "./sync_cursor_table";
+import PositionRow from "./position_table";
+import PrecedentRow from "./precedent_table";
+import RawRecordRow from "./raw_record_table";
+import RmNoteRow from "./rm_note_table";
+import SyncSourceRow from "./sync_source_table";
 import WorkItemRow from "./work_item_table";
 
 /** Type-only namespace exports for generated type groups. */
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  accessLever: __table({
+    name: 'access_lever',
+    indexes: [
+      { accessor: 'clientId', name: 'access_lever_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'access_lever_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'access_lever_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, AccessLeverRow),
+  accessRequest: __table({
+    name: 'access_request',
+    indexes: [
+      { accessor: 'clientId', name: 'access_request_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'access_request_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'access_request_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, AccessRequestRow),
   actor: __table({
     name: 'actor',
     indexes: [
@@ -67,31 +142,67 @@ const tablesSchema = __schema({
       { name: 'actor_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, ActorRow),
+  agentRun: __table({
+    name: 'agent_run',
+    indexes: [
+      { accessor: 'id', name: 'agent_run_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'agent_run_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, AgentRunRow),
+  assetPrice: __table({
+    name: 'asset_price',
+    indexes: [
+      { accessor: 'asset', name: 'asset_price_asset_idx_btree', algorithm: 'btree', columns: [
+        'asset',
+      ] },
+    ],
+    constraints: [
+      { name: 'asset_price_asset_key', constraint: 'unique', columns: ['asset'] },
+    ],
+  }, AssetPriceRow),
   auditEvent: __table({
     name: 'audit_event',
     indexes: [
+      { accessor: 'clientId', name: 'audit_event_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
       { accessor: 'id', name: 'audit_event_id_idx_btree', algorithm: 'btree', columns: [
         'id',
-      ] },
-      { accessor: 'workItemId', name: 'audit_event_work_item_id_idx_btree', algorithm: 'btree', columns: [
-        'workItemId',
       ] },
     ],
     constraints: [
       { name: 'audit_event_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, AuditEventRow),
-  bankTransaction: __table({
-    name: 'bank_transaction',
+  capability: __table({
+    name: 'capability',
     indexes: [
-      { accessor: 'id', name: 'bank_transaction_id_idx_btree', algorithm: 'btree', columns: [
+      { accessor: 'id', name: 'capability_id_idx_btree', algorithm: 'btree', columns: [
         'id',
       ] },
     ],
     constraints: [
-      { name: 'bank_transaction_id_key', constraint: 'unique', columns: ['id'] },
+      { name: 'capability_id_key', constraint: 'unique', columns: ['id'] },
     ],
-  }, BankTransactionRow),
+  }, CapabilityRow),
+  cashMovement: __table({
+    name: 'cash_movement',
+    indexes: [
+      { accessor: 'bankRef', name: 'cash_movement_bank_ref_idx_btree', algorithm: 'btree', columns: [
+        'bankRef',
+      ] },
+      { accessor: 'id', name: 'cash_movement_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'cash_movement_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, CashMovementRow),
   client: __table({
     name: 'client',
     indexes: [
@@ -103,6 +214,182 @@ const tablesSchema = __schema({
       { name: 'client_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, ClientRow),
+  clientCredit: __table({
+    name: 'client_credit',
+    indexes: [
+      { accessor: 'clientId', name: 'client_credit_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'client_credit_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'client_credit_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ClientCreditRow),
+  clock: __table({
+    name: 'clock',
+    indexes: [
+      { accessor: 'id', name: 'clock_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'clock_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ClockRow),
+  contract: __table({
+    name: 'contract',
+    indexes: [
+      { accessor: 'clientId', name: 'contract_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+    ],
+    constraints: [
+      { name: 'contract_client_id_key', constraint: 'unique', columns: ['clientId'] },
+    ],
+  }, ContractRow),
+  contractClause: __table({
+    name: 'contract_clause',
+    indexes: [
+      { accessor: 'clientId', name: 'contract_clause_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'contract_clause_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'contract_clause_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ContractClauseRow),
+  creditProfile: __table({
+    name: 'credit_profile',
+    indexes: [
+      { accessor: 'clientId', name: 'credit_profile_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+    ],
+    constraints: [
+      { name: 'credit_profile_client_id_key', constraint: 'unique', columns: ['clientId'] },
+    ],
+  }, CreditProfileRow),
+  custodyHolding: __table({
+    name: 'custody_holding',
+    indexes: [
+      { accessor: 'clientId', name: 'custody_holding_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'custody_holding_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'custody_holding_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, CustodyHoldingRow),
+  deadline: __table({
+    name: 'deadline',
+    indexes: [
+      { accessor: 'clientId', name: 'deadline_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'deadline_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'deadline_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, DeadlineRow),
+  decision: __table({
+    name: 'decision',
+    indexes: [
+      { accessor: 'id', name: 'decision_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'workItemId', name: 'decision_work_item_id_idx_btree', algorithm: 'btree', columns: [
+        'workItemId',
+      ] },
+    ],
+    constraints: [
+      { name: 'decision_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, DecisionRow),
+  dispute: __table({
+    name: 'dispute',
+    indexes: [
+      { accessor: 'clientId', name: 'dispute_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'dispute_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'invoiceId', name: 'dispute_invoice_id_idx_btree', algorithm: 'btree', columns: [
+        'invoiceId',
+      ] },
+    ],
+    constraints: [
+      { name: 'dispute_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, DisputeRow),
+  exploitFlag: __table({
+    name: 'exploit_flag',
+    indexes: [
+      { accessor: 'clientId', name: 'exploit_flag_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'exploit_flag_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'exploit_flag_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ExploitFlagRow),
+  gatewayCommand: __table({
+    name: 'gateway_command',
+    indexes: [
+      { accessor: 'id', name: 'gateway_command_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'workItemId', name: 'gateway_command_work_item_id_idx_btree', algorithm: 'btree', columns: [
+        'workItemId',
+      ] },
+    ],
+    constraints: [
+      { name: 'gateway_command_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, GatewayCommandRow),
+  hold: __table({
+    name: 'hold',
+    indexes: [
+      { accessor: 'clientId', name: 'hold_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'hold_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'hold_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, HoldRow),
+  investigationStep: __table({
+    name: 'investigation_step',
+    indexes: [
+      { accessor: 'id', name: 'investigation_step_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'workItemId', name: 'investigation_step_work_item_id_idx_btree', algorithm: 'btree', columns: [
+        'workItemId',
+      ] },
+    ],
+    constraints: [
+      { name: 'investigation_step_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, InvestigationStepRow),
   invoice: __table({
     name: 'invoice',
     indexes: [
@@ -117,28 +404,191 @@ const tablesSchema = __schema({
       { name: 'invoice_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, InvoiceRow),
-  policy: __table({
-    name: 'policy',
+  ledgerEntry: __table({
+    name: 'ledger_entry',
     indexes: [
-      { accessor: 'id', name: 'policy_id_idx_btree', algorithm: 'btree', columns: [
+      { accessor: 'id', name: 'ledger_entry_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'journalId', name: 'ledger_entry_journal_id_idx_btree', algorithm: 'btree', columns: [
+        'journalId',
+      ] },
+    ],
+    constraints: [
+      { name: 'ledger_entry_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, LedgerEntryRow),
+  loan: __table({
+    name: 'loan',
+    indexes: [
+      { accessor: 'clientId', name: 'loan_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'loan_id_idx_btree', algorithm: 'btree', columns: [
         'id',
       ] },
     ],
     constraints: [
-      { name: 'policy_id_key', constraint: 'unique', columns: ['id'] },
+      { name: 'loan_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, LoanRow),
+  notice: __table({
+    name: 'notice',
+    indexes: [
+      { accessor: 'clientId', name: 'notice_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'notice_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'notice_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, NoticeRow),
+  owedToClient: __table({
+    name: 'owed_to_client',
+    indexes: [
+      { accessor: 'clientId', name: 'owed_to_client_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'owed_to_client_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'owed_to_client_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, OwedToClientRow),
+  payerIdentity: __table({
+    name: 'payer_identity',
+    indexes: [
+      { accessor: 'clientId', name: 'payer_identity_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'payer_identity_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'value', name: 'payer_identity_value_idx_btree', algorithm: 'btree', columns: [
+        'value',
+      ] },
+    ],
+    constraints: [
+      { name: 'payer_identity_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PayerIdentityRow),
+  paymentApplication: __table({
+    name: 'payment_application',
+    indexes: [
+      { accessor: 'id', name: 'payment_application_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'invoiceId', name: 'payment_application_invoice_id_idx_btree', algorithm: 'btree', columns: [
+        'invoiceId',
+      ] },
+      { accessor: 'movementId', name: 'payment_application_movement_id_idx_btree', algorithm: 'btree', columns: [
+        'movementId',
+      ] },
+    ],
+    constraints: [
+      { name: 'payment_application_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PaymentApplicationRow),
+  platform: __table({
+    name: 'platform',
+    indexes: [
+      { accessor: 'id', name: 'platform_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'platform_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PlatformRow),
+  policy: __table({
+    name: 'policy',
+    indexes: [
+      { accessor: 'key', name: 'policy_key_idx_btree', algorithm: 'btree', columns: [
+        'key',
+      ] },
+      { accessor: 'policyId', name: 'policy_policy_id_idx_btree', algorithm: 'btree', columns: [
+        'policyId',
+      ] },
+    ],
+    constraints: [
+      { name: 'policy_key_key', constraint: 'unique', columns: ['key'] },
     ],
   }, PolicyRow),
-  syncCursor: __table({
-    name: 'sync_cursor',
+  position: __table({
+    name: 'position',
     indexes: [
-      { accessor: 'source', name: 'sync_cursor_source_idx_btree', algorithm: 'btree', columns: [
+      { accessor: 'clientId', name: 'position_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'position_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'position_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PositionRow),
+  precedent: __table({
+    name: 'precedent',
+    indexes: [
+      { accessor: 'clientId', name: 'precedent_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'precedent_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'workItemId', name: 'precedent_work_item_id_idx_btree', algorithm: 'btree', columns: [
+        'workItemId',
+      ] },
+    ],
+    constraints: [
+      { name: 'precedent_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PrecedentRow),
+  rawRecord: __table({
+    name: 'raw_record',
+    indexes: [
+      { accessor: 'id', name: 'raw_record_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'source', name: 'raw_record_source_idx_btree', algorithm: 'btree', columns: [
         'source',
       ] },
     ],
     constraints: [
-      { name: 'sync_cursor_source_key', constraint: 'unique', columns: ['source'] },
+      { name: 'raw_record_id_key', constraint: 'unique', columns: ['id'] },
     ],
-  }, SyncCursorRow),
+  }, RawRecordRow),
+  rmNote: __table({
+    name: 'rm_note',
+    indexes: [
+      { accessor: 'clientId', name: 'rm_note_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'rm_note_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'rm_note_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, RmNoteRow),
+  syncSource: __table({
+    name: 'sync_source',
+    indexes: [
+      { accessor: 'source', name: 'sync_source_source_idx_btree', algorithm: 'btree', columns: [
+        'source',
+      ] },
+    ],
+    constraints: [
+      { name: 'sync_source_source_key', constraint: 'unique', columns: ['source'] },
+    ],
+  }, SyncSourceRow),
   workItem: __table({
     name: 'work_item',
     indexes: [
@@ -157,11 +607,29 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
-  __reducerSchema("advance_sync_cursor", AdvanceSyncCursorReducer),
+  __reducerSchema("advance_clock", AdvanceClockReducer),
+  __reducerSchema("assign_role", AssignRoleReducer),
   __reducerSchema("propose_work_item", ProposeWorkItemReducer),
-  __reducerSchema("record_bank_transaction", RecordBankTransactionReducer),
-  __reducerSchema("register_actor", RegisterActorReducer),
+  __reducerSchema("record_sync_error", RecordSyncErrorReducer),
+  __reducerSchema("set_clock", SetClockReducer),
+  __reducerSchema("set_platform", SetPlatformReducer),
+  __reducerSchema("set_sync_status", SetSyncStatusReducer),
   __reducerSchema("transition_work_item", TransitionWorkItemReducer),
+  __reducerSchema("upsert_access_lever", UpsertAccessLeverReducer),
+  __reducerSchema("upsert_asset_price", UpsertAssetPriceReducer),
+  __reducerSchema("upsert_capability", UpsertCapabilityReducer),
+  __reducerSchema("upsert_cash_movement", UpsertCashMovementReducer),
+  __reducerSchema("upsert_client", UpsertClientReducer),
+  __reducerSchema("upsert_contract", UpsertContractReducer),
+  __reducerSchema("upsert_contract_clause", UpsertContractClauseReducer),
+  __reducerSchema("upsert_custody_holding", UpsertCustodyHoldingReducer),
+  __reducerSchema("upsert_dispute", UpsertDisputeReducer),
+  __reducerSchema("upsert_invoice", UpsertInvoiceReducer),
+  __reducerSchema("upsert_loan", UpsertLoanReducer),
+  __reducerSchema("upsert_owed_to_client", UpsertOwedToClientReducer),
+  __reducerSchema("upsert_payer_identity", UpsertPayerIdentityReducer),
+  __reducerSchema("upsert_position", UpsertPositionReducer),
+  __reducerSchema("upsert_raw_record", UpsertRawRecordReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

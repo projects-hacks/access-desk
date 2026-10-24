@@ -13,7 +13,14 @@ import {
 export default {
   kind: __t.string(),
   clientId: __t.string(),
-  summary: __t.string(),
+  subjectId: __t.string(),
+  title: __t.string(),
+  amountCents: __t.i64(),
   proposalJson: __t.string(),
-  policyVersion: __t.string(),
+  reasoning: __t.string(),
+  policyRef: __t.string(),
+  clausesCited: __t.array(__t.string()),
+  boundariesJson: __t.string(),
+  confidence: __t.f32(),
+  requiredRole: __t.string(),
 };

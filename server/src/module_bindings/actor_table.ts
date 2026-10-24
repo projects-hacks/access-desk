@@ -14,4 +14,5 @@ export default __t.row({
   identity: __t.identity().primaryKey(),
   name: __t.string(),
   role: __t.string(),
+  clientId: __t.option(__t.string()).name("client_id"),
 });

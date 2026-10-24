@@ -10,81 +10,435 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const AccessLever = __t.object("AccessLever", {
+  id: __t.string(),
+  clientId: __t.string(),
+  lever: __t.string(),
+  state: __t.string(),
+  detail: __t.string(),
+  workItemId: __t.option(__t.u64()),
+});
+export type AccessLever = __Infer<typeof AccessLever>;
+
+export const AccessRequest = __t.object("AccessRequest", {
+  id: __t.u64(),
+  clientId: __t.string(),
+  action: __t.string(),
+  amountCents: __t.i64(),
+  decision: __t.string(),
+  allowedCents: __t.i64(),
+  heldCents: __t.i64(),
+  reason: __t.string(),
+  at: __t.timestamp(),
+});
+export type AccessRequest = __Infer<typeof AccessRequest>;
+
 export const Actor = __t.object("Actor", {
   identity: __t.identity(),
   name: __t.string(),
   role: __t.string(),
+  clientId: __t.option(__t.string()),
 });
 export type Actor = __Infer<typeof Actor>;
 
+export const AgentRun = __t.object("AgentRun", {
+  id: __t.u64(),
+  agent: __t.string(),
+  trigger: __t.string(),
+  startedAt: __t.timestamp(),
+  finishedAt: __t.option(__t.timestamp()),
+  proposed: __t.u32(),
+  status: __t.string(),
+  error: __t.option(__t.string()),
+});
+export type AgentRun = __Infer<typeof AgentRun>;
+
+export const AssetPrice = __t.object("AssetPrice", {
+  asset: __t.string(),
+  priceCents: __t.i64(),
+  asOf: __t.string(),
+});
+export type AssetPrice = __Infer<typeof AssetPrice>;
+
 export const AuditEvent = __t.object("AuditEvent", {
   id: __t.u64(),
-  workItemId: __t.u64(),
+  at: __t.timestamp(),
+  simDate: __t.string(),
   actor: __t.identity(),
+  actorRole: __t.string(),
+  actorName: __t.string(),
   action: __t.string(),
+  subjectType: __t.string(),
+  subjectId: __t.string(),
+  clientId: __t.string(),
+  workItemId: __t.option(__t.u64()),
   fromState: __t.string(),
   toState: __t.string(),
   allowed: __t.bool(),
   detail: __t.string(),
-  at: __t.timestamp(),
+  policyRef: __t.string(),
 });
 export type AuditEvent = __Infer<typeof AuditEvent>;
 
-export const BankTransaction = __t.object("BankTransaction", {
+export const Capability = __t.object("Capability", {
+  id: __t.string(),
+  product: __t.string(),
+  lever: __t.string(),
+  step: __t.string(),
+  gentleness: __t.u8(),
+  reversible: __t.bool(),
+  twoApprovers: __t.bool(),
+  adapterAction: __t.string(),
+});
+export type Capability = __Infer<typeof Capability>;
+
+export const CashMovement = __t.object("CashMovement", {
   id: __t.string(),
   source: __t.string(),
-  sourceRef: __t.string(),
-  payerName: __t.string(),
+  platformAccount: __t.string(),
+  direction: __t.string(),
+  rail: __t.string(),
   amountCents: __t.i64(),
-  postedAt: __t.timestamp(),
-  rawJson: __t.string(),
+  valueOn: __t.string(),
+  status: __t.string(),
+  memo: __t.string(),
+  origName: __t.string(),
+  origAccount: __t.string(),
+  refs: __t.array(__t.string()),
+  bankRef: __t.string(),
+  reverses: __t.option(__t.string()),
+  rawId: __t.string(),
+  matchStatus: __t.string(),
+  isHistory: __t.bool(),
 });
-export type BankTransaction = __Infer<typeof BankTransaction>;
+export type CashMovement = __Infer<typeof CashMovement>;
 
 export const Client = __t.object("Client", {
   id: __t.string(),
   name: __t.string(),
-  tier: __t.string(),
+  legalName: __t.string(),
+  segment: __t.string(),
+  tier: __t.u8(),
+  strategic: __t.bool(),
   relationshipManager: __t.string(),
+  renewalOn: __t.option(__t.string()),
+  status: __t.string(),
 });
 export type Client = __Infer<typeof Client>;
+
+export const ClientCredit = __t.object("ClientCredit", {
+  id: __t.u64(),
+  clientId: __t.string(),
+  kind: __t.string(),
+  amountCents: __t.i64(),
+  movementId: __t.option(__t.string()),
+});
+export type ClientCredit = __Infer<typeof ClientCredit>;
+
+export const Clock = __t.object("Clock", {
+  id: __t.u8(),
+  simDate: __t.string(),
+  updatedAt: __t.timestamp(),
+});
+export type Clock = __Infer<typeof Clock>;
+
+export const Contract = __t.object("Contract", {
+  clientId: __t.string(),
+  msaRef: __t.string(),
+  termsDays: __t.u16(),
+  graceDays: __t.u16(),
+  cureDays: __t.u16(),
+  crossDefault: __t.bool(),
+});
+export type Contract = __Infer<typeof Contract>;
+
+export const ContractClause = __t.object("ContractClause", {
+  id: __t.string(),
+  clientId: __t.string(),
+  clause: __t.string(),
+  kind: __t.string(),
+  allowed: __t.bool(),
+  text: __t.string(),
+});
+export type ContractClause = __Infer<typeof ContractClause>;
+
+export const CreditProfile = __t.object("CreditProfile", {
+  clientId: __t.string(),
+  valueScore: __t.u8(),
+  reliabilityScore: __t.u8(),
+  coverageRatio: __t.f64(),
+  coverageDetail: __t.string(),
+  expectedSettleOn: __t.option(__t.string()),
+  updatedAt: __t.timestamp(),
+});
+export type CreditProfile = __Infer<typeof CreditProfile>;
+
+export const CustodyHolding = __t.object("CustodyHolding", {
+  id: __t.string(),
+  clientId: __t.string(),
+  asset: __t.string(),
+  quantity: __t.f64(),
+  valueCents: __t.i64(),
+});
+export type CustodyHolding = __Infer<typeof CustodyHolding>;
+
+export const Deadline = __t.object("Deadline", {
+  id: __t.u64(),
+  kind: __t.string(),
+  clientId: __t.string(),
+  workItemId: __t.option(__t.u64()),
+  dueOn: __t.string(),
+  status: __t.string(),
+});
+export type Deadline = __Infer<typeof Deadline>;
+
+export const Decision = __t.object("Decision", {
+  id: __t.u64(),
+  workItemId: __t.u64(),
+  revision: __t.u32(),
+  decidedBy: __t.identity(),
+  role: __t.string(),
+  decision: __t.string(),
+  reasonCode: __t.string(),
+  note: __t.string(),
+  at: __t.timestamp(),
+});
+export type Decision = __Infer<typeof Decision>;
+
+export const Dispute = __t.object("Dispute", {
+  id: __t.string(),
+  invoiceId: __t.string(),
+  clientId: __t.string(),
+  amountCents: __t.i64(),
+  reason: __t.string(),
+  openedOn: __t.string(),
+  status: __t.string(),
+  owner: __t.string(),
+});
+export type Dispute = __Infer<typeof Dispute>;
+
+export const ExploitFlag = __t.object("ExploitFlag", {
+  id: __t.string(),
+  clientId: __t.string(),
+  pattern: __t.string(),
+  score: __t.f32(),
+  status: __t.string(),
+  months: __t.u8(),
+  evidenceJson: __t.string(),
+  proposedFix: __t.string(),
+});
+export type ExploitFlag = __Infer<typeof ExploitFlag>;
+
+export const GatewayCommand = __t.object("GatewayCommand", {
+  id: __t.u64(),
+  workItemId: __t.u64(),
+  actionJson: __t.string(),
+  status: __t.string(),
+  externalRef: __t.option(__t.string()),
+  attempts: __t.u16(),
+  error: __t.option(__t.string()),
+});
+export type GatewayCommand = __Infer<typeof GatewayCommand>;
+
+export const Hold = __t.object("Hold", {
+  id: __t.u64(),
+  clientId: __t.string(),
+  amountCents: __t.i64(),
+  reason: __t.string(),
+  clause: __t.string(),
+  workItemId: __t.option(__t.u64()),
+  status: __t.string(),
+  createdAt: __t.timestamp(),
+  releasedAt: __t.option(__t.timestamp()),
+});
+export type Hold = __Infer<typeof Hold>;
+
+export const InvestigationStep = __t.object("InvestigationStep", {
+  id: __t.u64(),
+  workItemId: __t.u64(),
+  seq: __t.u16(),
+  tool: __t.string(),
+  summary: __t.string(),
+  status: __t.string(),
+});
+export type InvestigationStep = __Infer<typeof InvestigationStep>;
 
 export const Invoice = __t.object("Invoice", {
   id: __t.string(),
   clientId: __t.string(),
   product: __t.string(),
+  label: __t.string(),
+  period: __t.string(),
+  issuedOn: __t.string(),
+  dueOn: __t.string(),
   amountCents: __t.i64(),
   paidCents: __t.i64(),
-  dueAt: __t.timestamp(),
   status: __t.string(),
 });
 export type Invoice = __Infer<typeof Invoice>;
 
-export const Policy = __t.object("Policy", {
+export const LedgerEntry = __t.object("LedgerEntry", {
+  id: __t.u64(),
+  journalId: __t.string(),
+  postedOn: __t.string(),
+  accountCode: __t.string(),
+  debitCents: __t.i64(),
+  creditCents: __t.i64(),
+  ref: __t.string(),
+  workItemId: __t.option(__t.u64()),
+});
+export type LedgerEntry = __Infer<typeof LedgerEntry>;
+
+export const Loan = __t.object("Loan", {
   id: __t.string(),
+  clientId: __t.string(),
+  lineCents: __t.i64(),
+  outstandingCents: __t.i64(),
+  status: __t.string(),
+  borrowingAllowed: __t.bool(),
+});
+export type Loan = __Infer<typeof Loan>;
+
+export const Notice = __t.object("Notice", {
+  id: __t.u64(),
+  clientId: __t.string(),
+  workItemId: __t.option(__t.u64()),
+  channel: __t.string(),
+  body: __t.string(),
+  status: __t.string(),
+  sentAt: __t.option(__t.timestamp()),
+});
+export type Notice = __Infer<typeof Notice>;
+
+export const OwedToClient = __t.object("OwedToClient", {
+  id: __t.string(),
+  clientId: __t.string(),
+  kind: __t.string(),
+  amountCents: __t.i64(),
+  asOf: __t.string(),
+});
+export type OwedToClient = __Infer<typeof OwedToClient>;
+
+export const PayerIdentity = __t.object("PayerIdentity", {
+  id: __t.string(),
+  clientId: __t.string(),
+  kind: __t.string(),
+  value: __t.string(),
+  label: __t.string(),
+  relation: __t.string(),
+  verified: __t.bool(),
+});
+export type PayerIdentity = __Infer<typeof PayerIdentity>;
+
+export const PaymentApplication = __t.object("PaymentApplication", {
+  id: __t.u64(),
+  movementId: __t.string(),
+  invoiceId: __t.string(),
+  amountCents: __t.i64(),
+  method: __t.string(),
+  policyRef: __t.string(),
+  workItemId: __t.option(__t.u64()),
+  reversed: __t.bool(),
+});
+export type PaymentApplication = __Infer<typeof PaymentApplication>;
+
+export const Platform = __t.object("Platform", {
+  id: __t.u8(),
+  name: __t.string(),
+  legalName: __t.string(),
+  wireInstructions: __t.string(),
+  autoApplyLimitCents: __t.i64(),
+});
+export type Platform = __Infer<typeof Platform>;
+
+export const Policy = __t.object("Policy", {
+  key: __t.string(),
+  policyId: __t.string(),
   version: __t.u32(),
   status: __t.string(),
+  title: __t.string(),
   ruleJson: __t.string(),
   learnedFrom: __t.string(),
+  approvedBy: __t.option(__t.string()),
 });
 export type Policy = __Infer<typeof Policy>;
 
-export const SyncCursor = __t.object("SyncCursor", {
-  source: __t.string(),
-  cursor: __t.string(),
-  updatedAt: __t.timestamp(),
+export const Position = __t.object("Position", {
+  id: __t.string(),
+  clientId: __t.string(),
+  instrument: __t.string(),
+  side: __t.string(),
+  notionalCents: __t.i64(),
+  hedgeGroup: __t.option(__t.string()),
+  status: __t.string(),
 });
-export type SyncCursor = __Infer<typeof SyncCursor>;
+export type Position = __Infer<typeof Position>;
+
+export const Precedent = __t.object("Precedent", {
+  id: __t.u64(),
+  workItemId: __t.u64(),
+  clientId: __t.string(),
+  situation: __t.string(),
+  decision: __t.string(),
+  overrideReason: __t.string(),
+  outcome: __t.string(),
+});
+export type Precedent = __Infer<typeof Precedent>;
+
+export const RawRecord = __t.object("RawRecord", {
+  id: __t.string(),
+  source: __t.string(),
+  hash: __t.string(),
+  payloadJson: __t.string(),
+  firstSeenAt: __t.timestamp(),
+  lastSeenAt: __t.timestamp(),
+  goldenTable: __t.string(),
+  goldenId: __t.string(),
+});
+export type RawRecord = __Infer<typeof RawRecord>;
+
+export const RmNote = __t.object("RmNote", {
+  id: __t.u64(),
+  clientId: __t.string(),
+  workItemId: __t.option(__t.u64()),
+  author: __t.string(),
+  text: __t.string(),
+  at: __t.timestamp(),
+});
+export type RmNote = __Infer<typeof RmNote>;
+
+export const SyncSource = __t.object("SyncSource", {
+  source: __t.string(),
+  label: __t.string(),
+  status: __t.string(),
+  recordCount: __t.u32(),
+  cursor: __t.string(),
+  lastSyncAt: __t.option(__t.timestamp()),
+  error: __t.option(__t.string()),
+});
+export type SyncSource = __Infer<typeof SyncSource>;
 
 export const WorkItem = __t.object("WorkItem", {
   id: __t.u64(),
   kind: __t.string(),
   clientId: __t.string(),
+  subjectId: __t.string(),
   state: __t.string(),
-  summary: __t.string(),
+  title: __t.string(),
+  amountCents: __t.i64(),
   proposalJson: __t.string(),
+  reasoning: __t.string(),
+  policyRef: __t.string(),
+  clausesCited: __t.array(__t.string()),
+  boundariesJson: __t.string(),
+  confidence: __t.f32(),
+  autoApplied: __t.bool(),
+  requiredRole: __t.string(),
   proposedBy: __t.identity(),
-  policyVersion: __t.string(),
+  revision: __t.u32(),
+  revisedFrom: __t.option(__t.u64()),
+  expiresOn: __t.option(__t.string()),
+  createdAt: __t.timestamp(),
   updatedAt: __t.timestamp(),
 });
 export type WorkItem = __Infer<typeof WorkItem>;

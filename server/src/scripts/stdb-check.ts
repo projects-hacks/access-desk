@@ -13,4 +13,4 @@ conn
     }
     conn.disconnect();
   })
-  .subscribe([tables.actor, tables.client, tables.invoice, tables.bankTransaction, tables.workItem, tables.auditEvent]);
+  .subscribe([tables.platform, tables.clock, tables.actor, tables.client, tables.invoice, tables.cashMovement, tables.workItem, tables.auditEvent]);

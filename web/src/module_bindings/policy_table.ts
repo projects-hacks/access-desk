@@ -11,9 +11,12 @@ import {
 } from "spacetimedb";
 
 export default __t.row({
-  id: __t.string().primaryKey(),
+  key: __t.string().primaryKey(),
+  policyId: __t.string().name("policy_id"),
   version: __t.u32(),
   status: __t.string(),
+  title: __t.string(),
   ruleJson: __t.string().name("rule_json"),
   learnedFrom: __t.string().name("learned_from"),
+  approvedBy: __t.option(__t.string()).name("approved_by"),
 });

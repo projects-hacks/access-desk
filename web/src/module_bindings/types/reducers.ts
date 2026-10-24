@@ -6,15 +6,51 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
-import AdvanceSyncCursorReducer from "../advance_sync_cursor_reducer";
+import AdvanceClockReducer from "../advance_clock_reducer";
+import AssignRoleReducer from "../assign_role_reducer";
 import ProposeWorkItemReducer from "../propose_work_item_reducer";
-import RecordBankTransactionReducer from "../record_bank_transaction_reducer";
-import RegisterActorReducer from "../register_actor_reducer";
+import RecordSyncErrorReducer from "../record_sync_error_reducer";
+import SetClockReducer from "../set_clock_reducer";
+import SetPlatformReducer from "../set_platform_reducer";
+import SetSyncStatusReducer from "../set_sync_status_reducer";
 import TransitionWorkItemReducer from "../transition_work_item_reducer";
+import UpsertAccessLeverReducer from "../upsert_access_lever_reducer";
+import UpsertAssetPriceReducer from "../upsert_asset_price_reducer";
+import UpsertCapabilityReducer from "../upsert_capability_reducer";
+import UpsertCashMovementReducer from "../upsert_cash_movement_reducer";
+import UpsertClientReducer from "../upsert_client_reducer";
+import UpsertContractReducer from "../upsert_contract_reducer";
+import UpsertContractClauseReducer from "../upsert_contract_clause_reducer";
+import UpsertCustodyHoldingReducer from "../upsert_custody_holding_reducer";
+import UpsertDisputeReducer from "../upsert_dispute_reducer";
+import UpsertInvoiceReducer from "../upsert_invoice_reducer";
+import UpsertLoanReducer from "../upsert_loan_reducer";
+import UpsertOwedToClientReducer from "../upsert_owed_to_client_reducer";
+import UpsertPayerIdentityReducer from "../upsert_payer_identity_reducer";
+import UpsertPositionReducer from "../upsert_position_reducer";
+import UpsertRawRecordReducer from "../upsert_raw_record_reducer";
 
-export type AdvanceSyncCursorParams = __Infer<typeof AdvanceSyncCursorReducer>;
+export type AdvanceClockParams = __Infer<typeof AdvanceClockReducer>;
+export type AssignRoleParams = __Infer<typeof AssignRoleReducer>;
 export type ProposeWorkItemParams = __Infer<typeof ProposeWorkItemReducer>;
-export type RecordBankTransactionParams = __Infer<typeof RecordBankTransactionReducer>;
-export type RegisterActorParams = __Infer<typeof RegisterActorReducer>;
+export type RecordSyncErrorParams = __Infer<typeof RecordSyncErrorReducer>;
+export type SetClockParams = __Infer<typeof SetClockReducer>;
+export type SetPlatformParams = __Infer<typeof SetPlatformReducer>;
+export type SetSyncStatusParams = __Infer<typeof SetSyncStatusReducer>;
 export type TransitionWorkItemParams = __Infer<typeof TransitionWorkItemReducer>;
+export type UpsertAccessLeverParams = __Infer<typeof UpsertAccessLeverReducer>;
+export type UpsertAssetPriceParams = __Infer<typeof UpsertAssetPriceReducer>;
+export type UpsertCapabilityParams = __Infer<typeof UpsertCapabilityReducer>;
+export type UpsertCashMovementParams = __Infer<typeof UpsertCashMovementReducer>;
+export type UpsertClientParams = __Infer<typeof UpsertClientReducer>;
+export type UpsertContractParams = __Infer<typeof UpsertContractReducer>;
+export type UpsertContractClauseParams = __Infer<typeof UpsertContractClauseReducer>;
+export type UpsertCustodyHoldingParams = __Infer<typeof UpsertCustodyHoldingReducer>;
+export type UpsertDisputeParams = __Infer<typeof UpsertDisputeReducer>;
+export type UpsertInvoiceParams = __Infer<typeof UpsertInvoiceReducer>;
+export type UpsertLoanParams = __Infer<typeof UpsertLoanReducer>;
+export type UpsertOwedToClientParams = __Infer<typeof UpsertOwedToClientReducer>;
+export type UpsertPayerIdentityParams = __Infer<typeof UpsertPayerIdentityReducer>;
+export type UpsertPositionParams = __Infer<typeof UpsertPositionReducer>;
+export type UpsertRawRecordParams = __Infer<typeof UpsertRawRecordReducer>;
 

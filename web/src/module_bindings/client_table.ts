@@ -13,6 +13,11 @@ import {
 export default __t.row({
   id: __t.string().primaryKey(),
   name: __t.string(),
-  tier: __t.string(),
+  legalName: __t.string().name("legal_name"),
+  segment: __t.string(),
+  tier: __t.u8(),
+  strategic: __t.bool(),
   relationshipManager: __t.string().name("relationship_manager"),
+  renewalOn: __t.option(__t.string()).name("renewal_on"),
+  status: __t.string(),
 });
