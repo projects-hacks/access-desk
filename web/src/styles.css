@@ -421,3 +421,27 @@ th.num .sort { width: 100%; text-align: right; }
 .select-list li.selected { font-weight: 600; }
 .select-list .check { color: var(--accent); }
 @keyframes select-in { from { opacity: 0; transform: translateY(-4px); } }
+
+/* Activity (screens/AuditLog.tsx) */
+.activity { display: flex; flex-direction: column; gap: 24px; align-items: flex-start; }
+.activity-day { width: 100%; }
+.activity-date { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 8px; }
+.activity-list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.activity-list li { display: grid; grid-template-columns: 72px 1fr; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+.activity-list li:last-child { border-bottom: 0; }
+.activity-list li.by-person { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.activity-time { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.activity-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; align-items: flex-start; }
+.activity-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.activity-what { font-weight: 500; }
+.activity-client { color: var(--muted); }
+.activity-client::before { content: '· '; }
+.activity-detail { font-size: 13px; overflow-wrap: anywhere; }
+.actor { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.actor.person { background: var(--accent); color: #fff; }
+.actor.agent { background: var(--info-soft); color: var(--info); }
+.actor.system { background: var(--surface-3); color: var(--muted); }
+.activity-override { font-size: 12px; font-weight: 600; color: var(--accent); }
+.activity-why { margin: 2px 0 0; padding: 6px 12px; border-left: 2px solid var(--accent); color: var(--text); font-size: 13px; background: var(--surface); border-radius: 0 8px 8px 0; }
+.reveal-stack .activity-day { animation: reveal-in 0.42s ease-out backwards; animation-delay: 380ms; }
+@media (max-width: 720px) { .activity-list li { grid-template-columns: 1fr; gap: 4px; } }
