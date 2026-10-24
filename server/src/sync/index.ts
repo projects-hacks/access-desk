@@ -1,27 +1,154 @@
-import type { SyncSource } from './source';
+import { Timestamp } from 'spacetimedb';
+import { tables, type DbConnection } from '../module_bindings';
+import type { Dataset } from '../dataset';
+import type { Bank } from '../integrations/nessie/bank';
+import { env } from '../lib/env';
+import { bankRecords } from './sources/bank';
+import { chainRecords } from './sources/chain';
+import { platformRecords } from './sources/platform';
+import { SyncWriter, type SyncRecord } from './writer';
 
-const INTERVAL_MS = 10_000;
+const LABELS: Record<string, string> = {
+  crm: 'CRM',
+  billing: 'Billing',
+  platform_admin: 'Platform admin',
+  custody: 'Custody',
+  positions: 'Positions & financing',
+  bank: 'Bank feed (Nessie)',
+  chain: 'On-chain wallet',
+};
 
-/**
- * Pulls each source on an interval: raw -> standardized -> golden.
- * TODO: persist cursors and golden rows through SpacetimeDB reducers
- * (advanceSyncCursor, recordBankTransaction).
- */
-export function startSync(sources: SyncSource[], log: (msg: string) => void) {
-  const cursors = new Map<string, string | undefined>();
+export interface PassResult {
+  source: string;
+  records: number;
+  written: number;
+  errors: string[];
+}
 
-  const tick = async () => {
-    for (const source of sources) {
+/** Pulls every system of record into SpacetimeDB. One instance per database. */
+export class Sync {
+  private writer: SyncWriter;
+  private running = Promise.resolve();
+
+  constructor(
+    private readonly conn: DbConnection,
+    private readonly bank: Bank,
+    private readonly ds: Dataset,
+    private readonly log: (msg: string) => void = console.log,
+  ) {
+    this.writer = new SyncWriter(conn);
+  }
+
+  /** Subscribes to the rows sync needs to read (the clock). Call once before passes. */
+  ready(): Promise<void> {
+    return new Promise((resolve) => {
+      this.conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([tables.clock, tables.platform, tables.cashMovement]);
+    });
+  }
+
+  simDate(): string {
+    const clock = this.conn.db.clock.id.find(1);
+    if (!clock) throw new Error('clock row missing: is the module published?');
+    return clock.simDate;
+  }
+
+  /** Full pass: platform systems, then bank and chain. Serialized so passes never overlap. */
+  full(): Promise<PassResult[]> {
+    return this.serialize(async () => {
+      await this.syncPlatformRow();
+      const results: PassResult[] = [];
+      for (const [source, records] of Object.entries(platformRecords(this.conn, this.ds, this.bank.map))) {
+        results.push(await this.runSource(source, records));
+      }
+      results.push(...(await this.cashOnly()));
+      return results;
+    });
+  }
+
+  /** Bank and chain only: what changes during the demo. */
+  cash(): Promise<PassResult[]> {
+    return this.serialize(() => this.cashOnly());
+  }
+
+  start(): () => void {
+    const tick = (fn: () => Promise<PassResult[]>) => () =>
+      fn().then(
+        (results) => results.filter((r) => r.written || r.errors.length).forEach((r) => this.report(r)),
+        (err) => this.log(`[sync] ${err instanceof Error ? err.message : String(err)}`),
+      );
+    void tick(() => this.full())();
+    const cash = setInterval(tick(() => this.cash()), 5_000);
+    const platform = setInterval(tick(() => this.full()), 60_000);
+    return () => {
+      clearInterval(cash);
+      clearInterval(platform);
+    };
+  }
+
+  report(r: PassResult) {
+    this.log(`[sync:${r.source}] ${r.written}/${r.records} written${r.errors.length ? `, ${r.errors.length} errors: ${r.errors.slice(0, 3).join('; ')}` : ''}`);
+  }
+
+  private async cashOnly(): Promise<PassResult[]> {
+    const simDate = this.simDate();
+    const results: PassResult[] = [];
+    for (const [source, records] of [
+      ['bank', await bankRecords(this.conn, this.bank, simDate)],
+      ['chain', chainRecords(this.conn, this.ds, simDate)],
+    ] as const) {
+      const result = await this.runSource(source, records);
+      result.errors.push(...(await this.removeStale(source === 'bank' ? 'nessie' : 'chain', new Set(records.map((r) => r.id)))));
+      results.push(result);
+    }
+    return results;
+  }
+
+  /** Deletes cash rows the source no longer shows, so the database never holds stale movements. */
+  private async removeStale(origin: string, current: Set<string>): Promise<string[]> {
+    const errors: string[] = [];
+    for (const m of this.conn.db.cashMovement.iter()) {
+      if (m.source !== origin || current.has(m.id)) continue;
       try {
-        const { rows, cursor } = await source.fetchChanges(cursors.get(source.name));
-        if (rows.length) log(`[sync:${source.name}] ${rows.length} changed rows`);
-        cursors.set(source.name, cursor);
+        await this.conn.reducers.removeCashMovement({ id: m.id });
+        this.writer.forget('cash_movement', m.id);
+        this.log(`[sync:${origin}] removed ${m.bankRef} (no longer in source)`);
       } catch (err) {
-        log(`[sync:${source.name}] ${String(err)}`);
+        errors.push(`remove ${m.id}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-  };
+    return errors;
+  }
 
-  const timer = setInterval(tick, INTERVAL_MS);
-  return () => clearInterval(timer);
+  private async runSource<Row>(source: string, records: SyncRecord<Row>[]): Promise<PassResult> {
+    const { written, errors } = await this.writer.write(source, records);
+    await this.conn.reducers.setSyncStatus({
+      row: {
+        source,
+        label: LABELS[source] ?? source,
+        status: errors.length ? 'error' : 'synced',
+        recordCount: records.length,
+        cursor: new Date().toISOString(),
+        lastSyncAt: Timestamp.now(),
+        error: errors.length ? errors.slice(0, 3).join('; ') : undefined,
+      },
+    });
+    return { source, records: records.length, written, errors };
+  }
+
+  private async syncPlatformRow() {
+    const collections = this.bank.map.accounts.collections;
+    if (!collections) throw new Error('collections account missing from seed map');
+    await this.conn.reducers.setPlatform({
+      name: env.PLATFORM_NAME,
+      legalName: env.PLATFORM_LEGAL_NAME,
+      wireInstructions: `${env.PLATFORM_LEGAL_NAME} · ACCT ${collections.number} · reference your client id`,
+      autoApplyLimitCents: 5_000_000n,
+    });
+  }
+
+  private serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.running.then(fn, fn);
+    this.running = next.then(() => undefined, () => undefined);
+    return next;
+  }
 }

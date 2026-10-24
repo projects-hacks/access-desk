@@ -20,7 +20,11 @@ export const init = spacetimedb.init((ctx) => {
 export const setPlatform = spacetimedb.reducer(
   { name: t.string(), legalName: t.string(), wireInstructions: t.string(), autoApplyLimitCents: t.i64() },
   (ctx, args) => {
-    requireRole(ctx, ['ADMIN']);
+    // Sync applies the platform name from configuration, so a rename is one env change.
+    requireRole(ctx, ['ADMIN', 'SYNC']);
+    const current = ctx.db.platform.id.find(1);
+    if (current && current.name === args.name && current.legalName === args.legalName
+      && current.wireInstructions === args.wireInstructions && current.autoApplyLimitCents === args.autoApplyLimitCents) return;
     ctx.db.platform.id.update({ id: 1, ...args });
     audit(ctx, { action: 'SET_PLATFORM', subjectType: 'platform', subjectId: '1', detail: args.name });
   },

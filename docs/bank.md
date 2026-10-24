@@ -15,7 +15,7 @@ pnpm seed:nessie --apply --run demo   # separate run for judging, own customers
 
 pnpm bank show                        # Collections account: transactions
 pnpm bank show ORG-90412              # a client's bank side: payments sent + bills
-pnpm bank settle WI-5531              # post a pending wire (both sides), e.g. the demo wire
+pnpm bank settle WI-5531              # post a pending wire (both sides); then POST /sync/now
 pnpm bank reset                       # back to exactly as seeded; deletes anything created since
 
 pnpm test                             # includes the in-memory fake bank

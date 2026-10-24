@@ -125,6 +125,15 @@ export const upsertLoan = spacetimedb.reducer({ row: loan.rowType }, (ctx, { row
   else ctx.db.loan.insert(row);
 });
 
+/** Cash that disappeared from the source (bank reset, or dated after the clock was moved back). */
+export const removeCashMovement = spacetimedb.reducer({ id: t.string() }, (ctx, { id }) => {
+  requireRole(ctx, CAN_SYNC);
+  const existing = ctx.db.cashMovement.id.find(id);
+  if (!existing) return;
+  ctx.db.cashMovement.id.delete(id);
+  audit(ctx, { action: 'CASH_REMOVED', subjectType: 'cash_movement', subjectId: id, fromState: existing.status, detail: existing.bankRef });
+});
+
 /** Marks a sync pass as finished (keeps the reducer list honest about who wrote what). */
 export const recordSyncError = spacetimedb.reducer({ source: t.string(), error: t.string() }, (ctx, { source, error }) => {
   requireRole(ctx, CAN_SYNC);

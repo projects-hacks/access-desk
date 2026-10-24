@@ -10,7 +10,9 @@
     "seed:nessie": "tsx --env-file-if-exists=../.env src/scripts/seed-nessie.ts",
     "bank": "tsx --env-file-if-exists=../.env src/scripts/bank.ts",
     "test": "tsx --env-file-if-exists=../.env --test \"src/**/*.test.ts\"",
-    "stdb:check": "tsx --env-file-if-exists=../.env src/scripts/stdb-check.ts"
+    "stdb:check": "tsx --env-file-if-exists=../.env src/scripts/stdb-check.ts",
+    "sync": "tsx --env-file-if-exists=../.env src/scripts/sync-once.ts",
+    "sync:verify": "tsx --env-file-if-exists=../.env src/scripts/sync-verify.ts"
   },
   "dependencies": {
     "fastify": "^5.12.7",
