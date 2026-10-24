@@ -95,6 +95,7 @@ main { padding: 24px; }
 .waterfall small, .trace small { color: #777; font-size: 11px; }
 .pill.by-claude { background: #fae8ff; color: #86198f; }
 .pill.by-rules { background: #e0f2fe; color: #075985; }
+.pill.by-factory { background: #ffedd5; color: #9a3412; }
 .accuracy { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
 .accuracy summary { cursor: pointer; font-weight: 600; }
 .acc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 10px; }
