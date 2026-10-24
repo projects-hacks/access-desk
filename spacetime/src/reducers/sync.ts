@@ -32,7 +32,8 @@ export const upsertRawRecord = spacetimedb.reducer({ row: rawRecord.rowType }, (
 export const upsertClient = spacetimedb.reducer({ row: client.rowType }, (ctx, { row }) => {
   requireRole(ctx, CAN_SYNC);
   const existing = ctx.db.client.id.find(row.id);
-  if (existing) ctx.db.client.id.update({ ...row, status: existing.status });
+  // Status and tier belong to the system of work once imported (tier changes are controller-approved CREDIT_REVIEWs).
+  if (existing) ctx.db.client.id.update({ ...row, status: existing.status, tier: existing.tier });
   else ctx.db.client.insert(row);
 });
 
