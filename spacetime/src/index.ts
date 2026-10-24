@@ -11,4 +11,4 @@ export { placeHold } from './reducers/payments';
 export * from './reducers/gateway';
 export * from './reducers/books';
 export { upsertPolicy } from './reducers/policies';
-export { addRmNote } from './reducers/notes';
+export { addRmNote, recordInvestigation } from './reducers/notes';

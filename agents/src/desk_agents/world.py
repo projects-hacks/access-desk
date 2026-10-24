@@ -8,6 +8,7 @@ Row = dict[str, Any]
 PER_CLIENT = [
     "invoice", "dispute", "contract_clause", "access_lever", "hold", "custody_holding", "position",
     "work_item", "deadline", "payer_identity", "exploit_flag", "rm_note", "precedent",
+    "access_request",
 ]
 
 
@@ -28,6 +29,7 @@ class ClientView:
     exploit_flag: list[Row] = field(default_factory=list)
     rm_note: list[Row] = field(default_factory=list)
     precedent: list[Row] = field(default_factory=list)
+    access_request: list[Row] = field(default_factory=list)
     cash: list[Row] = field(default_factory=list)
     in_transit: list[Row] = field(default_factory=list)
     rejections: list[Row] = field(default_factory=list)
@@ -46,6 +48,8 @@ class World:
     clients: dict[str, ClientView]
     work_items: dict[int, Row]
     readings: dict[int, Any] = field(default_factory=dict)
+    policies: list[Row] = field(default_factory=list)
+    investigated: set[int] = field(default_factory=set)
 
 
 def load_world(db: SpacetimeClient) -> World:
@@ -83,6 +87,8 @@ def load_world(db: SpacetimeClient) -> World:
         capability=db.sql("SELECT * FROM capability"),
         clients=views,
         work_items=work_items,
+        policies=db.sql("SELECT * FROM policy WHERE status = 'active'"),
+        investigated={s["work_item_id"] for s in db.sql("SELECT * FROM investigation_step")},
     )
 
 

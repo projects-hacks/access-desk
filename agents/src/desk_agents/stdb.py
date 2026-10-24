@@ -87,6 +87,10 @@ class SpacetimeClient:
         """kind: promise_to_pay | follow_up. Resolved automatically when the sim date reaches due_on."""
         self.call("set_deadline", client_id, kind, due_on, note, work_item_id)
 
+    def record_investigation(self, work_item_id: int, steps: list[dict[str, str]]) -> None:
+        """Steps are {tool, summary, status}, in the order the agent took them."""
+        self.call("record_investigation", work_item_id, steps)
+
     def upsert_precedent(self, row: dict[str, Any]) -> None:
         """A decision worth learning from. `work_item_id` is optional: pass {"some": id} or {"none": []}."""
         self.call("upsert_precedent", row)

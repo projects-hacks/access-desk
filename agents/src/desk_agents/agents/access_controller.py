@@ -1,8 +1,11 @@
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
+
+import httpx
 
 from ..config import settings
 from ..models import Proposal, WorkItemKind
@@ -59,6 +62,7 @@ class AccessController(Agent):
         super().__init__(db)
         self.reader = reader or Reader()
         self.readings: dict[int, RmReading] = {}
+        self.unavailable: set[str] = set()
 
     async def run(self) -> list[Proposal]:
         world = self.observe()
@@ -76,11 +80,19 @@ class AccessController(Agent):
         return world
 
     def execute(self, move: Move) -> None:
+        if move.action in self.unavailable:
+            return
         try:
             getattr(self.db, move.action)(**move.args)
             log.info("[%s] %s %s: %s", self.name, move.action, move.client_id, move.summary)
         except ReducerError as e:
             log.warning("[%s] %s %s refused: %s", self.name, move.action, move.client_id, e)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                self.unavailable.add(move.action)
+                log.warning("[%s] %s is not published in this database yet; skipping it", self.name, move.action)
+            else:
+                log.warning("[%s] %s %s failed: %s", self.name, move.action, move.client_id, e)
 
 
 def plan(world: World, escalation_days: int | None = None) -> list[Move]:
@@ -88,7 +100,7 @@ def plan(world: World, escalation_days: int | None = None) -> list[Move]:
     ladder = ladders(world.capability)
     moves = []
     for view in world.clients.values():
-        moves += precedents_due(view, world)
+        moves += precedents_due(view, world) + investigations_due(view, world)
         move = next_move(view, world, ladder, days)
         if move:
             moves.append(move)
@@ -131,7 +143,7 @@ def next_move(view: ClientView, world: World, ladder: dict[str, list[str]], esca
     episode = episode_start(view, defaulted)
     if cure_blocks(view) or rejected_since(view, episode, "RESTRICTION") is not None:
         return None
-    return restriction(view, today, ladder, escalation_days)
+    return restriction(view, today, ladder, escalation_days, only_levers=agreed_levers(view))
 
 
 def overdue_invoices(view: ClientView, today: str) -> list[Row]:
@@ -232,7 +244,9 @@ def usable_steps(view: ClientView, lever: str, ladder: dict[str, list[str]]) -> 
     return steps
 
 
-def restriction(view: ClientView, today: str, ladder: dict[str, list[str]], escalation_days: int) -> Move | None:
+def restriction(
+    view: ClientView, today: str, ladder: dict[str, list[str]], escalation_days: int, only_levers: set[str] | None = None,
+) -> Move | None:
     overdue = overdue_invoices(view, today)
     if not overdue:
         return None
@@ -250,7 +264,7 @@ def restriction(view: ClientView, today: str, ladder: dict[str, list[str]], esca
         step = current_step(view, lever)
         position = steps.index(step) + 1 if step in steps else (len(steps) if step else 0)
         rungs_in_place += position
-        if position >= len(steps):
+        if position >= len(steps) or (only_levers is not None and name not in only_levers):
             continue
         if name == "withdrawals":
             if not allowed(view, "set_off"):
@@ -407,6 +421,8 @@ def rm_reply(view: ClientView, world: World) -> Move | None:
             continue
         if reading.intent == "already_paid":
             return payment_check(view, note, reading, world)
+        if reading.intent == "material_event":
+            return material_event_case(view, note, reading, world)
         if reading.intent == "exception_request":
             return exception_case(view, note, reading, world)
     return None
@@ -482,6 +498,106 @@ def exception_case(view: ClientView, note: Row, reading: RmReading, world: World
         confidence=0.5,
     )
     return Move(action="propose", client_id=view.id, args={"p": proposal}, summary=proposal.title)
+
+
+EVENT_WORDS = {
+    "acquisition": "being acquired", "merger": "merging", "insolvency": "insolvent", "wind_down": "winding down",
+    "regulatory": "under regulatory action", "other": "going through a material change",
+}
+
+
+def material_event_case(view: ClientView, note: Row, reading: RmReading, world: World) -> Move:
+    today = world.today
+    name = view.client["name"]
+    event = reading.event_type or "other"
+    who = f" by {reading.counterparty}" if reading.counterparty and event in ("acquisition", "merger") else ""
+    when = reading.effective_date
+    defaulted = defaulted_invoices(view, today)
+    open_invoices = [i for i in view.invoice if i["paid_cents"] < i["amount_cents"] and i["status"] != "disputed"]
+    in_default, total_open = owed(defaulted), owed(open_invoices)
+    usd_cash = next((h["value_cents"] for h in view.custody_holding if h["asset"] == "USD"), 0)
+    custody = sum(h["value_cents"] for h in view.custody_holding)
+    coc, set_off, debit = clause(view, "change_of_control"), clause(view, "set_off"), clause(view, "debit")
+    cure = latest_deadline(view, "cure_period")
+    since = min((i["due_on"] for i in defaulted), default=today)
+    withdrawn = sum(r["allowed_cents"] for r in view.access_request if r["action"] == "withdraw" and r["decision"] != "denied")
+    flagged = [f for f in view.exploit_flag if f["status"] == "open"]
+    covering = [p["policy_id"] for p in world.policies if re.search(r"change of control|acqui|merger|insolv", p["title"] + p["rule_json"], re.IGNORECASE)]
+
+    steps = [
+        ("rm_note", f"{note['author']}: {name} is {EVENT_WORDS[event]}{who}{f', effective {when}' if when else ''}."),
+        ("policy_search", f"Covered by {', '.join(covering)}." if covering else
+         f"None of the {len(world.policies)} active policies covers a change of control: this needs a controller."),
+        ("contract", "; ".join(filter(None, [
+            f"§{coc['clause']}: {coc['text'].rstrip('.')}" if coc and coc["allowed"] else "No change-of-control clause",
+            f"§{set_off['clause']} set-off allowed" if set_off and set_off["allowed"] else "no set-off right",
+            "custody debits allowed" if debit and debit["allowed"] else f"§{debit['clause'] if debit else '6.3'} debits need written consent",
+            f"cure period {cure['status']} until {cure['due_on']}" if cure and cure["status"] in ("open", "expired") else None,
+        ])) + "."),
+        ("exposure", (f"{usd(in_default)} in default, {usd(total_open)} open in total; custody holds {usd(usd_cash)} USD "
+                     f"of {usd(custody)} overall.")),
+        ("custody_activity", (f"{usd(withdrawn)} withdrawn from custody" if withdrawn else "No withdrawals")
+         + f" since {since}" + (f"; open flags: {', '.join(f['pattern'] for f in flagged)}" if flagged else "") + "."),
+    ]
+    past = [p for p in view.precedent if p["decision"]]
+    if past:
+        steps.append(("precedents", "; ".join(f"{p['decided_on']} {p['proposed']} → {p['decision']} ({p['outcome']})" for p in past[-3:])))
+
+    plan_steps = []
+    if coc and coc["allowed"]:
+        plan_steps.append(f"Invoke §{coc['clause']}: all {usd(total_open)} open becomes payable at closing"
+                          f"{f' on {when}' if when else ''}; send the acquirer a payoff statement.")
+    if cure and cure["status"] == "open":
+        plan_steps.append(f"No restriction before the cure period ends {cure['due_on']} (§{clause(view, 'cure')['clause']}).")
+    running = [{"api": "API access"}.get(lever["lever"], lever["lever"]) for lever in view.access_lever if lever["lever"] != "withdrawals" and lever["state"] != "not_used"]
+    if set_off and set_off["allowed"] and in_default:
+        plan_steps.append(f"If still unpaid then, hold {usd(in_default)} of withdrawals under §{set_off['clause']}; "
+                          f"keep {' and '.join(running) or 'everything else'} running so the deal is not disrupted.")
+    if not (debit and debit["allowed"]):
+        plan_steps.append("Ask the RM for written consent to debit custody, which would settle it today.")
+    if usd_cash < total_open or flagged:
+        plan_steps.append("Custody cash is moving out: secure the balance before closing rather than after.")
+    plan_steps.append(f"Ask {note['author']} for the closing date, the acquirer's legal entity and whether the MSA is assigned.")
+    steps.append(("proposal", " ".join(plan_steps)))
+
+    proposal = Proposal(
+        kind=WorkItemKind.NOVEL_CASE,
+        client_id=view.id,
+        subject_id=f"rm_note:{note['id']}",
+        title=f"{name} is {EVENT_WORDS[event]}{who}: no policy covers it",
+        amount_cents=total_open,
+        proposal={"rmNoteId": note["id"], "event": event, "counterparty": reading.counterparty, "effectiveDate": when,
+                  "onlyLevers": ["withdrawals"], "investigation": [{"tool": t, "summary": x} for t, x in steps]},
+        reasoning=" ".join(plan_steps),
+        policy_ref="none",
+        clauses_cited=[c["clause"] for c in (coc, set_off) if c and c["allowed"]],
+        confidence=0.6,
+    )
+    return Move(action="propose", client_id=view.id, args={"p": proposal}, summary=proposal.title)
+
+
+def agreed_levers(view: ClientView) -> set[str] | None:
+    approved = {a["work_item_id"] for a in view.approvals}
+    for item in view.work_item:
+        if item["kind"] == "NOVEL_CASE" and item["id"] in approved:
+            levers = json.loads(item["proposal_json"]).get("onlyLevers")
+            if levers is not None:
+                return set(levers)
+    return None
+
+
+def investigations_due(view: ClientView, world: World) -> list[Move]:
+    moves = []
+    for item in view.work_item:
+        if item["kind"] != "NOVEL_CASE" or item["id"] in world.investigated:
+            continue
+        steps = json.loads(item["proposal_json"]).get("investigation")
+        if steps:
+            rows = [{"tool": s["tool"], "summary": s["summary"], "status": "done"} for s in steps]
+            moves.append(Move(action="record_investigation", client_id=view.id,
+                              args={"work_item_id": item["id"], "steps": rows},
+                              summary=f"{len(rows)} investigation steps on WI-{item['id']}"))
+    return moves
 
 
 def grace_until(view: ClientView, today: str, escalation_days: int) -> str | None:

@@ -255,5 +255,72 @@ class Precedents(unittest.TestCase):
         self.assertFalse([m for m in moves(v) if m.action == "upsert_precedent"])
 
 
+ACQUIRED = RmReading(intent="material_event", summary="being acquired", event_type="acquisition",
+                     counterparty="Meridian Holdings", effective_date="2026-04-15")
+
+
+def cobalt(**extra):
+    v = view(products=("CUSTODY", "API"), owed=(("INV-1760", "CUSTODY", 38_200_00), ("INV-1761", "API", 23_200_00)),
+             cure="open", cure_due="2026-03-14", usd=189_470_00, rm_note=[NOTE], **extra)
+    v.contract_clause.append({"kind": "change_of_control", "clause": "12.4", "allowed": True,
+                              "text": "Amounts due become payable at the closing of a change of control."})
+    v.contract_clause[1]["allowed"] = False
+    return v
+
+
+def world_with_policies(v, **kw):
+    w = world(v, **kw)
+    w.policies = [{"policy_id": "pol-006", "title": "Restrict one lever one step at a time", "rule_json": "{}"}]
+    return w
+
+
+class MaterialEvent(unittest.TestCase):
+    def case(self, v, **kw):
+        found = [m for m in plan(world_with_policies(v, readings={4: ACQUIRED}, **kw), escalation_days=7)
+                 if m.action == "propose"]
+        return found[0].args["p"] if found else None
+
+    def test_acquisition_becomes_novel_case_with_investigation(self):
+        p = self.case(cobalt(), today="2026-03-03")
+        self.assertEqual((p.kind.value, p.required_role.value, p.subject_id), ("NOVEL_CASE", "CONTROLLER", "rm_note:4"))
+        tools = [s["tool"] for s in p.proposal["investigation"]]
+        self.assertEqual(tools, ["rm_note", "policy_search", "contract", "exposure", "custody_activity", "proposal"])
+        steps = {s["tool"]: s["summary"] for s in p.proposal["investigation"]}
+        self.assertIn("None of the 1 active policies covers a change of control", steps["policy_search"])
+        self.assertIn("§12.4", steps["contract"])
+        self.assertIn("Meridian Holdings", p.title)
+        self.assertIn("Invoke §12.4", p.reasoning)
+        self.assertIn("No restriction before the cure period ends 2026-03-14", p.reasoning)
+        self.assertIn("hold $61,400.00 of withdrawals under §7.2", p.reasoning)
+        self.assertIn("written consent to debit", p.reasoning)
+        self.assertEqual(p.clauses_cited, ["12.4", "7.2"])
+
+    def test_cash_leaving_custody_is_called_out(self):
+        withdrawals = [{"action": "withdraw", "decision": "approved", "allowed_cents": 1_350_000_00}]
+        flags = [{"status": "open", "pattern": "withdrawal_during_cure"}]
+        p = self.case(cobalt(access_request=withdrawals, exploit_flag=flags), today="2026-03-03")
+        steps = {s["tool"]: s["summary"] for s in p.proposal["investigation"]}
+        self.assertIn("$1,350,000.00 withdrawn", steps["custody_activity"])
+        self.assertIn("withdrawal_during_cure", steps["custody_activity"])
+        self.assertIn("secure the balance before closing", p.reasoning)
+
+    def test_approved_plan_restricts_only_withdrawals(self):
+        case = item(20, "NOVEL_CASE", "APPROVED", {"onlyLevers": ["withdrawals"]}, subject="rm_note:4")
+        v = cobalt(work_item=[case], approvals=[event("APPROVED", "2026-03-05", 20, kind="NOVEL_CASE")])
+        v.deadline[0].update(status="expired")
+        m = only(v, today="2026-03-15")
+        self.assertEqual((m.action, m.args["lever"], m.args["step"]), ("propose_restriction", "withdrawals", "HOLD_AMOUNT_OWED"))
+        v.access_lever[0].update(state="limited", detail="$61,400.00 held")
+        self.assertIsNone(only(v, today="2026-04-01"))
+
+    def test_investigation_recorded_once(self):
+        case = item(20, "NOVEL_CASE", "PROPOSED", {"investigation": [{"tool": "rm_note", "summary": "x"}]}, subject="rm_note:4")
+        w = world_with_policies(cobalt(work_item=[case]))
+        rec = [m for m in plan(w, escalation_days=7) if m.action == "record_investigation"]
+        self.assertEqual(rec[0].args, {"work_item_id": 20, "steps": [{"tool": "rm_note", "summary": "x", "status": "done"}]})
+        w.investigated = {20}
+        self.assertFalse([m for m in plan(w, escalation_days=7) if m.action == "record_investigation"])
+
+
 if __name__ == "__main__":
     unittest.main()
