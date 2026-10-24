@@ -4,6 +4,7 @@ import { CAN_APPROVE, CAN_POST, type Role } from '../roles';
 import { spacetimedb } from '../schema';
 import { canTransition, type WorkItemState } from '../workflow';
 import { executeApproved } from './actions';
+import { recordCreditPrecedent } from './credit';
 import { onPaymentApproved } from './payments';
 
 export const proposeWorkItem = spacetimedb.reducer(
@@ -76,5 +77,6 @@ export const transitionWorkItem = spacetimedb.reducer(
       onPaymentApproved(ctx, item.id);
       executeApproved(ctx, item.id);
     }
+    if (to === 'REJECTED') recordCreditPrecedent(ctx, item.id, 'Rejected', note);
   },
 );

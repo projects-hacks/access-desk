@@ -5,6 +5,7 @@ import { GL, cr, dr, queueCommand, queueJournal } from '../payments/gateway';
 import { cureState, defaultedInvoices } from '../payments/deadlines';
 import { formatUsd } from '../payments/match';
 import { spacetimedb } from '../schema';
+import { applyCreditReview } from './credit';
 
 /**
  * Actions agents (and people) can propose. Each one is checked against the
@@ -338,6 +339,10 @@ export function executeApproved(ctx: Ctx, workItemId: bigint) {
         id: 0n, clientId: item.clientId, workItemId: item.id, channel: p.channel, body: p.body, status: 'queued', sentOn: simDate(ctx), ref: `WI-${item.id}`, sentAt: undefined,
       });
       queueCommand(ctx, `SEND_NOTICE:${notice.id}`, { type: 'SEND_NOTICE', clientId: item.clientId, channel: p.channel, body: p.body, noticeId: String(notice.id) }, item.id);
+      return;
+    }
+    case 'CREDIT_REVIEW': {
+      applyCreditReview(ctx, item.id);
       return;
     }
   }

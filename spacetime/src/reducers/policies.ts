@@ -15,6 +15,9 @@ const BASELINE = [
   ['pol-012', 'Overpayments are held as credit on account', { when: 'payment exceeds quoted invoices', then: 'apply, credit the excess' }],
   ['pol-013', 'Duplicate payments: hold as unapplied cash and propose a refund', { when: 'quoted invoices already paid', then: 'propose refund to controller' }],
   ['pol-015', 'Returned payments reverse their applications and reopen the invoices', { when: 'bank returns a payment', then: 'reverse applications' }],
+  ['pol-020', "Downgrade a client's tier on score or exploit flag, with controller approval", { when: 'formula tier worse than current, or an exploit flag', then: 'propose up to two steps down to a controller' }],
+  ['pol-021', "Upgrade a client's tier one step at a time, with controller approval", { when: 'reliability clears the band line by 3+ points, no recent_late flag', then: 'propose one step up to a controller' }],
+  ['pol-022', "Strategic clients' tiers change only by a person; the agent may request a review", { when: 'strategic client, formula tier worse than current', then: 'propose a review, never a tier change' }],
 ] as const;
 
 export function seedBaselinePolicies(ctx: Ctx) {
