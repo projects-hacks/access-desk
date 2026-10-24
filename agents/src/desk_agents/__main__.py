@@ -1,11 +1,13 @@
 import asyncio
 import logging
+import sys
 
-from .agents.access_controller import AccessController
+from .agents.access_controller import AccessController, plan
 from .agents.base import Agent
 from .agents.credit_analyst import CreditAnalyst
 from .config import settings
 from .stdb import SpacetimeClient
+from .world import load_world
 
 log = logging.getLogger("desk_agents")
 
@@ -25,9 +27,24 @@ async def loop(agents: list[Agent], db: SpacetimeClient) -> None:
         await asyncio.sleep(settings.agent_interval_seconds)
 
 
+def dry_run(db: SpacetimeClient) -> None:
+    world = load_world(db)
+    moves = plan(world)
+    print(f"sim date {world.today} · {len(moves)} move(s)")
+    for move in moves:
+        print(f"\n{move.client_id} {world.clients[move.client_id].client['name']}: {move.action} · {move.summary}")
+        for key, value in move.args.items():
+            print(f"    {key}: {value}")
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    db = SpacetimeClient(settings.stdb_http_url, settings.stdb_database, settings.stdb_agent_token)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    db =SpacetimeClient(settings.stdb_http_url, settings.stdb_database, settings.stdb_agent_token)
+    if sys.argv[1:] == ["plan"]:
+        dry_run(db)
+        db.close()
+        return
     try:
         asyncio.run(loop([CreditAnalyst(db), AccessController(db)], db))
     except KeyboardInterrupt:

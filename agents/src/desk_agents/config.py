@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-opus-5-5"
     factory_api_key: str | None = None
     agent_interval_seconds: float = 15.0
+    escalation_days: int = 7
 
 
 settings = Settings()
