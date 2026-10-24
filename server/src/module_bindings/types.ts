@@ -309,6 +309,13 @@ export const InvestigationStep = __t.object("InvestigationStep", {
 });
 export type InvestigationStep = __Infer<typeof InvestigationStep>;
 
+export const InvestigationStepInput = __t.object("InvestigationStepInput", {
+  tool: __t.string(),
+  summary: __t.string(),
+  status: __t.string(),
+});
+export type InvestigationStepInput = __Infer<typeof InvestigationStepInput>;
+
 export const Invoice = __t.object("Invoice", {
   id: __t.string(),
   clientId: __t.string(),
