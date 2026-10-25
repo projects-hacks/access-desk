@@ -61,6 +61,12 @@ const FILTERS = {
   refused: { label: 'Refused', test: isRefused },
   access: { label: 'Access', test: (e: AuditEvent) => ACCESS.has(e.action) },
   payments: { label: 'Payments', test: (e: AuditEvent) => PAYMENTS.has(e.action) },
+  learning: {
+    label: 'Learning',
+    // A client's own policy from start to verdict: put in force, its reminders, graded; and lessons from people.
+    test: (e: AuditEvent) => ['POLICY_ACTIVATED', 'POLICY_OUTCOME', 'LEARNED', 'POLICY_REJECTED'].includes(e.action)
+      || (e.action === 'AUTO_APPLIED' && /^Reminder to /.test(e.detail)),
+  },
   notes: { label: 'Notes', test: (e: AuditEvent) => e.action === 'RM_NOTE' },
   deadlines: { label: 'Deadlines', test: (e: AuditEvent) => e.action.startsWith('DEADLINE') },
 } as const;
