@@ -1,6 +1,6 @@
 import { SenderError, t } from 'spacetimedb/server';
 import { AGENTS, MAX_TASK_ATTEMPTS, step, wake, type AgentName } from '../agents';
-import { requireRole, type Ctx } from '../context';
+import { audit, requireRole, type Ctx } from '../context';
 import { spacetimedb } from '../schema';
 
 /**
@@ -73,6 +73,11 @@ export const recordGuardrail = spacetimedb.reducer(
     step(ctx, {
       clientId: task.clientId, actor: 'guardrail', agent: task.agent as AgentName, opens: true,
       text: `Refused: ${attempted.trim()}`, checks: [{ ok: false, label: refusal.trim() }], instead: instead.trim(),
+    });
+    // The refusal itself happened in the reducer that threw (and rolled back); this is its record.
+    audit(ctx, {
+      action: 'GUARDRAIL_REFUSED', subjectType: 'agent_task', subjectId: String(task.id), clientId: task.clientId,
+      fromState: task.agent, toState: 'refused', allowed: false, detail: `${attempted.trim()}: ${refusal.trim()}${instead.trim() ? ` · instead: ${instead.trim()}` : ''}`,
     });
   },
 );

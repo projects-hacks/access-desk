@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTable } from 'spacetimedb/react';
 import { tables } from '../module_bindings';
 import type { AuditEvent, CashMovement, PaymentApplication, TieOutRun } from '../module_bindings/types';
-import { label, parseJson, plainDates } from './format';
+import { AGENTS } from './agents';
+import { label, parseJson, plainText } from './format';
 
 /** Live bank movements (the Nessie window), newest first. History stays out of the subscription. */
 export function useBankFeed(): [CashMovement[], boolean] {
@@ -120,14 +121,25 @@ export const nessieId = (m: CashMovement) => (m.source === 'nessie' ? m.id.repla
 const QUIET = new Set(['TIE_OUT', 'COMMAND_QUEUED', 'COMMAND_DONE', 'CASH_RECONCILED', 'SET_PLATFORM', 'ASSIGN_ROLE', 'POLICY_SAVED', 'BIND_PORTAL']);
 export const isNews = (e: AuditEvent) => !QUIET.has(e.action);
 
-/** Who did it, as people say it. */
-export function actor(e: AuditEvent): string {
+/** Which of the four agents wrote an audit row (the split the module uses for panel steps). `kind` is its work item's. */
+export function agentOf(e: AuditEvent, kind?: string): (typeof AGENTS)[number] {
+  const key =
+    e.action === 'GUARDRAIL_REFUSED' ? e.fromState
+    : e.action === 'CREDIT_SCORED' ? 'learning'
+    : e.action === 'TIER_CHANGED' || kind === 'CREDIT_REVIEW' || kind === 'POLICY_DRAFT' || (e.action === 'AGENT_WAITED' && /tier/.test(e.toState)) ? 'scoring'
+    : e.action === 'EXPLOIT_FLAGGED' || kind === 'EXPLOIT_FLAG' ? 'exploit'
+    : 'access';
+  return AGENTS.find((a) => a.key === key) ?? AGENTS[3];
+}
+
+/** Who did it, as people say it: the agent's name, the system part, or the person. */
+export function actor(e: AuditEvent, kind?: string): string {
   switch (e.actorRole) {
-    case 'AGENT': return 'Agent';
-    case 'SYNC': return 'Sync';
+    case 'AGENT': return agentOf(e, kind).name;
+    case 'SYNC': return 'Payment checking';
     case 'GATEWAY': return 'Gateway';
     case 'SYSTEM': return 'Scheduler';
-    case 'DEMO': return 'Demo';
+    case 'DEMO': case 'CLIENT': return 'Client';
     default: return e.actorName || e.actorRole.toLowerCase();
   }
 }
@@ -140,7 +152,7 @@ const VERB: Record<string, string> = {
 /** One audit event as a sentence: "approved · Move Halcyon from tier 1 to tier 2". */
 export function narrate(e: AuditEvent, title?: string): { verb: string; what: string } {
   const n = narrateRaw(e, title);
-  return { verb: n.verb, what: plainDates(n.what) };
+  return { verb: n.verb, what: plainText(n.what) };
 }
 
 function narrateRaw(e: AuditEvent, title?: string): { verb: string; what: string } {
@@ -155,6 +167,14 @@ function narrateRaw(e: AuditEvent, title?: string): { verb: string; what: string
     case 'HOLD_RELEASED': return { verb: 'released a hold', what: e.detail };
     case 'ADVANCE_CLOCK': return { verb: 'moved the clock', what: `to ${e.toState}` };
     case 'DEADLINE_SET': case 'DEADLINE_DUE': case 'DEADLINE_MET': return { verb: label(e.action).toLowerCase(), what: e.detail };
+    case 'AGENT_WAITED': return { verb: 'held off', what: e.detail };
+    case 'GUARDRAIL_REFUSED': return { verb: 'was refused', what: e.detail };
+    case 'ORDER_PLACED': return { verb: 'placed an order', what: e.detail };
+    case 'ORDER_REFUSED': return { verb: 'had an order refused', what: e.detail };
+    case 'WITHDRAWAL_REQUESTED': return { verb: 'asked to withdraw', what: e.detail };
+    case 'EXPLOIT_FLAGGED': return { verb: 'flagged a pattern', what: e.detail };
+    case 'TIER_CHANGED': return { verb: 'changed a tier', what: e.detail };
+    case 'RM_NOTE': return { verb: 'added a note', what: e.detail };
     default: return { verb: label(e.action).toLowerCase(), what: e.detail };
   }
 }

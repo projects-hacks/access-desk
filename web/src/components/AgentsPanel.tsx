@@ -227,19 +227,15 @@ function EarlierRow({ view, open, onToggle }: { view: EpisodeView; open: boolean
 function NeedCard({ need, onOpen }: { need: Need; onOpen: () => void }) {
   return (
     <div className="ap-need">
-      <div className="ap-need-text">
-        <Hand size={16} aria-hidden />
-        <span>
-          <strong>{withoutClient(need.title, need.clientName)}</strong>
-          {need.detail && !sameNews(need.detail, need.title, need.clientName) && <span className="muted">{withoutClient(need.detail, need.clientName)}</span>}
-        </span>
-      </div>
-      <div className="ap-need-foot">
-        <span>{need.clientName}</span>
-        <button className="btn primary" onClick={onOpen}>
-          Open in approvals <ArrowUpRight size={13} aria-hidden />
-        </button>
-      </div>
+      <Hand size={16} aria-hidden />
+      <span className="ap-need-text">
+        <strong>{withoutClient(need.title, need.clientName)}</strong>
+        {need.detail && !sameNews(need.detail, need.title, need.clientName) && <span className="muted">{withoutClient(need.detail, need.clientName)}</span>}
+        <span className="ap-need-client">{need.clientName}</span>
+      </span>
+      <button className="btn" onClick={onOpen}>
+        Review <ArrowUpRight size={13} aria-hidden />
+      </button>
     </div>
   );
 }
@@ -330,7 +326,7 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
         {before.length > 0 && (
           <section className="ap-section">
             <div className="ap-headrow">
-              <h4 className="ap-head">{simDay(beforeDay).replace(/, \d{4}$/, '')}</h4>
+              <h4 className="ap-head">{beforeDay ? simDay(beforeDay).replace(/, \d{4}$/, '') : 'Earlier'}</h4>
             </div>
             <ul className="ap-list">
               {before.map((v) => (

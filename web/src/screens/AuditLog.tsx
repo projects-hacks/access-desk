@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useTable } from 'spacetimedb/react';
+import { Download } from 'lucide-react';
+import { Hint } from '../components/Hint';
 import { SlidingPill } from '../components/SlidingPill';
+import { sameNews } from '../lib/agents';
+import { actor, agentOf } from '../lib/bank';
 import { LEVERS } from '../lib/clients';
-import { label, simDay } from '../lib/format';
+import { label, plainText, simDay } from '../lib/format';
 import { tables } from '../module_bindings';
 import type { AuditEvent } from '../module_bindings/types';
 
@@ -39,6 +43,9 @@ const PAYMENTS = new Set([
 ]);
 
 const isPerson = (e: AuditEvent) => PEOPLE.includes(e.actorRole);
+/** Attempts a guardrail stopped: an agent's action, a client's order, an approval that wasn't allowed. */
+const REFUSALS = new Set(['GUARDRAIL_REFUSED', 'ORDER_REFUSED', 'TRANSITION', 'TIER_CHANGED']);
+const isRefused = (e: AuditEvent) => !e.allowed && REFUSALS.has(e.action);
 /** The gateway confirming its own commands (APPROVED → POSTED) repeats what was already logged. */
 const isEcho = (e: AuditEvent) => e.action === 'TRANSITION' && e.toState === 'POSTED';
 
@@ -48,7 +55,9 @@ const FILTERS = {
     // Bank-feed arrivals are hundreds of rows; they live under Payments.
     test: (e: AuditEvent) => e.action !== 'CASH_RECEIVED',
   },
+  agents: { label: 'By agents', test: (e: AuditEvent) => e.actorRole === 'AGENT' },
   people: { label: 'Changed by people', test: isPerson },
+  refused: { label: 'Refused', test: isRefused },
   access: { label: 'Access', test: (e: AuditEvent) => ACCESS.has(e.action) },
   payments: { label: 'Payments', test: (e: AuditEvent) => PAYMENTS.has(e.action) },
   notes: { label: 'Notes', test: (e: AuditEvent) => e.action === 'RM_NOTE' },
@@ -64,18 +73,29 @@ export function AuditLog() {
   const [events, ready] = useTable(tables.auditEvent);
   const [clients] = useTable(tables.client);
   const [items] = useTable(tables.workItem);
+  const [policies] = useTable(tables.policy);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PAGE);
 
   const clientName = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
   const reasoning = useMemo(() => new Map(items.map((w) => [w.id, w])), [items]);
+  /** Policy id → its current title (the active version, else the newest). */
+  const policyTitle = useMemo(() => {
+    const out = new Map<string, { title: string; version: number; active: boolean }>();
+    for (const p of policies) {
+      const was = out.get(p.policyId);
+      const active = p.status === 'active';
+      if (!was || (active && !was.active) || (active === was.active && p.version > was.version)) out.set(p.policyId, { title: p.title, version: p.version, active });
+    }
+    return out;
+  }, [policies]);
 
-  // Only what took effect: refused attempts and plumbing never show.
+  // What took effect, plus the attempts a guardrail stopped; plumbing never shows.
   const visible = useMemo(
     () =>
       events
-        .filter((e) => e.allowed && !PLUMBING.has(e.action) && !isEcho(e))
+        .filter((e) => (e.allowed || isRefused(e)) && !PLUMBING.has(e.action) && !isEcho(e))
         .sort((a, b) => (a.id < b.id ? 1 : -1)),
     [events],
   );
@@ -101,12 +121,30 @@ export function AuditLog() {
     return visible.filter((e) => {
       if (!FILTERS[filter].test(e)) return false;
       if (!words.length) return true;
-      const text = [clientName.get(e.clientId) ?? '', e.clientId, e.detail, e.actorName, e.action]
+      const text = [clientName.get(e.clientId) ?? '', e.clientId, e.detail, who(e), e.action]
         .join(' ')
         .toLowerCase();
       return words.every((w) => text.includes(w));
     });
-  }, [visible, filter, query, clientName]);
+  }, [visible, filter, query, clientName, reasoning]);
+
+  function who(e: AuditEvent) {
+    return actor(e, e.workItemId !== undefined ? reasoning.get(e.workItemId)?.kind : undefined);
+  }
+
+  /** The current view as CSV, for an auditor's spreadsheet. */
+  function download() {
+    const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const rows = shown.map((e) => [
+      e.simDate, e.at.toDate().toISOString(), who(e), sentence(e), clientName.get(e.clientId) ?? e.clientId,
+      plainText(e.detail, clientName), e.allowed ? 'took effect' : 'refused', e.policyRef ? (policyTitle.get(e.policyRef)?.title ?? '') : '',
+    ]);
+    const csv = [['Business day', 'Time (UTC)', 'Who', 'What', 'Client', 'Detail', 'Outcome', 'Policy'], ...rows].map((r) => r.map(cell).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: `audit-log-${filter}.csv` });
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   const days = useMemo(() => {
     const out: { day: string; events: AuditEvent[] }[] = [];
@@ -124,10 +162,13 @@ export function AuditLog() {
         <div>
           <h2>Audit log</h2>
           <p className="muted">
-            Everything that took effect, newest first: what the agents did, and what people changed
-            after them.
+            Everything that took effect, newest first: what the agents did, what people changed after
+            them, and every attempt a guardrail stopped.
           </p>
         </div>
+        <button className="btn" onClick={download} disabled={!shown.length}>
+          <Download size={14} aria-hidden /> Download CSV
+        </button>
       </div>
 
       <div className="filters" role="toolbar" aria-label="Filter the audit log">
@@ -168,6 +209,8 @@ export function AuditLog() {
         <div className="empty">
           {filter === 'people'
             ? 'No one has changed anything by hand yet.'
+            : filter === 'refused'
+              ? 'No guardrail has had to stop anything yet.'
             : query
               ? `Nothing matches “${query}”.`
               : 'Nothing here yet.'}
@@ -185,7 +228,7 @@ export function AuditLog() {
                   const why = isPerson(e) && item?.policyRef === 'manual' ? item.reasoning : '';
                   const after = override ? overrides.restrictedBy.get(e.clientId) : undefined;
                   return (
-                    <li key={String(e.id)} className={isPerson(e) ? 'by-person' : ''}>
+                    <li key={String(e.id)} className={isRefused(e) ? 'refused' : isPerson(e) ? 'by-person' : ''}>
                       <span className="activity-time">
                         {e.at.toDate().toLocaleTimeString([], {
                           hour: 'numeric',
@@ -194,7 +237,7 @@ export function AuditLog() {
                       </span>
                       <div className="activity-body">
                         <div className="activity-line">
-                          <Actor e={e} />
+                          <Actor e={e} name={who(e)} kind={item?.kind} />
                           <span className="activity-what">{sentence(e)}</span>
                           {e.clientId && (
                             <span className="activity-client">
@@ -202,8 +245,8 @@ export function AuditLog() {
                             </span>
                           )}
                         </div>
-                        {e.detail && e.detail !== sentence(e) && (
-                          <div className="muted activity-detail">{e.detail}</div>
+                        {e.detail && !sameNews(e.detail, sentence(e), clientName.get(e.clientId)) && (
+                          <div className="muted activity-detail">{plainText(e.detail, clientName)}</div>
                         )}
                         {override && (
                           <div className="activity-override">
@@ -215,7 +258,9 @@ export function AuditLog() {
                         )}
                         {why && <blockquote className="activity-why">“{why}”</blockquote>}
                         {e.policyRef && e.policyRef !== 'manual' && (
-                          <span className="tag">{e.policyRef}</span>
+                          <span className="activity-policy">
+                            Under policy: {policyTitle.get(e.policyRef.split(':')[0]!)?.title ?? plainText(e.policyRef)}
+                          </span>
                         )}
                       </div>
                     </li>
@@ -235,10 +280,17 @@ export function AuditLog() {
   );
 }
 
-function Actor({ e }: { e: AuditEvent }) {
-  if (isPerson(e)) return <span className="actor person">{e.actorName || label(e.actorRole)}</span>;
-  if (e.actorRole === 'AGENT') return <span className="actor agent">Agent</span>;
-  return <span className="actor system">System</span>;
+function Actor({ e, name, kind }: { e: AuditEvent; name: string; kind?: string }) {
+  if (isPerson(e)) return <span className="actor person">{name || label(e.actorRole)}</span>;
+  if (e.actorRole === 'AGENT') {
+    const a = agentOf(e, kind);
+    return (
+      <Hint title={a.name} role={a.role} about={a.purpose}>
+        <span className="actor agent">{a.name} · {a.role}</span>
+      </Hint>
+    );
+  }
+  return <span className="actor system">{name}</span>;
 }
 
 const leverName = (subjectId: string) =>
@@ -254,7 +306,7 @@ function sentence(e: AuditEvent): string {
     case 'LEVER_SET':
       return `${leverName(e.subjectId)}: ${e.fromState || '?'} → ${e.toState || '?'}`;
     case 'TIER_CHANGED':
-      return `Tier ${e.fromState} → ${e.toState}`;
+      return e.allowed ? `Tier ${e.fromState} → ${e.toState}` : 'Tier change not applied';
     case 'PROPOSE':
       return 'Proposed for approval';
     case 'AUTO_APPLIED':
@@ -262,7 +314,7 @@ function sentence(e: AuditEvent): string {
         ? 'Applied under policy'
         : 'Applied';
     case 'TRANSITION':
-      return label(e.toState ?? '');
+      return e.allowed ? label(e.toState ?? '') : `Not allowed: ${label(e.toState ?? '').toLowerCase()}`;
     case 'RM_NOTE':
       return 'Added a note';
     case 'CASH_RECEIVED':
@@ -287,6 +339,12 @@ function sentence(e: AuditEvent): string {
       return 'Held off acting';
     case 'ADVANCE_CLOCK':
       return 'Moved the date forward';
+    case 'GUARDRAIL_REFUSED':
+      return 'Refused by a guardrail';
+    case 'ORDER_REFUSED':
+      return 'Order refused';
+    case 'ORDER_PLACED':
+      return 'Order placed';
     default:
       return label(e.action);
   }
