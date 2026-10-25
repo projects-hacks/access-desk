@@ -4,7 +4,7 @@ import { tables } from '../module_bindings';
 import type { AgentTask, Episode, EpisodeStep } from '../module_bindings/types';
 import { ago, useNow } from './bank';
 import { waitingReason } from './autonomy';
-import { plainText } from './format';
+import { bulletLines, plainText } from './format';
 
 /** The four Factory Droids, in roster order: who they are to the people watching, and what each is for. */
 export const AGENTS = [
@@ -185,7 +185,9 @@ export function useAgents(): AgentsView {
       .filter((e) => withAgent(e.id))
       .sort((a, b) => (a.id < b.id ? 1 : -1))
       .map((raw): EpisodeView & { settling: boolean } => {
-        const episode = { ...raw, trigger: tidy(raw.trigger, names), outcome: raw.outcome ? tidy(raw.outcome, names) : '' };
+        // An outcome written as points reads as its first point on the one-line row.
+        const outcome = raw.outcome ? (bulletLines(raw.outcome)?.[0] ?? raw.outcome) : '';
+        const episode = { ...raw, trigger: tidy(raw.trigger, names), outcome: outcome ? tidy(outcome, names) : '' };
         const list = stepsBy.get(raw.id) ?? [];
         const landed = lastArrival(list);
         const running = busy.has(episode.id) || now - landed < BUSY_MS;

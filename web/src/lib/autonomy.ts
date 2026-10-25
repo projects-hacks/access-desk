@@ -15,6 +15,7 @@ export const REASONS = {
   confidence: { label: 'Low confidence', note: 'The agent is under 10% sure' },
   promotion: { label: 'Tier 1 promotion', note: 'Moves a client into Tier 1' },
   judgment: { label: 'Model judgment', note: 'Goes beyond the rules at under 70% confidence' },
+  case: { label: 'Needs a decision', note: 'Outside what the agent may decide on its own' },
   console: { label: 'Console change', note: 'Made by the controller' },
 } as const;
 
@@ -40,6 +41,8 @@ export function reasonFor(item: WorkItem, client?: Client): ReasonKey | undefine
       && (base.action !== p.action || (p.action === 'tier_change' && Number(base.to_tier) !== Number(p.to_tier)));
     if (beyond && item.confidence < MIN_OVERRIDE_CONFIDENCE) return 'judgment';
   }
+  // Anything else the module routed to a person (an RM's exception request, a case no policy covers).
+  if (item.kind !== 'CREDIT_REVIEW') return 'case';
   return;
 }
 

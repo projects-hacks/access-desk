@@ -101,12 +101,18 @@ function StepRow({ step, t0, last, animate }: { step: EpisodeStep; t0: number; l
           {isAgent(step.actor) && <span className="ap-droid">· Droid</span>}
           {typing && <span className="ap-reasoning">reasoning</span>}
         </div>
-        <div
-          className={`ap-text ${open ? 'open' : ''} ${long ? 'long' : ''}`}
-          {...(long ? activate(() => setOpen(!open)) : {})}
-        >
-          {step.text}
-        </div>
+        {bulletLines(step.text) ? (
+          <ul className="ap-text ap-points">
+            {bulletLines(step.text)!.map((l, i) => <li key={i}>{l}</li>)}
+          </ul>
+        ) : (
+          <div
+            className={`ap-text ${open ? 'open' : ''} ${long ? 'long' : ''}`}
+            {...(long ? activate(() => setOpen(!open)) : {})}
+          >
+            {step.text}
+          </div>
+        )}
         {step.reason && (bulletLines(step.reason) ? (
           <ul
             className={`ap-reason list ${open || typing ? 'open' : ''}`}
