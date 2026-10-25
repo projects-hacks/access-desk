@@ -14,6 +14,8 @@
 
 /** Below this the agent is not sure enough to act alone; every agent proposal checks it. */
 export const MIN_AUTO_CONFIDENCE = 0.1;
+/** A model's tier move that differs from what the rules would do applies on its own only this sure. */
+export const MIN_OVERRIDE_CONFIDENCE = 0.7;
 
 /** The top clients (the top 0.1%): Tier 1, or marked strategic by a person. */
 export function isTopClient(tier: number, strategic: boolean): boolean {
@@ -47,10 +49,19 @@ export function needsHuman(i: AutonomyInput): string | undefined {
   // Exploit alerts are warnings to read, not actions.
   if (i.kind === 'EXPLOIT_FLAG') return undefined;
   if (isTopClient(i.tier, i.strategic)) return i.strategic ? 'strategic client' : 'tier 1 client';
-  const p = (i.proposal ?? {}) as { action?: string; to_tier?: number };
+  const p = (i.proposal ?? {}) as { action?: string; to_tier?: number; decided_by?: string; baseline?: { action?: string; to_tier?: number } };
   if (i.kind === 'CREDIT_REVIEW' && p.action === 'tier_change') {
     const to = Number(p.to_tier);
     if (!Number.isInteger(to) || to < 1 || to > 5) return 'unreadable tier';
+    // Tier 1 clients are a person's to handle, so a person decides who joins them.
+    if (to === 1) return 'promotion to tier 1';
+  }
+  // The model may go further than the rules, but only when it is sure; otherwise a person decides.
+  const base = p.baseline;
+  const beyondRules = i.kind === 'CREDIT_REVIEW' && p.decided_by && p.decided_by !== 'rules' && base
+    && (base.action !== p.action || (p.action === 'tier_change' && Number(base.to_tier) !== Number(p.to_tier)));
+  if (beyondRules && i.confidence < MIN_OVERRIDE_CONFIDENCE) {
+    return `the model went beyond the rules at confidence ${i.confidence.toFixed(2)}, below ${MIN_OVERRIDE_CONFIDENCE}`;
   }
   return lowConfidence(i.confidence);
 }

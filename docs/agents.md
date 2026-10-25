@@ -50,9 +50,9 @@ Generic proposals (credit reviews, policy drafts, novel cases) use `propose_work
 | Applies at once (`auto_applied`, audited `AUTO_APPLIED`) | Waits for a controller |
 |---|---|
 | Restrictions (pol-006), custody debits of any amount (pol-005), restores (pol-011), notices (pol-007) | Restricting a Tier 1 or strategic client |
-| Tier changes, reviews and exploit alerts for every other client | Tier changes and reviews for Tier 1 or strategic clients |
+| Tier changes, reviews and exploit alerts for every other client | Tier changes and reviews for Tier 1 or strategic clients, and any promotion into Tier 1 |
 | Reminder-only client policies | Client policies that change the contract or move money (prepay, grace or cure days, cross-default, custody debit) |
-| All need confidence 0.1 or more (`MIN_AUTO_CONFIDENCE`), except exploit alerts | Lower confidence. Offboarding (`two_approvers` capabilities such as close-only and full freeze, or turning off every console permission) |
+| All need confidence 0.1 or more (`MIN_AUTO_CONFIDENCE`), except exploit alerts. A model's tier move that differs from what the rules would do also needs 0.7 or more (`MIN_OVERRIDE_CONFIDENCE`) | Lower confidence, or the model going beyond the rules below 0.7. Offboarding (`two_approvers` capabilities such as close-only and full freeze, or turning off every console permission) |
 
 `transition_work_item` enforces the rest: approvers are ACCOUNTANT or CONTROLLER, `required_role = CONTROLLER` items need a controller, nobody approves their own proposal, denied attempts are audited rather than thrown. APPROVED becomes POSTED when the gateway confirms every command. The console runs as one named controller (`VITE_STDB_CONTROLLER_TOKEN`); reads need no token.
 

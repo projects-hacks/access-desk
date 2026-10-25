@@ -13,7 +13,7 @@ Built for Cal Hacks 13.0 on a fictional platform, Northstar Prime, with 30 insti
 - **Spots clients gaming the terms.** For example, paying only the day before a restriction, or using small partial payments to reset the clock.
 - **Keeps the books honest.** Every sync is tied out against the bank. When something does not tie, Iris traces it to the payments that caused it and posts a correcting entry on her own if it closes the gap to the cent. Money from an unknown sender is matched to its owner or sent back after five days.
 - **Learns.** Every decision a person makes becomes a precedent the agents read. Every policy the agents propose carries its own success test, checked against real payments. A policy that fails is replaced by a better one.
-- **Asks a person only when it should.** Restricting a top client, offboarding, a policy that changes the contract or moves money, or when the agent is not confident. Reminder-only policies apply on their own. A proposal nobody decides in 10 business days is withdrawn and the agent decides again on fresh numbers.
+- **Asks a person only when it should.** Restricting a top client, promoting a client into Tier 1, offboarding, a policy that changes the contract or moves money, or when the model goes further than the rules without being sure. Reminder-only policies apply on their own. A proposal nobody decides in 10 business days is withdrawn and the agent decides again on fresh numbers.
 
 ## How it works
 
