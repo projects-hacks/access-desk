@@ -189,10 +189,9 @@ export function ClientPortal() {
         <div>
           <h2>Client view</h2>
           <p className="muted">What a client sees in their own app when access is paused.</p>
-          <p className="cx-private" title={`Portal identity ${portal.identityHex ?? ''}`}>
+          <p className="cx-private">
             <Lock size={12} aria-hidden />
-            Private connection: this screen only receives {row.client.name}'s data (SpacetimeDB
-            views)
+            Private connection
           </p>
           {bindError && <p className="notice bad">{bindError}</p>}
         </div>
