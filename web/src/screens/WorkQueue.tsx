@@ -99,8 +99,9 @@ export function WorkQueue({ focus }: { focus?: Focus }) {
         <div>
           <h2>Approvals</h2>
           <p className="muted">
-            The agent acts on its own. It only asks you to restrict a top client, offboard a client,
-            or change the tier guidelines to fix an exploit.
+            The agents act on their own. They ask you only for what is yours to decide: restricting a
+            top client, offboarding, a contract change, an exception no policy covers, a promotion into
+            Tier 1, or a call the model is not sure enough to make alone.
           </p>
         </div>
       </div>
@@ -188,7 +189,7 @@ export function WorkQueue({ focus }: { focus?: Focus }) {
                       {plainText(w.title, names)}
                       <div className="eyebrow kind-line">
                         <KindIcon kind={w.kind} />
-                        {byPerson(w) ? label(w.kind) : `Agent ${Math.round(w.confidence * 100)}% sure · ${label(w.kind)}`}
+                        {byPerson(w) ? label(w.kind) : `Agent ${Math.floor(w.confidence * 100)}% sure · ${label(w.kind)}`}
                       </div>
                     </td>
                     <td data-label="Why it's asking">
