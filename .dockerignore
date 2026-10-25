@@ -3,7 +3,7 @@
 .env.*
 .git
 web/dist
-agents
+agents-py
 docs
 research
 .data/*

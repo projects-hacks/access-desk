@@ -18,10 +18,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
-      - uses: astral-sh/setup-uv@v6
-      - name: Agents tests
-        working-directory: agents
-        run: uv sync && uv run --with pytest python -m pytest -q
 
   # main only: build the API server image, push it, roll the one hosted instance.
   # GitHub signs in to Azure as a managed identity (OIDC, no stored secrets) limited to access-desk-rg.
@@ -52,7 +48,7 @@ jobs:
       - name: Roll the server
         run: az containerapp update -n access-desk-api -g access-desk-rg --image $IMAGE -o none
 
-  # main only: the agents' image (credit analyst, ExploitWatch, access controller), one always-on replica.
+  # main only: the agents' image (Learning, Scoring, ExploitWatch, Access), one always-on replica.
   deploy-agents:
     needs: check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -74,7 +70,8 @@ jobs:
       - run: az acr login -n $REGISTRY
       - uses: docker/build-push-action@v6
         with:
-          context: agents
+          context: .
+          file: agents/Dockerfile
           push: true
           tags: ${{ env.IMAGE }}
       - name: Roll the agents

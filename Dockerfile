@@ -7,6 +7,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY server/package.json server/
 COPY web/package.json web/
 COPY spacetime/package.json spacetime/
+COPY agents/package.json agents/
 RUN pnpm install --frozen-lockfile --filter @access-desk/server
 
 COPY server/ server/
