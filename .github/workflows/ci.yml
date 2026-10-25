@@ -19,11 +19,34 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
+  # Which hosted parts this push touches: a web or docs change must not restart the agents mid-session.
+  changes:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.f.outputs.server }}
+      agents: ${{ steps.f.outputs.agents }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: f
+        run: |
+          shared='^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig\.base\.json|\.github/workflows/)'
+          if files=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null); then
+            echo "$files"
+            echo "server=$(echo "$files" | grep -qE "$shared|^server/|^Dockerfile$|^\.data/" && echo true || echo false)" >> "$GITHUB_OUTPUT"
+            echo "agents=$(echo "$files" | grep -qE "$shared|^agents/" && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          else
+            echo "server=true" >> "$GITHUB_OUTPUT"
+            echo "agents=true" >> "$GITHUB_OUTPUT"
+          fi
+
   # main only: build the API server image, push it, roll the one hosted instance.
   # GitHub signs in to Azure as a managed identity (OIDC, no stored secrets) limited to access-desk-rg.
   deploy:
-    needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [check, changes]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     concurrency: deploy
     permissions:
@@ -50,8 +73,8 @@ jobs:
 
   # main only: the agents' image (Learning, Scoring, ExploitWatch, Access), one always-on replica.
   deploy-agents:
-    needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [check, changes]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.agents == 'true'
     runs-on: ubuntu-latest
     concurrency: deploy-agents
     permissions:
