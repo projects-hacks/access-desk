@@ -86,6 +86,7 @@ const patternWords = (text: string) => text.replace(/\b([A-Za-z]+(?:_[a-z]+)+)\b
 export function plainText(text: string, names: Map<string, string> = new Map()): string {
   const out = plainDates(patternWords(text))
     // Formula asides like "(1.00 vs >= 0.9)" are for the evaluator, not the reader.
+    .replace(/\s*\((?:[^()]|\([^()]*\))*\bvs\b(?:[^()]|\([^()]*\))*\)/g, '')
     .replace(/\s*\([^()]*(?:>=|<=)[^()]*\)/g, '')
     .replace(/\bpol-\d+:ORG-\d+(?:@\d+)?/gi, "this client's own policy")
     .replace(/(own policy)@\d+/g, '$1')
