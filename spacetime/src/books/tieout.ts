@@ -1,3 +1,4 @@
+import { BOOKS, route, step } from '../agents';
 import { audit, simDate, type Ctx } from '../context';
 import { createWorkItem } from '../payments/apply';
 import { GL } from '../payments/gateway';
@@ -114,6 +115,9 @@ export function runTieOut(ctx: Ctx, trigger: string) {
   // Logged, not escalated: one item per distinct unexplained amount, so reruns don't repeat it.
   const logged = [...ctx.db.workItem.iter()].some((w) => w.kind === 'BOOKS_BREAK' && w.amountCents === unexplainedTotal);
   if (status === 'break' && !logged) {
+    const text = `Books don't tie: ${formatUsd(unexplainedTotal)} unexplained.`;
+    step(ctx, { clientId: BOOKS, actor: 'payment', text, opens: text });
+    route(ctx, 'books_break', BOOKS, text);
     createWorkItem(ctx, {
       kind: 'BOOKS_BREAK', clientId: '', subjectId: `tie_out_run:${run.id}`, amountCents: unexplainedTotal,
       title: `Books don't tie out: ${formatUsd(unexplainedTotal)} unexplained`,

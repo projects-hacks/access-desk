@@ -35,6 +35,29 @@ export function sendRefund(bank: Bank, ds: Dataset, commandId: string, r: { clie
   return wireToClient(bank, ds, { ...r, trn: `RF-${commandId}`, remittance: `REFUND DUPLICATE PMT ${r.bankRef}` });
 }
 
+/**
+ * Money nobody claimed goes back to whoever sent it: a wire out of the account it came into, quoting
+ * the original reference so the bank feed brings it back as that payment's refund. Safe to retry.
+ */
+export async function returnToSender(
+  bank: Bank,
+  commandId: string,
+  r: { bankRef: string; platformAccount: string; amountCents: number; origName: string; origAccount: string; on: string },
+): Promise<BankRefs> {
+  const from = bank.map.accounts[r.platformAccount];
+  if (!from) throw new Error(`${r.bankRef}: no bank account for ${r.platformAccount}`);
+  const trn = `RT-${commandId}`;
+  const sent = (await bank.api.listWithdrawals(from.id)).find((t) => t.description.includes(`TRN:${trn} `))?._id;
+  const out = sent ?? (await bank.api.createWithdrawal(from.id, {
+    medium: 'balance', transaction_date: r.on, status: 'completed', amount: r.amountCents,
+    description: wireOut({
+      trn, date: r.on, beneficiary: r.origName || 'ORIGINATOR', account: r.origAccount, bank: { name: 'ORIGINATING BANK', id: '' },
+      remittance: `RETURN OF UNIDENTIFIED PMT ${r.bankRef}`,
+    }),
+  }))._id;
+  return { platform: out, counterparty: '' };
+}
+
 /** The CW reference is how the module recognizes the wire when the bank feed brings it back. */
 export function sendCustodyWithdrawal(bank: Bank, ds: Dataset, w: { clientId: string; withdrawalId: string; amountCents: number; on: string }) {
   const ref = `CW-${w.withdrawalId.padStart(4, '0')}`;

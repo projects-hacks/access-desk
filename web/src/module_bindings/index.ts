@@ -41,14 +41,17 @@ import AssignRoleReducer from "./assign_role_reducer";
 import BindPortalReducer from "./bind_portal_reducer";
 import BookInvoicesReducer from "./book_invoices_reducer";
 import ClaimAgentTaskReducer from "./claim_agent_task_reducer";
+import ClaimCashReducer from "./claim_cash_reducer";
 import ClaimGatewayCommandReducer from "./claim_gateway_command_reducer";
 import CompleteAgentTaskReducer from "./complete_agent_task_reducer";
 import CompleteGatewayCommandReducer from "./complete_gateway_command_reducer";
 import FailAgentTaskReducer from "./fail_agent_task_reducer";
 import FailGatewayCommandReducer from "./fail_gateway_command_reducer";
 import HeartbeatAgentTaskReducer from "./heartbeat_agent_task_reducer";
+import KeepUnclaimedReducer from "./keep_unclaimed_reducer";
 import PlaceHoldReducer from "./place_hold_reducer";
 import PlaceOrderReducer from "./place_order_reducer";
+import ProposeAdjustingJournalReducer from "./propose_adjusting_journal_reducer";
 import ProposeCustodyDebitReducer from "./propose_custody_debit_reducer";
 import ProposeGuidelineChangeReducer from "./propose_guideline_change_reducer";
 import ProposeNoticeReducer from "./propose_notice_reducer";
@@ -71,6 +74,7 @@ import RecordWaitReducer from "./record_wait_reducer";
 import RemoveCashMovementReducer from "./remove_cash_movement_reducer";
 import RequestCustodyWithdrawalReducer from "./request_custody_withdrawal_reducer";
 import ResetWorldReducer from "./reset_world_reducer";
+import ReturnCashReducer from "./return_cash_reducer";
 import SetClockReducer from "./set_clock_reducer";
 import SetClockSpeedReducer from "./set_clock_speed_reducer";
 import SetDeadlineReducer from "./set_deadline_reducer";
@@ -895,14 +899,17 @@ const reducersSchema = __reducers(
   __reducerSchema("bind_portal", BindPortalReducer),
   __reducerSchema("book_invoices", BookInvoicesReducer),
   __reducerSchema("claim_agent_task", ClaimAgentTaskReducer),
+  __reducerSchema("claim_cash", ClaimCashReducer),
   __reducerSchema("claim_gateway_command", ClaimGatewayCommandReducer),
   __reducerSchema("complete_agent_task", CompleteAgentTaskReducer),
   __reducerSchema("complete_gateway_command", CompleteGatewayCommandReducer),
   __reducerSchema("fail_agent_task", FailAgentTaskReducer),
   __reducerSchema("fail_gateway_command", FailGatewayCommandReducer),
   __reducerSchema("heartbeat_agent_task", HeartbeatAgentTaskReducer),
+  __reducerSchema("keep_unclaimed", KeepUnclaimedReducer),
   __reducerSchema("place_hold", PlaceHoldReducer),
   __reducerSchema("place_order", PlaceOrderReducer),
+  __reducerSchema("propose_adjusting_journal", ProposeAdjustingJournalReducer),
   __reducerSchema("propose_custody_debit", ProposeCustodyDebitReducer),
   __reducerSchema("propose_guideline_change", ProposeGuidelineChangeReducer),
   __reducerSchema("propose_notice", ProposeNoticeReducer),
@@ -925,6 +932,7 @@ const reducersSchema = __reducers(
   __reducerSchema("remove_cash_movement", RemoveCashMovementReducer),
   __reducerSchema("request_custody_withdrawal", RequestCustodyWithdrawalReducer),
   __reducerSchema("reset_world", ResetWorldReducer),
+  __reducerSchema("return_cash", ReturnCashReducer),
   __reducerSchema("set_clock", SetClockReducer),
   __reducerSchema("set_clock_speed", SetClockSpeedReducer),
   __reducerSchema("set_deadline", SetDeadlineReducer),

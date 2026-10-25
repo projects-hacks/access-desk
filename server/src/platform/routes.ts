@@ -3,7 +3,7 @@ import { GatewayActionSchema, type ActionType } from './commands';
 import { PlatformError, type PlatformSimulator } from './simulator';
 
 /** Which platform API each command type calls, as a real platform would expose them. */
-export const ROUTES: Record<Exclude<ActionType, 'REFUND'>, string> = {
+export const ROUTES: Record<Exclude<ActionType, 'REFUND' | 'RETURN_PAYMENT'>, string> = {
   APPLY_PAYMENT: '/billing/applications',
   REVERSE_PAYMENT: '/billing/reversals',
   POST_JOURNAL: '/gl/journals',

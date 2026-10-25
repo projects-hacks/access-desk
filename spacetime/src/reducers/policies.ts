@@ -15,6 +15,7 @@ const BASELINE = [
   ['pol-012', 'Overpayments are held as credit on account', { when: 'payment exceeds quoted invoices', then: 'apply, credit the excess' }],
   ['pol-013', 'Duplicate payments are refunded to the account they came from', { when: 'quoted invoices already paid by an identical wire', then: 'refund through the bank automatically' }],
   ['pol-015', 'Returned payments reverse their applications and reopen the invoices', { when: 'bank returns a payment', then: 'reverse applications' }],
+  ['pol-016', 'Correct a books break without approval when the evidence explains it to the cent', { when: 'an adjusting entry closes every unexplained difference exactly, never touches cash, confidence 0.8+', then: 'post it; anything partial goes to a controller' }],
   ['pol-020', "Downgrade a client's tier on score or exploit flag, with controller approval", { when: 'formula tier worse than current, or an exploit flag', then: 'propose up to two steps down to a controller' }],
   ['pol-021', "Upgrade a client's tier one step at a time, with controller approval", { when: 'reliability clears the band line by 3+ points, no recent_late flag', then: 'propose one step up to a controller' }],
   ['pol-022', "Strategic clients' tiers change only by a person; the agent may request a review", { when: 'strategic client, formula tier worse than current', then: 'propose a review, never a tier change' }],

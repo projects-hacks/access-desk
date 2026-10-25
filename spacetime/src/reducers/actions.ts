@@ -7,6 +7,7 @@ import { formatUsd } from '../payments/match';
 import { isTopClient, lowConfidence } from '../autonomy';
 import { route, stepChecks } from '../agents';
 import { spacetimedb } from '../schema';
+import { postAdjustingJournal } from './books';
 import { applyCreditReview, applyPolicyDraft } from './credit';
 import { applyGuidelineEffects } from './guidelines';
 import { applyPermissionChange } from './manual';
@@ -341,6 +342,9 @@ export function executeApproved(ctx: Ctx, workItemId: bigint) {
   const p = JSON.parse(item.proposalJson);
   const today = simDate(ctx);
   switch (item.kind) {
+    case 'ADJUSTING_JOURNAL':
+      postAdjustingJournal(ctx, item.id);
+      break;
     case 'CUSTODY_DEBIT': {
       const invoices = (p.invoiceIds as string[]).map((id) => ctx.db.invoice.id.find(id)).filter((i) => !!i);
       const apps = invoices.map((inv) => ctx.db.paymentApplication.insert({

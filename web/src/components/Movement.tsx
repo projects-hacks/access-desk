@@ -4,6 +4,7 @@ import { matchBadge, nessieId, rail } from '../lib/bank';
 import { shortDate } from '../lib/clients';
 import { label, money, percent } from '../lib/format';
 import { Badge } from './Badge';
+import { PlaceCash } from './PlaceCash';
 
 /**
  * One bank movement, the way it arrived and the way the desk read it:
@@ -52,6 +53,7 @@ export function Movement({ m, apps, fresh, known }: { m: CashMovement; apps: Pay
             </li>
           </ul>
           {m.parseNotes && <p className="muted small">{m.parseNotes}</p>}
+          {!out && m.matchStatus === 'exception' && !known && <PlaceCash m={m} />}
           {apps.length > 0 && (
             <>
               <div className="eyebrow">Applied to</div>

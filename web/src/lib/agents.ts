@@ -150,7 +150,7 @@ export function useAgents(): AgentsView {
 
   return useMemo(() => {
     const names = new Map(clients.map((c) => [c.id, c.name]));
-    const nameOf = (id: string) => names.get(id) ?? id;
+    const nameOf = (id: string) => names.get(id) ?? (id === 'books' ? 'The books' : id);
     const open = (t: AgentTask) =>
       (t.status === 'queued' || t.status === 'running') && now - ms(t.updatedAt) < STALE_TASK_MS;
 

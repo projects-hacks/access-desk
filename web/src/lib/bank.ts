@@ -96,6 +96,8 @@ const MATCH: Record<string, { label: string; tone: 'good' | 'warn' | 'bad' | 'in
   in_transit: { label: 'In transit', tone: 'info' },
   refunded: { label: 'Refunded', tone: 'neutral' },
   reversed: { label: 'Returned', tone: 'bad' },
+  returning: { label: 'Going back', tone: 'info' },
+  unclaimed: { label: 'Unclaimed', tone: 'neutral' },
 };
 
 /** What payment checking concluded about a movement. */

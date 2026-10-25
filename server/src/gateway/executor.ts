@@ -4,7 +4,7 @@ import type { Dataset } from '../dataset';
 import type { Bank } from '../integrations/nessie/bank';
 import { GatewayActionSchema, type GatewayResult, type InvoiceState } from '../platform/commands';
 import { PermanentError, type PlatformApi } from '../platform/client';
-import { sendCustodyWithdrawal, sendRefund, syncBills } from './bank';
+import { returnToSender, sendCustodyWithdrawal, sendRefund, syncBills } from './bank';
 
 /**
  * The gateway: the only writer to systems of record. Executes queued commands
@@ -104,6 +104,10 @@ export class Gateway {
         const nessie = await sendRefund(this.bank, this.ds, String(cmd.id), action);
         result = { type: 'REFUND', nessie };
         externalRef = nessie.platform;
+      } else if (action.type === 'RETURN_PAYMENT') {
+        const nessie = await returnToSender(this.bank, String(cmd.id), action);
+        result = { type: 'RETURN_PAYMENT', nessie };
+        externalRef = nessie.platform;
       } else if (action.type === 'CUSTODY_WITHDRAWAL') {
         // Custody releases the cash first; then the wire goes out.
         const custody = await this.platform.execute(String(cmd.id), action);
@@ -115,6 +119,7 @@ export class Gateway {
       }
       await this.conn.reducers.completeGatewayCommand({ id: cmd.id, resultJson: JSON.stringify(result), externalRef });
       if (action.type === 'REFUND' || action.type === 'CUSTODY_WITHDRAWAL') await this.onBankWrite([action.clientId]);
+      if (action.type === 'RETURN_PAYMENT') await this.onBankWrite([]);
       if ('invoices' in result) this.updateBills(result.invoices);
       return true;
     } catch (err) {

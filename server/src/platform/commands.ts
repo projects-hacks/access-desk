@@ -30,6 +30,10 @@ export const GatewayActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('REFUND'), clientId: z.string(), movementId: z.string(), bankRef: z.string(), amountCents: cents, on: date }),
   z.object({ type: z.literal('SEND_NOTICE'), clientId: z.string(), channel: z.enum(['email', 'portal', 'rm']), body: z.string(), noticeId: z.string().optional() }),
   z.object({
+    type: z.literal('RETURN_PAYMENT'), movementId: z.string(), bankRef: z.string(), platformAccount: z.string(), amountCents: cents,
+    origName: z.string(), origAccount: z.string(), on: date,
+  }),
+  z.object({
     type: z.literal('TRADE'), clientId: z.string(), orderId: z.string(), side: z.enum(['buy', 'sell']), asset: z.string(),
     quantity: z.number().positive(), amountCents: cents,
   }),
@@ -50,6 +54,6 @@ export type GatewayResult =
   | { type: 'PLACE_HOLD' | 'RELEASE_HOLD' | 'SET_LEVER'; lever: LeverState }
   | { type: 'CUSTODY_DEBIT'; invoices: InvoiceState[]; holdings: HoldingState[] }
   | { type: 'CUSTODY_WITHDRAWAL'; holdings: HoldingState[]; nessie?: BankRefs }
-  | { type: 'REFUND'; nessie: BankRefs }
+  | { type: 'REFUND' | 'RETURN_PAYMENT'; nessie: BankRefs }
   | { type: 'SEND_NOTICE'; messageId: string }
   | { type: 'TRADE'; holdings: HoldingState[] };

@@ -2,6 +2,7 @@ import { clientOf, evaluate, outcomeText, parsePolicies } from '../credit/compan
 import { loadBilling, loadBook } from '../credit/load';
 import { explainReliability } from '../credit/reasoning';
 import { scoreBook, wholeScore } from '../credit/scoring';
+import { BOOKS, handleBooks } from '../books/handle';
 import type { Agent } from '../types';
 
 /** Reliability moving at least this much is worth a line on the panel. */
@@ -21,6 +22,7 @@ export const learning: Agent = {
   async handle(ctx) {
     const { conn, today } = ctx;
     const clientId = ctx.task.clientId;
+    if (clientId === BOOKS) return handleBooks(ctx);
     const book = loadBook(conn, clientId, today);
     if (!book) return 'unknown client';
     const scores = scoreBook(book, loadBilling(conn, today));

@@ -52,7 +52,7 @@ export function WorkQueue({ focus }: { focus?: Focus }) {
   const [openId, setOpenId] = useState<bigint>();
 
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
-  const names = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
+  const names = useMemo(() => new Map([...clients.map((c) => [c.id, c.name] as const), ['books', 'The books'] as const]), [clients]);
   // Only items a person was asked about; everything the agent did alone is in the Audit log.
   const asked = useMemo(
     () =>

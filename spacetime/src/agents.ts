@@ -10,6 +10,8 @@ import { LEVER_LABEL } from './reducers/actions';
  */
 
 export const AGENTS = ['learning', 'scoring', 'exploit', 'access'] as const;
+/** Tasks and episodes about the platform's own books use this in place of a client id. */
+export const BOOKS = 'books';
 export type AgentName = (typeof AGENTS)[number];
 
 /** Which agents each kind of change wakes, for the client it happened to. */
@@ -31,6 +33,10 @@ const ROUTES = {
   posted: ['access'],
   /** A person decided on an access item (restriction, debit, exception case): Access carries on from there. */
   decided: ['access'],
+  /** Money nobody could identify was parked: Iris looks for its owner. */
+  unidentified: ['learning'],
+  /** A tie-out found a difference nothing explains: Iris traces it to the payments behind it. */
+  books_break: ['learning'],
   /** A client's own policy started failing its success criteria: Scoring proposes a better version. */
   policy_failing: ['scoring'],
   /** A person rejected an agent's proposal: the profile learns from it. */
@@ -49,12 +55,14 @@ export const MAX_TASK_ATTEMPTS = 3;
 
 export function route(ctx: Ctx, event: Route, clientId: string | undefined, reason: string) {
   if (!clientId) return;
+  // The books (breaks, unidentified cash, return-by dates) are Iris's.
+  if (clientId === BOOKS) return wake(ctx, 'learning', BOOKS, reason);
   for (const agent of ROUTES[event]) wake(ctx, agent, clientId, reason);
 }
 
 /** Queue a task, or fold the change into the one already queued for this agent and client. */
 export function wake(ctx: Ctx, agent: AgentName, clientId: string, reason: string) {
-  if (!ctx.db.client.id.find(clientId)) return;
+  if (clientId !== BOOKS && !ctx.db.client.id.find(clientId)) return;
   const episodeId = openEpisode(ctx, clientId)?.id ?? 0n;
   const queued = [...ctx.db.agentTask.clientId.filter(clientId)].find((t) => t.agent === agent && t.status === 'queued');
   if (queued) {
@@ -216,7 +224,7 @@ export function humanize(ctx: Ctx, s: string, sentence = true): string {
 const PAYMENT_KINDS = new Set(['PAYMENT_MATCH', 'REFUND', 'UNAPPLIED_CASH', 'UNIDENTIFIED_CASH', 'PAYMENT_REVERSAL', 'UNEXPLAINED_OUTFLOW']);
 const SCORING_KINDS = new Set(['CREDIT_REVIEW', 'POLICY_DRAFT']);
 const PEOPLE = new Set(['CONTROLLER', 'ACCOUNTANT', 'RELATIONSHIP_MANAGER', 'ADMIN']);
-const DEADLINE_LABEL: Record<string, string> = { cure_period: 'Cure period', promise_to_pay: 'Promised payment', follow_up: 'Follow-up' };
+const DEADLINE_LABEL: Record<string, string> = { cure_period: 'Cure period', promise_to_pay: 'Promised payment', follow_up: 'Follow-up', return_by: 'Return-by date' };
 
 /** Who did it, from the caller's identity. */
 function senderActor(ctx: Ctx, agent: AgentName): Actor {
@@ -264,7 +272,7 @@ export function stepFromAudit(ctx: Ctx, e: AuditLike) {
       if (!item) return;
       // Importing history (first sync, reset) is not news.
       if (PAYMENT_KINDS.has(item.kind) && ctx.db.cashMovement.id.find(item.subjectId)?.isHistory) return;
-      const agent: AgentName = SCORING_KINDS.has(item.kind) ? 'scoring' : item.kind === 'EXPLOIT_FLAG' ? 'exploit' : 'access';
+      const agent: AgentName = SCORING_KINDS.has(item.kind) ? 'scoring' : item.kind === 'EXPLOIT_FLAG' ? 'exploit' : item.kind === 'ADJUSTING_JOURNAL' ? 'learning' : 'access';
       const actor = PAYMENT_KINDS.has(item.kind) ? 'payment' : senderActor(ctx, agent);
       const checks = [...policy, ...(item.autoApplied ? [{ ok: true, label: 'no approval needed' }] : [])];
       return step(ctx, {

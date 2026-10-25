@@ -70,7 +70,8 @@ export function extractRefs(remittance: string): { refs: string[]; repaired: boo
   }
   for (const m of text.matchAll(/\bORG[-\s]?(\d{5})\b/g)) refs.add(`ORG-${m[1]}`);
   for (const m of text.matchAll(/\bLN[-\s]?(\d{4})\b/g)) refs.add(`LN-${m[1]}`);
-  for (const m of text.matchAll(/\b(WI|AC|TX|CW)-(\d{4})\b/g)) refs.add(`${m[1]}-${m[2]}`);
+  for (const m of text.matchAll(/\b(WI|AC|TX|CW|JD)-(\d{4})\b/g)) refs.add(`${m[1]}-${m[2]}`);
+  for (const m of text.matchAll(/\bWE-(\d{5})\b/g)) refs.add(`WE-${m[1]}`);
   return { refs: [...refs], repaired };
 }
 

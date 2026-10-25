@@ -5,7 +5,8 @@ import { PlatformError, type PlatformSimulator } from './simulator';
 /** Raised for writes the platform refused: retrying won't help. */
 export class PermanentError extends Error {}
 
-type PlatformAction = Exclude<GatewayAction, { type: 'REFUND' }>;
+/** Bank-only commands (refunds, returns) never reach the platform. */
+type PlatformAction = Exclude<GatewayAction, { type: 'REFUND' | 'RETURN_PAYMENT' }>;
 
 export interface PlatformApi {
   execute(commandId: string, action: PlatformAction): Promise<GatewayResult>;

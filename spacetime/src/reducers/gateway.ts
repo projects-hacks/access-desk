@@ -128,6 +128,7 @@ function gatewayStep(type: string, action: { amountCents?: string | number; leve
     case 'REVERSE_PAYMENT': return 'Invoices reopened on the platform.';
     case 'REFUND': return `Refund of ${amount} sent back through the bank.`;
     case 'SEND_NOTICE': return 'Notice delivered to the client.';
+    case 'RETURN_PAYMENT': return `${amount} sent back to the sender through the bank.`;
     case 'TRADE': return `${action.side === 'buy' ? 'Bought' : 'Sold'} ${action.quantity?.toFixed(4)} ${action.asset} for ${amount} at the live price.`;
     default: return undefined;
   }

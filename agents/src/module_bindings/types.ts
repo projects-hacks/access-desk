@@ -41,6 +41,13 @@ export const Actor = __t.object("Actor", {
 });
 export type Actor = __Infer<typeof Actor>;
 
+export const AdjustingLine = __t.object("AdjustingLine", {
+  account: __t.string(),
+  debitCents: __t.i64(),
+  creditCents: __t.i64(),
+});
+export type AdjustingLine = __Infer<typeof AdjustingLine>;
+
 export const AgentRun = __t.object("AgentRun", {
   id: __t.u64(),
   agent: __t.string(),

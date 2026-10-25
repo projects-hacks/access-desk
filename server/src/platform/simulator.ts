@@ -239,8 +239,9 @@ export class PlatformSimulator {
         return { type: 'TRADE', holdings: [state(usd), state(coin)] };
       }
       case 'REFUND':
-        // Money moves at the bank, not here; the gateway sends refunds to Nessie.
-        throw new PlatformError('REFUND is executed against the bank, not the platform');
+      case 'RETURN_PAYMENT':
+        // Money moves at the bank, not here; the gateway sends these to Nessie.
+        throw new PlatformError(`${a.type} is executed against the bank, not the platform`);
     }
   }
 

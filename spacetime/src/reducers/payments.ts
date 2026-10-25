@@ -9,6 +9,7 @@ import { formatUsd, planMatch, type MatchPlan } from '../payments/match';
 import { spacetimedb } from '../schema';
 import { closeCashExceptions } from './matches';
 import { placeHoldFor } from './actions';
+import { parkUnidentified } from './cash';
 import { arrivalText, route, step } from '../agents';
 
 /**
@@ -75,13 +76,14 @@ function onIncoming(ctx: Ctx, m: Movement, previous: Movement | undefined) {
 
   if (!payer) {
     setMatchStatus(ctx, m.id, 'exception');
-    createWorkItem(ctx, {
+    const parked = createWorkItem(ctx, {
       kind: 'UNIDENTIFIED_CASH', clientId: '', subjectId: m.id, amountCents: m.amountCents,
       title: `Parked ${formatUsd(m.amountCents)} ${m.rail} from ${m.origName || m.origAccount} as unapplied cash`,
       proposal: { movementId: m.id, origAccount: m.origAccount, origName: m.origName },
       reasoning: 'The sender is not in the CRM and the payment quotes no client or invoice, so the cash stays on the books as unapplied until a payer claims it. Nobody is restricted because of it.',
       policyRef: 'pol-001', confidence: 0, requiredRole: 'ACCOUNTANT', autoApplied: true,
     });
+    if (!m.isHistory) parkUnidentified(ctx, m, parked.id);
     return;
   }
 

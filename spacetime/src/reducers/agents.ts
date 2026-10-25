@@ -1,5 +1,5 @@
 import { SenderError, t } from 'spacetimedb/server';
-import { AGENTS, MAX_TASK_ATTEMPTS, step, wake, type AgentName } from '../agents';
+import { AGENTS, BOOKS, MAX_TASK_ATTEMPTS, step, wake, type AgentName } from '../agents';
 import { audit, requireRole, type Ctx } from '../context';
 import { spacetimedb } from '../schema';
 
@@ -87,4 +87,5 @@ export const queueSweep = spacetimedb.reducer({ agent: t.string(), reason: t.str
   requireRole(ctx, WORKERS);
   if (!(AGENTS as readonly string[]).includes(agent)) throw new SenderError(`unknown agent ${agent}`);
   for (const c of [...ctx.db.client.iter()]) wake(ctx, agent as AgentName, c.id, reason);
+  if (agent === 'learning') wake(ctx, 'learning', BOOKS, reason);
 });

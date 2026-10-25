@@ -80,7 +80,7 @@ export function AuditLog() {
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PAGE);
 
-  const clientName = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
+  const clientName = useMemo(() => new Map([...clients.map((c) => [c.id, c.name] as const), ['books', 'The books'] as const]), [clients]);
   const reasoning = useMemo(() => new Map(items.map((w) => [w.id, w])), [items]);
   /** Policy id → its current title (the active version, else the newest). */
   const policyTitle = useMemo(() => {

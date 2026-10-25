@@ -9,11 +9,11 @@ export * from './reducers/work';
 export { proposeCustodyDebit, proposeRestriction, proposeRestrictionWithBoundaries, proposeRestore, proposeNotice, requestCustodyWithdrawal, setDeadline } from './reducers/actions';
 export { adjustReturnJournals, placeHold } from './reducers/payments';
 export * from './reducers/gateway';
-export * from './reducers/books';
+export { proposeAdjustingJournal, tieOut } from './reducers/books';
 export { upsertPolicy } from './reducers/policies';
 export { addRmNote, recordInvestigation } from './reducers/notes';
 export { recordAgentRun, recordWait } from './reducers/runs';
-export { proposePaymentMatch } from './reducers/matches';
+export { claimCash, proposePaymentMatch } from './reducers/matches';
 export { recordPolicyOutcome, upsertCreditProfile, upsertExploitFlag } from './reducers/credit';
 export { proposePermissionChange, proposeTierChange } from './reducers/manual';
 export { proposeGuidelineChange, recordConsolePrecedent, setStrategic } from './reducers/guidelines';
@@ -22,3 +22,4 @@ export {
 } from './reducers/portal';
 export { claimAgentTask, completeAgentTask, failAgentTask, heartbeatAgentTask, queueSweep, recordAgentStep, recordGuardrail } from './reducers/agents';
 export { placeOrder } from './reducers/orders';
+export { keepUnclaimed, returnCash } from './reducers/cash';
