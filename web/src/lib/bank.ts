@@ -117,7 +117,7 @@ export function rail(m: CashMovement): string {
 export const nessieId = (m: CashMovement) => (m.source === 'nessie' ? m.id.replace(/^nessie:/, '') : undefined);
 
 /** Audit actions that are plumbing rather than decisions or money. */
-const QUIET = new Set(['TIE_OUT', 'COMMAND_QUEUED', 'COMMAND_DONE', 'CASH_RECONCILED', 'SET_PLATFORM', 'ASSIGN_ROLE', 'POLICY_SAVED']);
+const QUIET = new Set(['TIE_OUT', 'COMMAND_QUEUED', 'COMMAND_DONE', 'CASH_RECONCILED', 'SET_PLATFORM', 'ASSIGN_ROLE', 'POLICY_SAVED', 'BIND_PORTAL']);
 export const isNews = (e: AuditEvent) => !QUIET.has(e.action);
 
 /** Who did it, as people say it. */

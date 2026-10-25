@@ -29,7 +29,7 @@ export const PERMISSION_GROUPS = [
 
 /** Whether a permission is on: its own row, or else whether its lever is fully on. */
 export function permissionOn(
-  row: ClientRow,
+  row: Pick<ClientRow, 'client' | 'levers'>,
   permissions: readonly Permission[],
   key: string,
   lever: string,

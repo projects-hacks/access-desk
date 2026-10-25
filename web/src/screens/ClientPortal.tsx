@@ -1,12 +1,21 @@
-import { useMemo, useState } from 'react';
+import { Lock } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTable } from 'spacetimedb/react';
 import { Select } from '../components/Select';
 import { SlidingPill } from '../components/SlidingPill';
-import { shortDate, useClientRows, type ClientRow } from '../lib/clients';
+import {
+  LEVERS,
+  daysBetween,
+  shortDate,
+  useClientRows,
+  type ClientRow,
+  type Lever,
+} from '../lib/clients';
 import { demo } from '../lib/demo';
 import { money } from '../lib/format';
 import { PERMISSION_GROUPS, permissionOn } from '../lib/permissions';
-import { usePlatform } from '../lib/session';
+import { bindTo, usePortal, type PortalSnapshot } from '../lib/portal';
+import { useClock, usePlatform } from '../lib/session';
 import { tables } from '../module_bindings';
 
 /** How the client hears about each paused permission: plain words, no internal codes. */
@@ -27,6 +36,11 @@ const PAGES = { home: 'Home', assets: 'My assets', pay: 'Pay balance' } as const
 type Page = keyof typeof PAGES;
 
 type Paused = { key: string; label: string; detail?: string };
+/** What the screen needs about one client; the staff list's ClientRow fits it too. */
+type Row = Pick<
+  ClientRow,
+  'client' | 'levers' | 'invoices' | 'unpaidCents' | 'overdueCents' | 'daysPastDue'
+>;
 type Holding = { asset: string; quantity: number; valueCents: bigint };
 
 const COIN: Record<string, { name: string; color: string; glyph: string }> = {
@@ -38,7 +52,7 @@ const COIN: Record<string, { name: string; color: string; glyph: string }> = {
 };
 
 /** Everything the client can't do right now, from permissions, levers and holds. */
-function pausedFor(row: ClientRow, permissions: Parameters<typeof permissionOn>[1]): Paused[] {
+function pausedFor(row: Row, permissions: Parameters<typeof permissionOn>[1]): Paused[] {
   const out: Paused[] = [];
   for (const g of PERMISSION_GROUPS) {
     const lever = row.levers.find((l) => l.key === g.lever);
@@ -64,8 +78,30 @@ function pausedFor(row: ClientRow, permissions: Parameters<typeof permissionOn>[
   return out;
 }
 
+/** The bound client's row, built only from the portal connection's views (same math as useClientRows). */
+function portalRow(p: PortalSnapshot, today: string): Row | undefined {
+  if (!p.client) return undefined;
+  const owed = (i: (typeof p.invoices)[number]) => i.amountCents - i.paidCents;
+  const unpaid = p.invoices.filter((i) => i.status !== 'void' && owed(i) > 0n);
+  const overdue = unpaid.filter((i) => i.dueOn < today && i.status !== 'disputed');
+  const sum = (xs: typeof unpaid) => xs.reduce((s, i) => s + owed(i), 0n);
+  const oldest = overdue.map((i) => i.dueOn).sort()[0];
+  const levers: Lever[] = LEVERS.map((l) => {
+    const r = p.levers.find((x) => x.lever === l.key);
+    return { ...l, state: r?.state ?? 'not_used', detail: r?.detail ?? '' };
+  });
+  return {
+    client: p.client,
+    levers,
+    invoices: [...p.invoices].sort((a, b) => (a.dueOn < b.dueOn ? 1 : -1)),
+    unpaidCents: sum(unpaid),
+    overdueCents: sum(overdue),
+    daysPastDue: oldest && today ? daysBetween(oldest, today) : 0,
+  };
+}
+
 const can = (paused: Paused[], ...keys: string[]) => !paused.some((p) => keys.includes(p.key));
-const usesLever = (row: ClientRow, lever: string) =>
+const usesLever = (row: Row, lever: string) =>
   row.levers.some((l) => l.key === lever && l.state !== 'not_used');
 
 /**
@@ -74,12 +110,19 @@ const usesLever = (row: ClientRow, lever: string) =>
  * how to get it back.
  */
 export function ClientPortal() {
+  // Staff connection: only the demo picker (names, "paused" hints, the default pick),
+  // the platform's wire instructions and the clock. Client data comes from the portal.
   const rows = useClientRows();
-  const [permissions] = useTable(tables.permission);
-  const [holdings] = useTable(tables.custodyHolding);
+  const [staffPermissions, permissionsReady] = useTable(tables.permission);
+  // The default pick needs the whole staff picture (levers, invoices, clock), not a partial one.
+  const [, leversReady] = useTable(tables.accessLever);
+  const [, invoicesReady] = useTable(tables.invoice);
   const platform = usePlatform();
-  // Starts on the most overdue client with something paused, so there's a restriction to show.
-  const [clientId, setClientId] = useState('');
+  const today = useClock()?.simDate ?? '';
+  const portal = usePortal();
+  const [pending, setPending] = useState<string>();
+  const [bindError, setBindError] = useState<string>();
+  const autoBound = useRef(false);
   const [page, setPage] = useState<Page>('home');
   const [panel, setPanel] = useState<'trade' | 'withdraw'>('trade');
   const [dismissed, setDismissed] = useState('');
@@ -88,18 +131,54 @@ export function ClientPortal() {
     () => [...rows].sort((a, b) => a.client.name.localeCompare(b.client.name)),
     [rows],
   );
-  const row =
-    rows.find((r) => r.client.id === clientId) ??
+  // Starts on the most overdue client with something paused, so there's a restriction to show.
+  const fallback = (
     [...rows]
-      .filter((r) => pausedFor(r, permissions).length)
-      .sort((a, b) => b.daysPastDue - a.daysPastDue)[0] ??
-    sorted[0];
-  if (!row) return <div className="empty">Loading…</div>;
+      .filter((r) => pausedFor(r, staffPermissions).length)
+      .sort((a, b) => b.daysPastDue - a.daysPastDue)[0] ?? sorted[0]
+  )?.client.id;
 
-  const paused = pausedFor(row, permissions);
-  const own = holdings
-    .filter((h) => h.clientId === row.client.id)
-    .sort((a, b) => Number(b.valueCents - a.valueCents));
+  function viewAs(id: string) {
+    setPending(id);
+    setBindError(undefined);
+    bindTo(id).catch((e) => {
+      setPending(undefined);
+      setBindError(e instanceof Error ? e.message : String(e));
+    });
+  }
+
+  // First open: a fresh portal identity isn't bound to anyone yet, so its views are empty.
+  useEffect(() => {
+    const staffReady = permissionsReady && leversReady && invoicesReady && !!today;
+    if (!portal.ready || portal.clientId || !staffReady || !fallback || autoBound.current) return;
+    autoBound.current = true;
+    viewAs(fallback);
+  }, [portal.ready, portal.clientId, fallback, permissionsReady, leversReady, invoicesReady, today]);
+
+  // The views have caught up with the picker.
+  useEffect(() => {
+    if (pending && portal.clientId === pending) setPending(undefined);
+  }, [pending, portal.clientId]);
+
+  const row = portalRow(portal, today);
+  if (!row)
+    return (
+      <div className="empty">
+        {bindError ? (
+          <>
+            {bindError}{' '}
+            <button className="btn ghost" onClick={() => fallback && viewAs(fallback)}>
+              Retry
+            </button>
+          </>
+        ) : (
+          portal.error ?? 'Opening a private portal connection…'
+        )}
+      </div>
+    );
+
+  const paused = pausedFor(row, portal.permissions);
+  const own = [...portal.holdings].sort((a, b) => Number(b.valueCents - a.valueCents));
   const total = own.reduce((s, h) => s + h.valueCents, 0n);
   const usd = own.find((h) => h.asset === 'USD')?.valueCents ?? 0n;
   const showBanner = paused.length > 0 && dismissed !== row.client.id;
@@ -110,27 +189,34 @@ export function ClientPortal() {
         <div>
           <h2>Client view</h2>
           <p className="muted">What a client sees in their own app when access is paused.</p>
+          <p className="cx-private" title={`Portal identity ${portal.identityHex ?? ''}`}>
+            <Lock size={12} aria-hidden />
+            Private connection: this screen only receives {row.client.name}'s data (SpacetimeDB
+            views)
+          </p>
+          {bindError && <p className="notice bad">{bindError}</p>}
         </div>
         <label className="viewing-as">
           <span className="eyebrow">Viewing as</span>
           <Select
             label="Client"
-            value={row.client.id}
+            value={pending ?? row.client.id}
             onChange={(id) => {
-              setClientId(id);
+              if (id === (pending ?? row.client.id)) return;
+              viewAs(id);
               setPage('home');
               setPanel('trade');
             }}
             options={sorted.map((r) => ({
               value: r.client.id,
               label: r.client.name,
-              hint: pausedFor(r, permissions).length ? 'paused' : undefined,
+              hint: pausedFor(r, staffPermissions).length ? 'paused' : undefined,
             }))}
           />
         </label>
       </div>
 
-      <div className="cx">
+      <div className={`cx ${pending ? 'cx-switching' : ''}`} aria-busy={!!pending}>
         <aside className="cx-side">
           <div className="cx-logo" title={platform?.name ?? 'Northstar Prime'} />
           <nav aria-label="Client app">
@@ -247,7 +333,7 @@ function Assets({ holdings }: { holdings: Holding[] }) {
   );
 }
 
-function Access({ row, paused }: { row: ClientRow; paused: Paused[] }) {
+function Access({ row, paused }: { row: Row; paused: Paused[] }) {
   if (!paused.length)
     return <div className="cx-card cx-ok">Everything on your account is available.</div>;
   return (
@@ -277,7 +363,7 @@ function TradePanel({
   paused,
   onWithdraw,
 }: {
-  row: ClientRow;
+  row: Row;
   paused: Paused[];
   onWithdraw: () => void;
 }) {
@@ -389,7 +475,7 @@ function WithdrawPanel({
   usd,
   onBack,
 }: {
-  row: ClientRow;
+  row: Row;
   paused: Paused[];
   usd: bigint;
   onBack: () => void;
@@ -487,7 +573,7 @@ function WithdrawOutcome({ r }: { r: WithdrawResult }) {
   );
 }
 
-function Pay({ row, wire }: { row: ClientRow; wire: string }) {
+function Pay({ row, wire }: { row: Row; wire: string }) {
   const open = row.invoices.filter(
     (i) => i.status !== 'void' && i.paidCents < i.amountCents && i.status !== 'disputed',
   );

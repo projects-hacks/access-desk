@@ -65,16 +65,18 @@ With Postgres this is a database, an API server, a message bus, a cron service a
 | Subscriptions with filters | `web/src/lib/bank.ts`: `tables.cashMovement.where((r) => r.isHistory.eq(false))` keeps history out of the browser |
 | Scheduled reducers | `tick_clock` driven by the `clock_tick` table (`ScheduleAt.interval`), `spacetime/src/reducers/world.ts` |
 | Identities and roles | `actor` table, `requireRole`, `assign_role`; role sets in `spacetime/src/roles.ts`; each service has its own token |
-| Views for per-client privacy | Being added: `spacetime/src/reducers/portal.ts` |
+| Views for per-client privacy | `my_*` views keyed on `ctx.sender`, `spacetime/src/reducers/portal.ts`; the Client view's own connection, `web/src/lib/portal.ts` |
 | Automatic reconnect with session resumption | `server/src/lib/stdb.ts`: `withAutomaticReconnect()`, backoff 1 s to 30 s |
 | Generated TypeScript bindings | `pnpm stdb:generate` writes `web/src/module_bindings` and `server/src/module_bindings` |
 
-## Client portal privacy (in progress)
+## Client portal privacy
 
-Staff tables are public to the staff console, which is not acceptable for a client login. The portal adds per-identity views named `my_*` in `spacetime/src/reducers/portal.ts`, built on SpacetimeDB views that filter by `ctx.sender`. A client login subscribes to the views only and so only receives its own rows. This file may not be merged yet.
+The Client view opens its own connection as a separate identity (`web/src/lib/portal.ts`) and subscribes only to nine views: `my_client`, `my_invoices`, `my_holdings`, `my_levers`, `my_permissions`, `my_holds`, `my_access_requests`, `my_bank_accounts`, `my_notices` (`spacetime/src/reducers/portal.ts`). Each view looks up the caller (`ctx.sender`) in `actor` and returns only that client's rows; an unbound identity gets nothing. The database computes the rows per identity, so other clients' data never reaches the browser.
+
+`bind_portal` (DEMO or ADMIN only) binds a browser identity to a client; it refuses any identity that already holds a staff or service role. `pnpm portal:verify` checks it live: bound to one client the connection sees only that client, rebinding switches cleanly, a stranger sees zero rows, staff identities can't be rebound.
 
 ## Honest limits
 
-- Staff tables are public on the module (`{ public: true }` in `spacetime/src/tables/`). Anyone with the database name can read them; role checks guard writes, not reads, until the portal views land.
+- Staff tables are public on the module (`{ public: true }` in `spacetime/src/tables/`) because the console, sync, gateway and agents read them directly; role checks guard writes. The client portal reads only through the per-identity views; a client opening its own raw connection could still query base tables. Closing that needs private tables with staff-side views, or row-level filters (deprecated in 2.13).
 - The Python agents have no SpacetimeDB SDK. They poll a fingerprint (audit row count and sim date) over HTTP SQL every second (`watch_seconds`) and propose through reducers (`agents/src/desk_agents/__main__.py`, `stdb.py`). Reaction time is up to a second, not a push.
 - The shared database runs on the Maincloud free tier.
