@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     factory_attempts: int = 2
     agent_interval_seconds: float = 15.0
     watch_seconds: float = 1.0
+    # The loop acts on the shared database, so exactly one may run: the hosted one sets this.
+    agents_host: bool = False
     # Seat 2's LLM calls, in order (see seat2_llm.py). The classifier gates the "already paid" moment.
     seat2_rm_note_providers: str = "anthropic,factory"
     seat2_notice_providers: str = "factory,anthropic"

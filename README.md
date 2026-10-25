@@ -19,7 +19,7 @@ cp .env.example .env     # shared Maincloud database + hosted API (ask for the v
 pnpm dev                 # web :5173, talking to the hosted API
 ```
 
-The API server (sync, gateway, simulated platform, demo endpoints) runs once, on Azure Container Apps, because it is the only writer to the shared database. Every push to `main` is checked (typecheck, tests) and, if green, built and deployed there by CI. Don't run a second server against the shared database: `pnpm dev` starts only the web app, and the server refuses to start unless `SERVER_HOST=true` (`pnpm dev:server`).
+The API server (sync, gateway, simulated platform, demo endpoints) and the agents (credit analyst, ExploitWatch, access controller, deciding through Factory's Droid) each run once, on Azure Container Apps, because it is the only writer to the shared database. Every push to `main` is checked (typecheck, tests) and, if green, built and deployed there by CI. Don't run a second server against the shared database: `pnpm dev` starts only the web app, the server refuses to start unless `SERVER_HOST=true` (`pnpm dev:server`), and the agent loop unless `AGENTS_HOST=true` (`desk-agents --dry-run` shows what they would do).
 
 ## Commands
 

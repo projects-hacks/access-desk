@@ -2,9 +2,8 @@ import { config } from './config';
 
 /** Demo controls are POSTs to the server (`DEMO_CONTROLS=true`). Returns the JSON body or throws its error. */
 export async function demo<T = unknown>(path: string, body: object = {}): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`${config.apiUrl}/demo/${path}`, {
+  const post = () =>
+    fetch(`${config.apiUrl}/demo/${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -12,8 +11,16 @@ export async function demo<T = unknown>(path: string, body: object = {}): Promis
       },
       body: JSON.stringify(body),
     });
+  let res: Response;
+  try {
+    res = await post();
+    // Only a reset is safe to repeat; one retry if the host's front door blips.
+    if (path === 'reset' && res.status >= 502 && res.status <= 504) {
+      await new Promise((r) => setTimeout(r, 3_000));
+      res = await post();
+    }
   } catch {
-    throw new Error(`Server not reachable at ${config.apiUrl}. Run pnpm dev with the .env tokens.`);
+    throw new Error(`Server not reachable at ${config.apiUrl}. Check VITE_API_URL in .env.`);
   }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {

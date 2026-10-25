@@ -118,6 +118,11 @@ def main() -> None:
         dry_run(db)
         db.close()
         return
+    if not settings.agents_host:
+        print("The agents already run on Azure against the shared database; a second loop would act twice.\n"
+              "Use --dry-run to see what they would do, or set AGENTS_HOST=true only where no other loop runs.")
+        db.close()
+        sys.exit(1)
     try:
         # Credit first (its tier reviews are what tier_mismatch compares against), then
         # exploits, then access, so a flag raised this cycle is in the queue before access acts.
