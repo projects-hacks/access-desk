@@ -46,11 +46,32 @@ function clean(text: string): string {
   return /^```(?:json)?\s*([\s\S]*?)\s*```$/.exec(t)?.[1] ?? t;
 }
 
+/**
+ * Model calls in flight across all four agents. Each Droid call is its own CLI process, so this
+ * (not the agents' concurrency) is what bounds the container's memory; the rest wait their turn.
+ */
+const MAX_IN_FLIGHT = Number(process.env.LLM_CONCURRENCY ?? 2);
+let inFlight = 0;
+const waiting: (() => void)[] = [];
+
+async function inTurn<T>(call: () => Promise<T>): Promise<T> {
+  // A finished call hands its slot straight to the next waiter, so the count never overshoots.
+  if (inFlight < MAX_IN_FLIGHT) inFlight++;
+  else await new Promise<void>((resolve) => waiting.push(resolve));
+  try {
+    return await call();
+  } finally {
+    const next = waiting.shift();
+    if (next) next();
+    else inFlight--;
+  }
+}
+
 async function answer(providers: Provider[], prompt: string, schema: Record<string, unknown>): Promise<{ text: string; by: Answered }> {
   const failures: string[] = [];
   for (const p of providers) {
     try {
-      return { text: await p.answer(prompt, schema), by: { provider: p.name, model: env.LLM_MODEL } };
+      return { text: await inTurn(() => p.answer(prompt, schema)), by: { provider: p.name, model: env.LLM_MODEL } };
     } catch (e) {
       failures.push(`${p.name}: ${e instanceof Error ? e.message : String(e)}`);
     }
