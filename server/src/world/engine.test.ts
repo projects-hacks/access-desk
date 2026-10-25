@@ -105,6 +105,8 @@ async function fixture(simDate = '2026-04-02') {
       }
       return [];
     },
+    // The real one books the run atomically; here the full sync below copies the invoices.
+    bookInvoices: async () => undefined,
     report: () => undefined,
   } as unknown as Sync;
 

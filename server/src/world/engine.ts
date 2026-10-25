@@ -197,6 +197,7 @@ export class World {
     this.billing = { lastPeriods: periods, lastAt: new Date().toISOString() };
     const total = issued.reduce((s, i) => s + i.amountCents, 0);
     this.deps.log(`[world] billing · ${clock.simDate}: issued ${issued.length} invoices for ${periods.join(', ')} (${issued[0]!.id}..${issued.at(-1)!.id}, ${formatUsd(total)})`);
+    await sync.bookInvoices(issued.map((i) => i.id)).catch((e) => this.deps.log(`[world] booking the billing run failed (the sync below retries): ${errText(e)}`));
     await sync.full().then(
       (results) => results.filter((r) => r.errors.length).forEach((r) => sync.report(r)),
       (e) => this.deps.log(`[world] billing sync failed (the next sync pass retries): ${errText(e)}`),

@@ -1,6 +1,6 @@
 import { t } from 'spacetimedb/server';
 import { arrivalText, route } from '../agents';
-import { audit, requireRole } from '../context';
+import { audit, requireRole, type Ctx } from '../context';
 import { CAN_SYNC } from '../roles';
 import { spacetimedb } from '../schema';
 import { accessLever, capability, client, contract, contractClause, payerIdentity } from '../tables/clients';
@@ -74,12 +74,34 @@ export const upsertAccessLever = spacetimedb.reducer({ row: accessLever.rowType 
 /** Billing's view of an invoice; paid amount and status are then recomputed with our applications. */
 export const upsertInvoice = spacetimedb.reducer({ row: invoice.rowType }, (ctx, { row }) => {
   requireRole(ctx, CAN_SYNC);
+  putInvoice(ctx, row);
+});
+
+function putInvoice(ctx: Ctx, row: NonNullable<ReturnType<Ctx['db']['invoice']['id']['find']>>) {
   const existing = ctx.db.invoice.id.find(row.id);
   // Keep the paid date we recorded when billing doesn't have one yet.
   if (existing) ctx.db.invoice.id.update({ ...row, paidOn: row.paidOn ?? existing.paidOn });
   else ctx.db.invoice.insert(row);
   recomputeInvoice(ctx, row.id);
-});
+}
+
+function putLedgerEntry(ctx: Ctx, row: NonNullable<ReturnType<Ctx['db']['ledgerEntry']['id']['find']>>) {
+  if (ctx.db.ledgerEntry.id.find(row.id)) ctx.db.ledgerEntry.id.update(row);
+  else ctx.db.ledgerEntry.insert(row);
+}
+
+/**
+ * A billing run: the new invoices and their receivable journals in one transaction, so a tie-out
+ * can never see the receivables on one side and not the other.
+ */
+export const bookInvoices = spacetimedb.reducer(
+  { invoices: t.array(invoice.rowType), entries: t.array(ledgerEntry.rowType) },
+  (ctx, { invoices, entries }) => {
+    requireRole(ctx, CAN_SYNC);
+    for (const row of invoices) putInvoice(ctx, row);
+    for (const row of entries) putLedgerEntry(ctx, row);
+  },
+);
 
 export const upsertDispute = spacetimedb.reducer({ row: dispute.rowType }, (ctx, { row }) => {
   requireRole(ctx, CAN_SYNC);
@@ -167,10 +189,7 @@ export const upsertLoan = spacetimedb.reducer({ row: loan.rowType }, (ctx, { row
 /** General ledger lines, in batches (thousands of lines; one call each would be slow). */
 export const upsertLedgerEntries = spacetimedb.reducer({ rows: t.array(ledgerEntry.rowType) }, (ctx, { rows }) => {
   requireRole(ctx, CAN_SYNC);
-  for (const row of rows) {
-    if (ctx.db.ledgerEntry.id.find(row.id)) ctx.db.ledgerEntry.id.update(row);
-    else ctx.db.ledgerEntry.insert(row);
-  }
+  for (const row of rows) putLedgerEntry(ctx, row);
 });
 
 /** Past decisions (history import) and live ones written by agents. */

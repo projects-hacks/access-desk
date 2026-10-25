@@ -16,6 +16,16 @@ import type { SyncRecord } from '../writer';
  * positions). Changing state (invoices, levers, custody) is read from the live
  * platform; reference data from the dataset. Grouped by source system.
  */
+/** Billing's invoice as the golden copy stores it. */
+export function invoiceRow(i: PlatformSimulator['invoices'] extends Map<string, infer V> ? V : never): Invoice {
+  const status = i.status === 'open' && i.paidCents > 0 ? 'partially_paid' : i.status;
+  return {
+    id: i.id, clientId: i.clientId, product: i.product, label: i.label, period: i.period, issuedOn: i.issuedOn,
+    dueOn: i.dueOn, amountCents: BigInt(i.amountCents), sourcePaidCents: BigInt(i.paidCents), paidCents: BigInt(i.paidCents),
+    paidOn: i.paidOn, status,
+  };
+}
+
 export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap, sim: PlatformSimulator): Record<string, SyncRecord<unknown>[]> {
   const r = conn.reducers;
   const rec = <Row>(table: string, id: string, row: Row, upsert: (row: Row) => Promise<void>): SyncRecord<unknown> =>
@@ -64,13 +74,7 @@ export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap, 
 
   const billing: SyncRecord<unknown>[] = [];
   for (const i of sim.invoices.values()) {
-    const status = i.status === 'open' && i.paidCents > 0 ? 'partially_paid' : i.status;
-    const invoice: Invoice = {
-      id: i.id, clientId: i.clientId, product: i.product, label: i.label, period: i.period, issuedOn: i.issuedOn,
-      dueOn: i.dueOn, amountCents: BigInt(i.amountCents), sourcePaidCents: BigInt(i.paidCents), paidCents: BigInt(i.paidCents),
-      paidOn: i.paidOn, status,
-    };
-    billing.push(rec('invoice', i.id, invoice, (row) => r.upsertInvoice({ row })));
+    billing.push(rec('invoice', i.id, invoiceRow(i), (row) => r.upsertInvoice({ row })));
   }
   for (const d of disputes(ds)) {
     const dispute: Dispute = { ...d, amountCents: BigInt(d.amountCents) };

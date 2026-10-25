@@ -11,7 +11,7 @@ import { glRows } from './sources/gl';
 import { historyRecords } from './sources/history';
 import type { PlatformSimulator } from '../platform/simulator';
 import { RemittanceInterpreter } from '../integrations/bank-text/interpret';
-import { platformRecords } from './sources/platform';
+import { invoiceRow, platformRecords } from './sources/platform';
 import { SyncWriter, type SyncRecord } from './writer';
 
 const LABELS: Record<string, string> = {
@@ -55,6 +55,17 @@ export class Sync {
     this.plan = buildSeedPlan(ds);
     this.openings = openingBalances(ds, this.plan);
   }
+  /**
+   * A billing run, booked in one transaction: the invoices and their receivable journals. The full
+   * sync that follows finds them already there; a tie-out in between never sees half a run.
+   */
+  async bookInvoices(ids: string[]): Promise<void> {
+    const issued = new Set(ids);
+    const invoices = [...this.platform.invoices.values()].filter((i) => issued.has(i.id)).map(invoiceRow);
+    const entries = glRows(this.platform).filter((e) => e.journalId.startsWith('JE-INV-') && issued.has(e.ref));
+    await this.conn.reducers.bookInvoices({ invoices, entries });
+  }
+
 
   /** Subscribes to the rows sync needs to read (the clock). Call once before passes. */
   ready(): Promise<void> {

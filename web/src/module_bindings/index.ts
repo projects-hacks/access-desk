@@ -38,6 +38,7 @@ import AddRmNoteReducer from "./add_rm_note_reducer";
 import AdvanceClockReducer from "./advance_clock_reducer";
 import AssignRoleReducer from "./assign_role_reducer";
 import BindPortalReducer from "./bind_portal_reducer";
+import BookInvoicesReducer from "./book_invoices_reducer";
 import ClaimAgentTaskReducer from "./claim_agent_task_reducer";
 import ClaimGatewayCommandReducer from "./claim_gateway_command_reducer";
 import CompleteAgentTaskReducer from "./complete_agent_task_reducer";
@@ -890,6 +891,7 @@ const reducersSchema = __reducers(
   __reducerSchema("advance_clock", AdvanceClockReducer),
   __reducerSchema("assign_role", AssignRoleReducer),
   __reducerSchema("bind_portal", BindPortalReducer),
+  __reducerSchema("book_invoices", BookInvoicesReducer),
   __reducerSchema("claim_agent_task", ClaimAgentTaskReducer),
   __reducerSchema("claim_gateway_command", ClaimGatewayCommandReducer),
   __reducerSchema("complete_agent_task", CompleteAgentTaskReducer),
