@@ -5,7 +5,7 @@ import { AgentsPanel } from './components/AgentsPanel';
 import { AlertBar } from './components/AlertBar';
 import { SlidingPill } from './components/SlidingPill';
 import { Splash } from './components/Splash';
-import { SessionPill, TopBar } from './components/TopBar';
+import { PlatformDate, SessionPill, TopBar } from './components/TopBar';
 import { reasonFor } from './lib/autonomy';
 import { tables } from './module_bindings';
 import { AuditLog } from './screens/AuditLog';
@@ -64,7 +64,7 @@ export function App() {
     <div className={`app ${booting ? 'booting' : ''} ${agentsOpen ? 'agents-open' : ''}`}>
       <Splash ready={itemsReady && clientsReady} onLeave={() => setBooting(false)} />
       <header className="appbar reveal" style={{ '--d': '0ms' } as CSSProperties}>
-        <div className="brand">Access Desk</div>
+        <div className="brand">Neo</div>
         <nav className="screens" aria-label="Screens">
           <SlidingPill active={screen} />
           {(Object.keys(SCREENS) as ScreenKey[]).map((key) => (
@@ -84,6 +84,7 @@ export function App() {
             </button>
           ))}
         </nav>
+        <PlatformDate />
         <SessionPill />
       </header>
       <TopBar />

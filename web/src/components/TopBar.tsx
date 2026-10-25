@@ -9,18 +9,40 @@ import { tables } from '../module_bindings';
 import { label, simDay } from '../lib/format';
 import { useClock, usePlatform, useSession } from '../lib/session';
 
-/** The platform's business date and what the desk is doing right now. */
+/** What the desk is doing right now (on a phone, with the business date). */
 export function TopBar() {
-  const clock = useClock();
-  const platform = usePlatform();
   return (
     <div className="topbar reveal" style={{ '--d': '60ms' } as CSSProperties}>
-      <div className="topbar-date">
-        <CalendarClock className="ico muted" size={16} aria-hidden />
-        <span className="eyebrow">{platform?.name ?? 'Platform'}</span>
-        <strong>{simDay(clock?.simDate)}</strong>
-      </div>
+      <PlatformDate compact />
       <AgentTicker />
+    </div>
+  );
+}
+
+const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** The platform the desk runs and its business date, as a calendar tile. */
+export function PlatformDate({ compact = false }: { compact?: boolean }) {
+  const clock = useClock();
+  const platform = usePlatform();
+  const date = clock?.simDate;
+  const d = date ? new Date(`${date}T12:00:00Z`) : undefined;
+  return (
+    <div className={`platform-date ${compact ? 'compact' : ''}`} title={`${platform?.name ?? 'Platform'} · business date ${simDay(date)}`}>
+      <span className="platform-mark" aria-hidden>
+        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 1.5 14.2 9.8 22.5 12 14.2 14.2 12 22.5 9.8 14.2 1.5 12 9.8 9.8Z" fill="currentColor" /></svg>
+      </span>
+      <span className="platform-name">{platform?.name ?? 'Platform'}</span>
+      {d && (
+        <span className="cal" aria-label={simDay(date)}>
+          <span className="cal-tile">
+            <span className="cal-month">{MONTH[d.getUTCMonth()]}</span>
+            <span className="cal-day">{d.getUTCDate()}</span>
+          </span>
+          <span className="cal-weekday">{WEEKDAY[d.getUTCDay()]}</span>
+        </span>
+      )}
     </div>
   );
 }
