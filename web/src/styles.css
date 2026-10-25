@@ -1094,6 +1094,17 @@ i.open { background: #f2c2c6; }
   .table td.next { min-width: 120px; }
   .table td.ask { min-width: 220px; }
 }
+/* Credit book: compact cells always; the client's detail goes under the table when both don't fit side by side. */
+.ca-table .table.clients th, .ca-table .table.clients td { padding-left: 8px; padding-right: 8px; }
+.ca-table .table.clients th:first-child, .ca-table .table.clients td:first-child { padding-left: 14px; min-width: 150px; }
+.ca-table .table.clients th { white-space: normal; }
+.ca-table .table.clients .badge { white-space: normal; }
+@media (max-width: 1365px) {
+  .ca-grid-book { grid-template-columns: 1fr; }
+  .ca-grid-book .ca-detail { position: static; }
+}
+.app.agents-open .ca-grid-book { grid-template-columns: 1fr; }
+.app.agents-open .ca-grid-book .ca-detail { position: static; }
 /* An ID never breaks at its hyphen. */
 .client-cell .eyebrow .mono { white-space: nowrap; }
 

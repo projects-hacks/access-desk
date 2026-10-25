@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useReducer } from 'spacetimedb/react';
 import { Badge } from '../../components/Badge';
 import {
@@ -39,6 +39,15 @@ export function Portfolio({
   audit: readonly AuditEvent[];
 }) {
   const [selectedId, setSelectedId] = useState(book[0]?.client.id ?? '');
+  const bookGrid = useRef<HTMLDivElement>(null);
+  // When the detail sits under the table (panel open, narrower screen), picking a row brings it into view.
+  const pick = (id: string) => {
+    setSelectedId(id);
+    const grid = bookGrid.current;
+    if (grid && getComputedStyle(grid).gridTemplateColumns.split(' ').length === 1) {
+      requestAnimationFrame(() => grid.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+    }
+  };
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('score');
   const [page, setPage] = useState(0);
@@ -146,7 +155,7 @@ export function Portfolio({
         </div>
       </div>
 
-      <div className="ca-grid ca-grid-book">
+      <div className="ca-grid ca-grid-book" ref={bookGrid}>
         <div className="ca-card ca-flush">
           <div className="ca-card-head ca-pad">
             <h3>Credit book</h3>
@@ -181,7 +190,7 @@ export function Portfolio({
                   <tr
                     key={c.client.id}
                     className={c.client.id === selected.client.id ? 'selected' : ''}
-                    onClick={() => setSelectedId(c.client.id)}
+                    onClick={() => pick(c.client.id)}
                   >
                     <td className="cell-main">
                       <div className="title">
