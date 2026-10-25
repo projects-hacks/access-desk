@@ -7,7 +7,7 @@ import { Select } from '../components/Select';
 import { tables } from '../module_bindings';
 import { ago, useApplications, useArrivals, useBankFeed, usePayerNames, useLatestTieOut, useNow } from '../lib/bank';
 import { demo } from '../lib/demo';
-import { label, money } from '../lib/format';
+import { label, money, plainText } from '../lib/format';
 
 const FEED_FILTERS = {
   all: { label: 'All', test: () => true },
@@ -108,7 +108,7 @@ export function BankBooks() {
           {runBreaks.map((b) => (
             <li key={String(b.id)}>
               <span>
-                <Badge tone={b.kind === 'unexplained' ? 'bad' : 'info'}>{label(b.kind)}</Badge> {b.detail}
+                <Badge tone={b.kind === 'unexplained' ? 'bad' : 'info'}>{label(b.kind)}</Badge> {plainText(b.detail)}
               </span>
               <span className="tnum">{money(b.amountCents)}</span>
             </li>

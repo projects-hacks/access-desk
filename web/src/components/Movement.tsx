@@ -2,7 +2,7 @@ import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import type { CashMovement, PaymentApplication } from '../module_bindings/types';
 import { matchBadge, nessieId, rail } from '../lib/bank';
 import { shortDate } from '../lib/clients';
-import { label, money, percent } from '../lib/format';
+import { label, money, percent, titleCaseName } from '../lib/format';
 import { Badge } from './Badge';
 import { PlaceCash } from './PlaceCash';
 
@@ -23,10 +23,10 @@ export function Movement({ m, apps, fresh, known }: { m: CashMovement; apps: Pay
           </span>
           <span className="movement-date mono">{shortDate(m.valueOn)}</span>
           <span className="movement-who">
-            <strong>{m.origName || known || (m.origAccount ? `Unknown wallet ${m.origAccount.slice(0, 8)}…` : out ? 'Outgoing' : 'Unknown payer')}</strong>
+            <strong>{(m.origName && (m.origName === m.origName.toUpperCase() ? titleCaseName(m.origName) : m.origName)) || known || (m.origAccount ? `Unknown wallet ${m.origAccount.slice(0, 8)}…` : out ? 'Outgoing' : 'Unknown payer')}</strong>
             <span className="eyebrow">
               {rail(m)} · <span className="mono">{m.bankRef}</span>
-              {m.refs.length > 0 && ` · ${m.refs.join(' ')}`}
+              {m.refs.some((r) => r !== m.bankRef) && ` · ${m.refs.filter((r) => r !== m.bankRef).join(' ')}`}
             </span>
           </span>
           <span className={`movement-amount tnum ${out ? 'out' : 'in'}`}>

@@ -54,7 +54,7 @@ export function plainDates(text: string): string {
 const KEEP_UPPER = new Set(['LP', 'LLC', 'LLP', 'LTD', 'PLC', 'USD', 'USDC', 'ACH', 'API', 'RM', 'BTC', 'ETH', 'SOL', 'II', 'III', 'NA', 'AG', 'SA']);
 
 /** "ZEPHYR CAPITAL MGMT LP" as a bank sends it reads "Zephyr Capital Mgmt LP". */
-function titleCaseName(run: string): string {
+export function titleCaseName(run: string): string {
   return run.split(/(\s+)/).map((w) => (KEEP_UPPER.has(w.replace(/[.,]/g, '')) || /^\s+$/.test(w) ? w : w.charAt(0) + w.slice(1).toLowerCase())).join('');
 }
 
