@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { useReducer, useTable } from 'spacetimedb/react';
 import { Badge, StateBadge } from '../components/Badge';
 import { SlidingPill } from '../components/SlidingPill';
+import { CollapseButton, useSlideClose } from '../components/useSlideClose';
 import { LeverChips, stateAfter, useLevers } from '../components/LeverChips';
 import { label, money, parseJson, percent } from '../lib/format';
 import { REASONS, reasonFor, waitingReason } from '../lib/autonomy';
@@ -256,6 +257,7 @@ function Drawer({
   };
   onClose: () => void;
 }) {
+  const { leaving, close } = useSlideClose(onClose);
   const session = useSession();
   const transition = useReducer(reducers.transitionWorkItem);
   const [note, setNote] = useState('');
@@ -298,9 +300,10 @@ function Drawer({
   }
 
   return (
-    <aside className="drawer" aria-label={`Work item ${item.id}`}>
+    <aside className={`drawer ${leaving ? 'leaving' : ''}`} aria-label={`Work item ${item.id}`}>
       <div className="drawer-head">
-        <div>
+        <CollapseButton onClick={close} />
+        <div className="drawer-title">
           <div className="eyebrow">
             #{String(item.id)} · {label(item.kind)} ·{' '}
             {clientName ?? (item.clientId || noClient(item.kind))}
@@ -313,9 +316,6 @@ function Drawer({
             <Confidence value={item.confidence} />
           </div>
         </div>
-        <button className="btn ghost" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
       </div>
 
       <div className="drawer-body">

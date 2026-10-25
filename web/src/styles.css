@@ -539,3 +539,18 @@ th.num .sort { width: 100%; text-align: right; }
 }
 .cx-tag.na { background: var(--surface-2); color: var(--faint); }
 .table td.ask { min-width: 260px; font-weight: 500; line-height: 1.4; }
+
+/* Side panels slide in from the right and collapse back out (components/useSlideClose.tsx) */
+.drawer { animation: drawer-in 0.32s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
+.reveal-stack .drawer { animation: drawer-in 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+.drawer.leaving, .reveal-stack .drawer.leaving { animation: drawer-out 0.26s cubic-bezier(0.55, 0, 0.75, 0.2) forwards; pointer-events: none; }
+@keyframes drawer-in { from { transform: translateX(100%); } }
+@keyframes drawer-out { to { transform: translateX(100%); } }
+.drawer-head { justify-content: flex-start; align-items: flex-start; }
+.drawer-title { flex: 1; min-width: 0; }
+.collapse { flex: none; width: 34px; height: 34px; margin: -2px 0 0 -10px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; transition: background 0.15s, color 0.15s, transform 0.15s; }
+.collapse:hover { background: var(--surface-2); color: var(--text); transform: translateX(2px); }
+.collapse:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.drawer-tabs button:focus { outline: none; }
+.drawer-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
+@media (prefers-reduced-motion: reduce) { .drawer, .drawer.leaving { animation-duration: 0.01s; } }

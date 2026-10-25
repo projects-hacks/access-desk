@@ -7,6 +7,7 @@ import { reducers, tables } from '../module_bindings';
 import { PERMISSION_GROUPS } from '../lib/permissions';
 import { Badge } from './Badge';
 import { Select } from './Select';
+import { CollapseButton, useSlideClose } from './useSlideClose';
 
 export type PanelMode = 'overview' | 'access' | 'notes';
 
@@ -29,10 +30,12 @@ export function ClientPanel({
   onClose: () => void;
 }) {
   const c = row.client;
+  const { leaving, close } = useSlideClose(onClose);
   return (
-    <aside className="drawer" aria-label={c.name}>
+    <aside className={`drawer ${leaving ? 'leaving' : ''}`} aria-label={c.name}>
       <div className="drawer-head">
-        <div>
+        <CollapseButton onClick={close} />
+        <div className="drawer-title">
           <div className="eyebrow">
             T{c.tier} · {c.segment} · <span className="mono">{c.id}</span>
             {c.relationshipManager && ` · RM ${c.relationshipManager}`}
@@ -43,9 +46,6 @@ export function ClientPanel({
             {c.strategic && <Badge>Strategic</Badge>}
           </div>
         </div>
-        <button className="btn ghost icon" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
       </div>
       <div className="drawer-tabs" role="tablist">
         {MODES.map((m) => (
