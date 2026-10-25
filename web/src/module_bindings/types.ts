@@ -286,6 +286,7 @@ export const Episode = __t.object("Episode", {
   kind: __t.string(),
   startedAt: __t.timestamp(),
   updatedAt: __t.timestamp(),
+  simDate: __t.string(),
 });
 export type Episode = __Infer<typeof Episode>;
 

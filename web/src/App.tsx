@@ -91,6 +91,10 @@ export function App() {
           // On a phone the sheet covers the screen it just opened.
           if (!window.matchMedia('(min-width: 900px)').matches) setAgentsOpen(false);
         }}
+        onOpenAudit={() => {
+          setScreen('audit');
+          if (!window.matchMedia('(min-width: 900px)').matches) setAgentsOpen(false);
+        }}
       />
     </div>
   );

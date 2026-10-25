@@ -40,6 +40,8 @@ export const episode = table(
     kind: t.string(),
     startedAt: t.timestamp(),
     updatedAt: t.timestamp(),
+    /** The platform's business day it started on. */
+    simDate: t.string().default(''),
   },
 );
 

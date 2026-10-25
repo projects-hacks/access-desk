@@ -1,4 +1,4 @@
-import { actorOf, type Ctx } from './context';
+import { actorOf, simDate, type Ctx } from './context';
 import { formatUsd } from './payments/match';
 import { LEVER_LABEL } from './reducers/actions';
 
@@ -128,7 +128,7 @@ export function step(ctx: Ctx, s: StepInput) {
     if (!s.opens) return;
     const trigger = humanize(ctx, typeof s.opens === 'string' ? s.opens : task?.reason || s.text);
     ep = ctx.db.episode.insert({
-      id: 0n, clientId: s.clientId, trigger, outcome: '', kind: 'auto', startedAt: ctx.timestamp, updatedAt: ctx.timestamp,
+      id: 0n, clientId: s.clientId, trigger, outcome: '', kind: 'auto', startedAt: ctx.timestamp, updatedAt: ctx.timestamp, simDate: simDate(ctx),
     });
   }
   if (task && !task.episodeId) ctx.db.agentTask.id.update({ ...task, episodeId: ep.id });

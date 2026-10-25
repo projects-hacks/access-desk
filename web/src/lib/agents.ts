@@ -114,9 +114,15 @@ export type AgentsView = {
   needs: Need[];
   /** The newest episode that is running, or finished moments ago. */
   now?: EpisodeView;
+  /** The platform's business day ('YYYY-MM-DD'). */
+  today: string;
+  /** Today's episodes besides the live one, newest first. */
   earlier: EpisodeView[];
-  /** Episodes that exist, including those beyond the Earlier cap. */
+  /** Episodes today, including those beyond the cap. */
   total: number;
+  /** While today has little to show: the last few episodes of the day before, and that day. */
+  before: EpisodeView[];
+  beforeDay: string;
   working: boolean;
   /** Did this step arrive by push in the last few seconds (as opposed to being there on load)? */
   isFresh: (step: EpisodeStep) => boolean;
@@ -128,6 +134,8 @@ export function useAgents(): AgentsView {
   const [episodes, episodesReady] = useTable(tables.episode);
   const [steps, stepsReady] = useTable(tables.episodeStep);
   const [clients, clientsReady] = useTable(tables.client);
+  const [clockRows] = useTable(tables.clock);
+  const today = clockRows[0]?.simDate ?? '';
   const ready = tasksReady && episodesReady && stepsReady && clientsReady;
   const now = useNow(1000);
   const arrivals = useArrivals(
@@ -178,7 +186,11 @@ export function useAgents(): AgentsView {
         };
       });
     const live = views.find((v) => v.settling);
-    const earlier = views.filter((v) => v !== live);
+    // History lives in the Audit log; the panel is about the business day.
+    const earlier = views.filter((v) => v !== live && v.episode.simDate === today);
+    const older = views.filter((v) => v !== live && v.episode.simDate !== today);
+    const beforeDay = older.find((v) => v.episode.simDate)?.episode.simDate ?? '';
+    const before = earlier.length < 3 ? older.filter((v) => v.episode.simDate === beforeDay).slice(0, 5) : [];
 
     const roster = AGENTS.map(({ key, name, role, purpose }): AgentStatus => {
       const mine = tasks.filter((t) => t.agent === key);
@@ -215,10 +227,13 @@ export function useAgents(): AgentsView {
       roster,
       needs,
       now: live,
+      today,
       earlier: earlier.slice(0, EARLIER_LIMIT),
-      total: episodes.length,
+      total: earlier.length,
+      before,
+      beforeDay,
       working: roster.some((r) => r.working) || !!live?.running,
       isFresh: (step: EpisodeStep) => now - (arrivals.get(step.id) ?? 0) < SETTLE_MS,
     };
-  }, [tasks, episodes, steps, clients, ready, now, arrivals]);
+  }, [tasks, episodes, steps, clients, today, ready, now, arrivals]);
 }

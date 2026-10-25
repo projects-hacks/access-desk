@@ -18,4 +18,5 @@ export default __t.row({
   kind: __t.string(),
   startedAt: __t.timestamp().name("started_at"),
   updatedAt: __t.timestamp().name("updated_at"),
+  simDate: __t.string().name("sim_date"),
 });

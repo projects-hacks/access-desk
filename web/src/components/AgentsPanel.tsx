@@ -6,6 +6,7 @@ import {
 import { AGENTS, clock, EARLIER_LIMIT, isAgent, offset, sameNews, useAgents, withoutClient, type EpisodeView, type Need } from '../lib/agents';
 import type { EpisodeStep } from '../module_bindings/types';
 import { Hint } from './Hint';
+import { simDay } from '../lib/format';
 
 type Actor = { name: string; role?: string; about: string; icon: LucideIcon; hue: number; low?: boolean; ink?: boolean };
 
@@ -191,9 +192,15 @@ function EarlierRow({ view, open, onToggle }: { view: EpisodeView; open: boolean
       <button className="ap-row" onClick={onToggle} aria-expanded={open}>
         <Icon size={16} className={`ap-kind ${view.running ? 'running' : view.episode.kind}`} aria-hidden />
         <span className="ap-row-text">
-          <span className="ap-row-trigger">{view.episode.trigger}</span>
-          <span className={`ap-row-outcome ${view.episode.kind}`}>
-            {view.episode.outcome && !sameNews(view.episode.outcome, view.episode.trigger, view.clientName) ? view.episode.outcome : kind.badge}
+          <span className="ap-row-trigger">{withoutClient(view.episode.trigger, view.clientName)}</span>
+          <span className="ap-row-outcome">
+            <span className="ap-row-client">{view.clientName}</span>
+            {' · '}
+            <span className={view.episode.kind}>
+              {view.episode.outcome && !sameNews(view.episode.outcome, view.episode.trigger, view.clientName)
+                ? withoutClient(view.episode.outcome, view.clientName)
+                : kind.badge}
+            </span>
           </span>
         </span>
         <span className="ap-row-side">
@@ -238,8 +245,10 @@ function NeedCard({ need, onOpen }: { need: Need; onOpen: () => void }) {
 }
 
 /** The docked panel (a bottom sheet on narrow screens) showing the agents working, live from the database. */
-export function AgentsPanel({ open, onToggle, onOpenApprovals }: { open: boolean; onToggle: () => void; onOpenApprovals: (need: Need) => void }) {
-  const { roster, needs, now, earlier, total, working, isFresh } = useAgents();
+export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
+  open: boolean; onToggle: () => void; onOpenApprovals: (need: Need) => void; onOpenAudit: () => void;
+}) {
+  const { roster, needs, now, today, earlier, total, before, beforeDay, working, isFresh } = useAgents();
   const [expanded, setExpanded] = useState<Set<bigint>>(new Set());
   const toggle = (id: bigint) =>
     setExpanded((s) => {
@@ -305,8 +314,8 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals }: { open: boolean
         {now && <NowCard view={now} fresh={isFresh} />}
         <section className="ap-section">
           <div className="ap-headrow">
-            <h4 className="ap-head">Earlier</h4>
-            {total > 0 && <span>{total > earlier.length + (now ? 1 : 0) ? `latest ${EARLIER_LIMIT} of ${total}` : `${total} episodes`}</span>}
+            <h4 className="ap-head">Today · {simDay(today).replace(/, \d{4}$/, '')}</h4>
+            {total > 0 && <span>{total > earlier.length ? `latest ${EARLIER_LIMIT} of ${total}` : `${total} ${total === 1 ? 'episode' : 'episodes'}`}</span>}
           </div>
           {earlier.length ? (
             <ul className="ap-list">
@@ -315,9 +324,24 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals }: { open: boolean
               ))}
             </ul>
           ) : (
-            !now && <p className="ap-empty">Nothing yet. When something happens, the agents show up here.</p>
+            !now && !before.length && <p className="ap-empty">Quiet so far today. When something happens, the agents show up here.</p>
           )}
         </section>
+        {before.length > 0 && (
+          <section className="ap-section">
+            <div className="ap-headrow">
+              <h4 className="ap-head">{simDay(beforeDay).replace(/, \d{4}$/, '')}</h4>
+            </div>
+            <ul className="ap-list">
+              {before.map((v) => (
+                <EarlierRow key={v.episode.id} view={v} open={expanded.has(v.episode.id)} onToggle={() => toggle(v.episode.id)} />
+              ))}
+            </ul>
+          </section>
+        )}
+        <button className="ap-history" onClick={onOpenAudit}>
+          Full history in the Audit log <ArrowUpRight size={13} aria-hidden />
+        </button>
       </div>
     </aside>
     </StatusContext.Provider>
