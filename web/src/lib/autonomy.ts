@@ -26,7 +26,10 @@ const isOpen = (w: WorkItem) => w.state === 'PROPOSED' || w.state === 'NEEDS_INF
 /** Which of the reasons put this item in front of a person (for open or decided items). */
 export function reasonFor(item: WorkItem, client?: Client): ReasonKey | undefined {
   if (item.autoApplied) return;
-  if (item.kind === 'POLICY_DRAFT') return item.policyRef.startsWith('exploit-fix-') ? 'exploit' : 'policy';
+  if (item.kind === 'POLICY_DRAFT') {
+    if (item.policyRef.startsWith('exploit-fix-')) return 'exploit';
+    return item.policyRef.startsWith('credit-') ? 'console' : 'policy';
+  }
   if (item.title.startsWith('Offboarding')) return 'offboarding';
   if (item.policyRef === 'manual') return 'console';
   // Mirrors isTopClient in spacetime/src/autonomy.ts.
