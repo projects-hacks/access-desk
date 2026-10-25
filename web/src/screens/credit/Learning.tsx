@@ -233,7 +233,7 @@ export function Learning({
           <strong>Agent decision trace & backtest</strong>
           <span className="muted">
             {' '}
-            · how the Seat 1 agent scored and decided each client, and how accurate it was
+            · how Quinn scored and decided each client, and how accurate it was
           </span>
         </summary>
         <CreditDesk />

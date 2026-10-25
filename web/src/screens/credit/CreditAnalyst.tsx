@@ -22,7 +22,7 @@ type Tab = keyof typeof TABS;
 /**
  * Seat 1, the credit analyst: scores every client on value and reliability, sorts them
  * into tiers, spots clients gaming the terms, and learns from what people decide.
- * Changes to the tier guidelines are proposals that wait in Approvals.
+ * The controller's changes to the tier guidelines apply at once.
  */
 export function CreditAnalyst() {
   const policy = useCreditPolicy();
@@ -36,11 +36,11 @@ export function CreditAnalyst() {
     <section className="ca">
       <div className="screen-head">
         <div>
-          <div className="eyebrow">Seat 1 · Predictive</div>
+          <div className="eyebrow">Quinn and Rowan · Credit and exploits</div>
           <h2>Credit Analyst</h2>
           <p className="muted">
             Scores every client on value and reliability, sorts them into tiers, and flags clients
-            gaming the terms. Changes to the tier guidelines wait in Approvals.
+            gaming the terms. A change you make to the guidelines applies at once and is kept in the audit log.
           </p>
         </div>
         <div className="row">
