@@ -16,8 +16,8 @@ const BASELINE = [
   ['pol-013', 'Duplicate payments are refunded to the account they came from', { when: 'quoted invoices already paid by an identical wire', then: 'refund through the bank automatically' }],
   ['pol-015', 'Returned payments reverse their applications and reopen the invoices', { when: 'bank returns a payment', then: 'reverse applications' }],
   ['pol-016', 'Correct a books break without approval when the evidence explains it to the cent', { when: 'an adjusting entry closes every unexplained difference exactly, never touches cash, confidence 0.8+', then: 'post it; anything partial goes to a controller' }],
-  ['pol-020', "Downgrade a client's tier on score or exploit flag, with controller approval", { when: 'formula tier worse than current, or an exploit flag', then: 'propose up to two steps down to a controller' }],
-  ['pol-021', "Upgrade a client's tier one step at a time, with controller approval", { when: 'reliability clears the band line by 3+ points, no recent_late flag', then: 'propose one step up to a controller' }],
+  ['pol-020', "Downgrade a client's tier on score or exploit flag; Tier 1 and strategic clients go to a controller", { when: 'formula tier worse than current, or an exploit flag', then: 'move up to two steps down; a controller decides for Tier 1 or strategic clients' }],
+  ['pol-021', "Upgrade a client's tier one step at a time; a promotion into Tier 1 goes to a controller", { when: 'reliability clears the band line by 3+ points, no recent_late flag', then: 'move one step up; a controller decides a promotion into Tier 1' }],
   ['pol-022', "Strategic clients' tiers change only by a person; the agent may request a review", { when: 'strategic client, formula tier worse than current', then: 'propose a review, never a tier change' }],
 ] as const;
 
