@@ -11,11 +11,16 @@ Built for Cal Hacks 13.0 on a fictional platform, Northstar Prime, with 30 insti
 - **Restricts carefully.** One access setting, one step at a time, never more than is owed, never before the cure period ends, and never close-only on a hedged book.
 - **Restores automatically.** When the client pays, holds are released and access returns in the same transaction.
 - **Spots clients gaming the terms.** For example, paying only the day before a restriction, or using small partial payments to reset the clock.
-- **Learns.** Every decision a person makes becomes a precedent the agents read. Every policy the agents propose carries its own success test, checked against real payments.
-- **Asks a person only when it should.** Restricting a top client, offboarding, changing policy, or when the agent is not confident.
+- **Keeps the books honest.** Every sync is tied out against the bank. When something does not tie, Iris traces it to the payments that caused it and posts a correcting entry on her own if it closes the gap to the cent. Money from an unknown sender is matched to its owner or sent back after five days.
+- **Learns.** Every decision a person makes becomes a precedent the agents read. Every policy the agents propose carries its own success test, checked against real payments. A policy that fails is replaced by a better one.
+- **Asks a person only when it should.** Restricting a top client, offboarding, a policy that changes the contract or moves money, or when the agent is not confident. Reminder-only policies apply on their own. A proposal nobody decides in 10 business days is withdrawn and the agent decides again on fresh numbers.
 
 ## How it works
 
+![Neo architecture: the bank, the platform and live prices feed SpacetimeDB on Azure; four Droid agents read from it and propose through it; the controller and the client view update live](docs/architecture.png)
+
+<details>
+<summary>The same diagram as text</summary>
 
 ```mermaid
 flowchart LR
@@ -74,6 +79,8 @@ flowchart LR
     class console,portal peopleStyle
 ```
 
+</details>
+
 1. A payment lands at the bank. Sync records it in SpacetimeDB.
 2. In one transaction the database matches it, applies it, releases holds if the client is now current, writes the audit row, and queues a task for each agent that should look.
 3. The task is pushed to the agents. No polling, no orchestrator.
@@ -85,27 +92,27 @@ flowchart LR
 
 | Agent | Job | Woken by |
 |---|---|---|
-| Iris, Learning | Keeps each client's credit profile current and checks the client's own policies against new payments | New client, payment, dispute, a person's rejection, each business day |
+| Iris, Learning | Keeps each client's credit profile current, grades the client's own policies against new payments, and looks after the books | New client, payment, dispute, a person's rejection, a books break, unidentified cash, each business day |
 | Quinn, Scoring | Turns the profile into a tier and proposes tier changes or client policies | Iris moving a profile, a client policy failing |
 | Rowan, ExploitWatch | Finds clients gaming the payment terms | Payment, return, dispute, deadline, withdrawal |
 | Sage, Access | Collects, holds, restricts and restores, one step at a time | Payment, return, deadline, RM note, tier change, exploit flag, each business day |
 
-Each agent handles one client per task, several clients in parallel. Decisions that need judgment go to Factory's Droid. Routine cases run on rules in milliseconds.
+Each agent handles one client per task, several clients in parallel. When Sage or Rowan has a real decision to make, a Droid session reads the client through tools (overview, invoices, payments, history, similar cases at other clients) and acts through the same guarded reducers. Quinn asks Droid for tier and policy decisions. Routine cases run on rules in milliseconds, and the rules take over if the model times out or is refused. See [agents](docs/agents.md).
 
 ## Guardrails live in the database
 
-Agents act through the same reducers as people, so their proposals face the same checks inside the transaction: contract clauses, the platform's capabilities, policy, the amount owed, cure periods, hedged positions, and who may approve what. A refused action is recorded and shown with what the agent did instead. Nobody approves their own proposal, and only the gateway writes to the bank and the platform.
+Agents act through the same reducers as people, so their proposals face the same checks inside the transaction: contract clauses, the platform's capabilities, policy, the amount owed, cure periods, hedged positions, payments still in transit, and who may approve what. A refused action is recorded and shown with what the agent did instead. Nobody approves their own proposal, and only the gateway writes to the bank and the platform.
 
 ## The platform runs on its own
 
-The hosted server keeps Northstar Prime alive. A business day passes every 15 minutes. Billing issues invoices each month. Clients behave like themselves: most pay on time, some pay late or in part, one games the terms, a few are chronically late, and now and then a wire is short, duplicated or returned. Clients also withdraw and trade at live prices. Everything goes through the real paths, so you can step in at any moment, approve, reject, pay or trade, and the desk carries on from there. See [world](docs/world.md).
+The hosted server keeps Northstar Prime alive. A business day passes every 15 minutes. Billing issues invoices each month. Clients behave like themselves: most pay on time, some pay late or in part, one games the terms, a few are chronically late, and now and then a wire is short, duplicated or returned. Clients also withdraw and trade at live prices. Everything goes through the real paths, so you can step in at any moment as the controller, Maya Chen: approve, reject, pay, trade or change a client by hand. Her changes apply at once and the desk carries on from there. See [world](docs/world.md).
 
 ## Built with
 
 | | Used for |
 |---|---|
 | [SpacetimeDB](https://spacetimedb.com) | The shared state: reducers hold the rules, the task queue wakes the agents, subscriptions push every change, a scheduled reducer runs the business clock. [Why SpacetimeDB](docs/spacetimedb.md) |
-| [Factory Droid](https://factory.ai) | The agents' reasoning |
+| [Factory Droid](https://factory.ai) | The agents' reasoning, with tools served over MCP |
 | [Capital One Nessie](http://api.nessieisreal.com) | Bank accounts, wires, ACH, refunds and withdrawals |
 | [Microsoft Azure](https://azure.microsoft.com/products/container-apps) | Container Apps for the API server and the agents, deployed by GitHub Actions |
 | React and Vite | The controller console and the client view, on Vercel |

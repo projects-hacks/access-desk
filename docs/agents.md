@@ -36,7 +36,7 @@ Each reducer checks the contract, the platform's capabilities and policy before 
 | Reducer | Checks |
 |---|---|
 | `propose_custody_debit` | debit clause signed (§6.3), invoices overdue and undisputed, USD custody covers them |
-| `propose_restriction` | lever in contract, step in `capability`, something overdue, cure period over (§9.1), set-off clause for withdrawals, no close-only on a hedged book (pol-008) |
+| `propose_restriction` | lever in contract, step in `capability`, something overdue, cure period over (§9.1), set-off clause for withdrawals, no close-only on a hedged book (pol-008), no restriction while a payment from the last 5 days is still in transit |
 | `propose_restore` | lever currently restricted |
 | `propose_notice` | non-empty body |
 | `set_deadline` | date after today |
@@ -103,7 +103,7 @@ It also checks the data (`paid_mismatch`, `prior_overclaimed`, `invoice_overappl
 | Rejections | A person rejecting an agent's proposal wakes Iris. The same view is not proposed again for 30 sim days. The panel logs "Lesson recorded from a rejection" |
 | Client policies | A model draft becomes a `policy` row `pol-020:<client>@<version>` (`draft`) and a `POLICY_DRAFT` item. Agents can only save drafts. Approval (automatic for reminder-only) makes it `active` and the previous version `superseded`; rejection makes it `rejected` |
 | Success tests | Each draft carries criteria (`share_paid_within_grace`, `mean_days_late`, `max_days_late`, `pattern_not_firing`). Iris evaluates active policies on invoices due since `effective_on` (fewer than 2: `pending`) and writes the verdict with `record_policy_outcome`. A policy turning failing wakes Quinn for a better version |
-| Weekly trend | Each business week the module counts `AUTO_APPLIED` against `PROPOSE` (needed a person) and writes `share_needing_human` and `handled_automatically` to `metric_snapshot`, continuing from 12 weeks of history (`spacetime/src/autonomyTrend.ts`) |
+| Weekly trend | Each business week the module counts `AUTO_APPLIED` against `PROPOSE` (needed a person) over the last four weeks, so one busy week does not swing it, and writes `share_needing_human` and `handled_automatically` to `metric_snapshot`, continuing from 12 weeks of history (`spacetime/src/autonomyTrend.ts`) |
 
 ## Iris on the books
 
@@ -130,9 +130,9 @@ Droid (`@factory/droid-sdk`) answers first, the Claude API (`@anthropic-ai/sdk`)
 
 Measured on Maincloud (2026-10-24): reducer call to committed to pushed back, median about 100 ms, p90 330 ms (n = 18, mostly network); withdrawal request to decided to wired through Nessie, 1.08 s; a Droid decision (Quinn), about 11 s.
 
-## Agents with tools (behind a setting, off by default)
+## Agents with tools
 
-`AGENT_MODE` lets Sage and Rowan run as Droid sessions that read the database and act through MCP tools instead of answering one question. **The default is `rules`, and that is what runs today.** The tools path is built and tested but not switched on.
+`AGENT_MODE` lets Sage and Rowan run as Droid sessions that read the database and act through MCP tools instead of answering one question. **The hosted agents run with `droid`.** The code default is `rules`, so a local run never acts unless asked.
 
 | `AGENT_MODE` | |
 |---|---|
