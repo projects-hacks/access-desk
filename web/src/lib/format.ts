@@ -71,8 +71,10 @@ export function plainText(text: string, names: Map<string, string> = new Map()):
     .replace(/\bORG-\d+\b/g, (id) => names.get(id) ?? 'the client')
     .replace(/\bpol-\d+\b/gi, 'policy')
     // Bank and work item refs mean nothing in a sentence; the screen shows the payment itself.
-    .replace(/\s*\(\s*(?:WI|AC|TX|JD|WE|CW)-[A-Z]?\d+\s*\)/g, '')
-    .replace(/\s+(?:WI|AC|TX|JD|WE|CW)-[A-Z]?\d+\b/g, '')
+    .replace(/\s*\(\s*(?:WI|AC|TX|JD|WE|CW|DSP)-[A-Z]?\d+\s*\)/g, '')
+    .replace(/\s+(?:WI|AC|TX|JD|WE|CW|DSP)-[A-Z]?\d+\b/g, '')
+    // A wallet address reads as 0xa47d…7b9c.
+    .replace(/\b(0x[0-9a-fA-F]{4})[0-9a-fA-F]{8,}([0-9a-fA-F]{4})\b/g, '$1…$2')
     .replace(/\b(?:WIRE|USDC)\b(?= (?:of|from|to)\b)/g, (w) => (w === 'WIRE' ? 'wire' : w))
     .replace(/\b[A-Z][A-Z&'.]+(?:\s+[A-Z][A-Z&'.]+)+\b/g, titleCaseName)
     .replace(/\s*·?\s*\bscores? \d+(\.\d+)?/gi, '')

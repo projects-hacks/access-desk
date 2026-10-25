@@ -195,5 +195,7 @@ export const resetWorld = spacetimedb.reducer({ simDate: t.string() }, (ctx, { s
 export const worldSettled = spacetimedb.reducer({}, (ctx) => {
   requireRole(ctx, CAN_RESET);
   const c = ctx.db.clock.id.find(1);
-  if (c?.settling) ctx.db.clock.id.update({ ...c, settling: false, updatedAt: ctx.timestamp });
+  if (!c?.settling) return;
+  ctx.db.clock.id.update({ ...c, settling: false, updatedAt: ctx.timestamp });
+  runTieOut(ctx, 'reset reloaded');
 });

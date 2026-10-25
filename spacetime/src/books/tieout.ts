@@ -31,6 +31,8 @@ const CASH_ACCOUNTS: Record<string, string> = { collections: '1010', disbursemen
  * anything else is unexplained and goes to the controller.
  */
 export function runTieOut(ctx: Ctx, trigger: string) {
+  // While a reset reloads the bank before the ledger, the two cannot agree yet; the reset ties out once it is whole.
+  if (ctx.db.clock.id.find(1)?.settling) return;
   const today = simDate(ctx);
 
   // GL balances (debit − credit).

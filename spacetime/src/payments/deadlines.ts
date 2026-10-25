@@ -1,4 +1,4 @@
-import { route } from '../agents';
+import { BOOKS, route } from '../agents';
 import { addDays, audit, simDate, type Ctx } from '../context';
 
 /**
@@ -60,6 +60,10 @@ export function evaluateDeadlines(ctx: Ctx) {
       fromState: 'open', toState: status, detail: `${d.kind.replace(/_/g, ' ')} ${status} on ${today}${d.clause ? ` (§${d.clause})` : ''}`,
     });
     if (status !== 'due') route(ctx, 'deadline', d.clientId, `${d.kind.replace(/_/g, ' ')} ${status} on ${today}`);
+  }
+  // Unclaimed cash past its return-by date is Iris's to return or keep; she is asked each day until it is settled.
+  if ([...ctx.db.deadline.clientId.filter(BOOKS)].some((d) => d.kind === 'return_by' && d.status === 'due')) {
+    route(ctx, 'unidentified', BOOKS, `Unclaimed cash is past its return-by date (${today})`);
   }
 }
 

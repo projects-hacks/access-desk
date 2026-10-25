@@ -31,7 +31,7 @@ async function main() {
   }
   const conn = await connect();
   new Dispatcher(conn, AGENTS, makeAsk()).start();
-  console.log(`[agents] ${AGENTS.map((a) => `${a.name}×${a.concurrency}`).join(', ')} waiting for tasks`);
+  console.log(`[agents] ${AGENTS.map((a) => `${a.name}×${a.concurrency}`).join(', ')} waiting for tasks · AGENT_MODE=${env.AGENT_MODE}`);
 }
 
 main().catch((e) => {
