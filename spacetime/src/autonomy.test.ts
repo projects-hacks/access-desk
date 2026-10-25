@@ -31,12 +31,20 @@ test('an unreadable tier is never applied', () => {
   assert.match(needsHuman(review({}, { action: 'tier_change', to_tier: 9 })) ?? '', /unreadable/);
 });
 
-test('an exploit fix (a policy draft editing the tier guidelines) always waits for a person', () => {
-  const draft = (over: Partial<AutonomyInput> = {}): AutonomyInput => ({
-    kind: 'POLICY_DRAFT', tier: 4, strategic: false, confidence: 0.95, proposal: { rule: { terms: [{ lever: 'prepay' }] } }, ...over,
+test('a client policy that changes the contract or moves money always waits for a person', () => {
+  const draft = (levers: string[], over: Partial<AutonomyInput> = {}): AutonomyInput => ({
+    kind: 'POLICY_DRAFT', tier: 4, strategic: false, confidence: 0.95, proposal: { rule: { terms: levers.map((lever) => ({ lever })) } }, ...over,
   });
-  assert.match(needsHuman(draft()) ?? '', /exploit fix/);
-  assert.match(needsHuman(draft({ tier: 5, confidence: 1 })) ?? '', /exploit fix/);
+  assert.match(needsHuman(draft(['prepay'])) ?? '', /contract or moves money/);
+  assert.match(needsHuman(draft(['reminder', 'cure_days'], { tier: 5, confidence: 1 })) ?? '', /contract or moves money/);
+  assert.match(needsHuman(draft([])) ?? '', /contract or moves money/);
+});
+
+test('a client policy that only adds reminders is within the desk\'s authority and applies on its own', () => {
+  const reminders: AutonomyInput = { kind: 'POLICY_DRAFT', tier: 4, strategic: false, confidence: 0.95, proposal: { rule: { terms: [{ lever: 'reminder' }] } } };
+  assert.equal(needsHuman(reminders), undefined);
+  // Reminders need no approval for any client (pol-007), top clients included.
+  assert.equal(needsHuman({ ...reminders, tier: 1 }), undefined);
 });
 
 test('exploit alerts are acknowledged automatically, for any client, whatever the confidence', () => {

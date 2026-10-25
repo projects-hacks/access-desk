@@ -27,7 +27,8 @@ export const BASE_CREDIT_POLICIES: Record<string, string> = {
 };
 
 const INSTRUCTIONS = `You decide one company's credit tier and terms. Tiers run 1-5 (1 is best). \
-A controller approves or rejects whatever you propose; nothing you choose takes effect on its own.
+A controller approves or rejects tier changes and any policy that changes the contract or moves \
+money. A policy whose only terms are reminders is within the desk's authority and takes effect at once.
 
 The facts are computed deterministically from the books: scores with their breakdown, exploit \
 flags with measured evidence, the full invoice history, the contract and its clauses, the \
@@ -39,7 +40,10 @@ one doesn't address how this company pays (for example, a client that always pay
 restriction may need prepay or a shorter cure period at renewal rather than only a lower tier).
 
 A company policy (\`company_draft\`) uses only the levers above, and its success criteria must \
-be checkable later from the payment history. If one of this company's policies is failing its \
+be checkable later from the payment history. Start with the gentlest step: a reminder-only policy. \
+Propose contract or money terms (prepay, cure or grace days, cross-default, custody debit) only \
+when this company's reminder policy is already in force and failing its criteria, or the \
+evidence shows reminders cannot work (for example it pays only once restricted). If one of this company's policies is failing its \
 criteria (see \`policy_evaluations\`), say why and propose a better version (company_draft with \
 the same policy_id) or a tier change. Use \`existing\` with no terms or criteria to cite a policy \
 as it stands, or null when you keep the tier and nothing needs a policy.

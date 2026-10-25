@@ -5,7 +5,9 @@
  * - to restrict a top client (Tier 1 or strategic);
  * - to offboard a client, decided where the step is chosen (capability.two_approvers,
  *   permissions.ts);
- * - on an exploit fix: a POLICY_DRAFT that edits the guidelines tied to the tiers;
+ * - on a client policy that changes the contract or moves money (prepay, cure or grace days,
+ *   cross-default, custody debit). One that only adds reminders is within the desk's authority
+ *   (pol-007) and applies on its own;
  * - as a safety net, when the agent's own confidence is below MIN_AUTO_CONFIDENCE.
  * Pure, so it is unit-tested; the module calls it from propose_work_item.
  */
@@ -37,8 +39,11 @@ export const isGoverned = (kind: string) => (GOVERNED_KINDS as readonly string[]
 
 /** Why a person must decide this, or undefined when it can apply on its own. */
 export function needsHuman(i: AutonomyInput): string | undefined {
-  // An exploit fix changes the guidelines every client on that tier is held to.
-  if (i.kind === 'POLICY_DRAFT') return 'edits the tier guidelines (exploit fix)';
+  if (i.kind === 'POLICY_DRAFT') {
+    const terms = ((i.proposal ?? {}) as { rule?: { terms?: { lever?: string }[] } }).rule?.terms ?? [];
+    // Reminders are already the desk's to send; anything else changes what the client signed.
+    return terms.length && terms.every((t) => t.lever === 'reminder') ? undefined : 'changes the contract or moves money';
+  }
   // Exploit alerts are warnings to read, not actions.
   if (i.kind === 'EXPLOIT_FLAG') return undefined;
   if (isTopClient(i.tier, i.strategic)) return i.strategic ? 'strategic client' : 'tier 1 client';
