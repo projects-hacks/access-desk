@@ -187,7 +187,8 @@ export function useAgents(): AgentsView {
 
     // The panel is about the agents: an episode shows once an agent has a step in it, or while an
     // agent is working on it. Everything else (a withdrawal the platform paid out, say) is in the Audit log.
-    const withAgent = (id: bigint) => busy.has(id) || (stepsBy.get(id) ?? []).some((s) => isAgent(s.actor));
+    // A client's own policy sending its reminder on the daily clock counts too: an agent put that policy in force.
+    const withAgent = (id: bigint) => busy.has(id) || (stepsBy.get(id) ?? []).some((s) => isAgent(s.actor) || (s.actor === 'scheduler' && /^Reminder to /.test(s.text)));
     // The business day a moment falls in: the last day whose first audit row came before it.
     const dayStart = new Map<string, number>();
     for (const e of audit) {

@@ -276,7 +276,8 @@ export function stepFromAudit(ctx: Ctx, e: AuditLike) {
       const actor = PAYMENT_KINDS.has(item.kind) ? 'payment' : senderActor(ctx, agent);
       const checks = [...policy, ...(item.autoApplied ? [{ ok: true, label: 'no approval needed' }] : [])];
       return step(ctx, {
-        clientId, actor, agent, text: item.title, reason: actor === agent ? item.reasoning : '', checks, workItemId: item.id, opens: true,
+        // A client's own policy acting on the daily clock keeps its reasons too.
+        clientId, actor, agent, text: item.title, reason: actor === agent || item.subjectId.startsWith('reminder:') ? item.reasoning : '', checks, workItemId: item.id, opens: true,
         waiting: !item.autoApplied || undefined,
       });
     }
