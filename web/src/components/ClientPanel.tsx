@@ -6,9 +6,11 @@ import { label, money } from '../lib/format';
 import { useSession } from '../lib/session';
 import { reducers, tables } from '../module_bindings';
 import { Avatar } from './Avatar';
+import { PERMISSION_GROUPS } from '../lib/permissions';
 import { Badge } from './Badge';
 import { MoneyTab } from './MoneyTab';
 import { Select } from './Select';
+import { CollapseButton, useSlideClose } from './useSlideClose';
 
 export type PanelMode = 'overview' | 'money' | 'access' | 'notes';
 
@@ -32,9 +34,11 @@ export function ClientPanel({
   onClose: () => void;
 }) {
   const c = row.client;
+  const { leaving, close } = useSlideClose(onClose);
   return (
-    <aside className="drawer" aria-label={c.name}>
+    <aside className={`drawer ${leaving ? 'leaving' : ''}`} aria-label={c.name}>
       <div className="drawer-head">
+        <CollapseButton onClick={close} />
         <Avatar id={c.id} name={c.name} size="lg" />
         <div className="drawer-title">
           <div className="eyebrow">
@@ -47,9 +51,6 @@ export function ClientPanel({
             {c.strategic && <Badge>Strategic</Badge>}
           </div>
         </div>
-        <button className="btn ghost icon" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
       </div>
       <div className="drawer-tabs" role="tablist">
         {MODES.map((m) => (
@@ -210,31 +211,6 @@ function leverText(l: Lever) {
   if (l.state === 'active') return l.detail || 'On';
   return l.detail || (l.state === 'off' ? 'Off' : 'Limited');
 }
-
-const PERMISSION_GROUPS = [
-  {
-    lever: 'withdrawals',
-    name: 'Custody',
-    items: [
-      { key: 'crypto_withdrawals', name: 'Crypto withdrawals' },
-      { key: 'fiat_withdrawals', name: 'Fiat withdrawals' },
-      { key: 'transfers', name: 'Transfers between portfolios' },
-      { key: 'staking', name: 'Staking' },
-    ],
-  },
-  {
-    lever: 'trading',
-    name: 'Trading',
-    items: [
-      { key: 'buy', name: 'Buy' },
-      { key: 'sell', name: 'Sell' },
-      { key: 'derivatives', name: 'Derivatives' },
-      { key: 'otc', name: 'OTC desk' },
-    ],
-  },
-  { lever: 'api', name: 'API', items: [{ key: 'api', name: 'API access' }] },
-  { lever: 'financing', name: 'Borrowing', items: [{ key: 'borrowing', name: 'New borrowing' }] },
-] as const;
 
 /**
  * People change tier and permissions the same way agents do: each change is a proposal.
@@ -421,8 +397,8 @@ function ChangeAccess({ row }: { row: ClientRow }) {
       ))}
       {results.some((r) => r.tone === 'good') && (
         <p className="eyebrow">
-          Tier 1–2 and strategic clients, and turning off Sell, wait in Approvals for a second
-          controller.
+          Changes apply at once, except for top clients (Tier 1 or strategic) and offboarding (every
+          permission off), which wait in Approvals for the other controller.
         </p>
       )}
     </>

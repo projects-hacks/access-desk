@@ -49,11 +49,16 @@ export function BankBooks() {
   const tied = run && run.unexplainedCents === 0n;
 
   return (
-    <>
-      <p className="muted">
-        Live from the platform's bank at Nessie (Capital One): every deposit and withdrawal is read, matched and booked
-        as it lands. Bank sync {bank?.status === 'error' ? <span className="bad-text">failing</span> : 'every 5 s'} · last {synced}.
-      </p>
+    <section>
+      <div className="screen-head">
+        <div>
+          <h2>Bank & books</h2>
+          <p className="muted">
+            Live from the platform's bank at Nessie (Capital One): every deposit and withdrawal is read, matched and
+            booked as it lands. Bank sync {bank?.status === 'error' ? <span className="bad-text">failing</span> : 'every 5 s'} · last {synced}.
+          </p>
+        </div>
+      </div>
 
       <h4 className="row spread">
         <span className="row"><Landmark size={15} aria-hidden /> Accounts against the ledger</span>
@@ -132,7 +137,7 @@ export function BankBooks() {
           ))}
         </ul>
       )}
-    </>
+    </section>
   );
 }
 

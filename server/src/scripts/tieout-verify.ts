@@ -40,7 +40,7 @@ await wait(800);
 const broken = latest()!;
 check(broken.status === 'break' && broken.unexplainedCents === 123_456n, 'Caught as an unexplained $1,234.56 break', `${broken.status} ${broken.unexplainedCents}`);
 check(breaksOf(broken.id).some((b) => b.kind === 'unexplained' && b.area === 'cash:collections'), 'Located in cash: collections (1010)');
-check([...db.workItem.iter()].some((w) => w.kind === 'BOOKS_BREAK' && w.state === 'PROPOSED'), 'Escalated to the controller as a work item');
+check([...db.workItem.iter()].some((w) => w.kind === 'BOOKS_BREAK' && w.amountCents === 123_456n && w.autoApplied), 'Logged as a work item (no approval)');
 
 conn.disconnect();
 console.log(failed ? `\nFAILED: ${failed} checks` : '\nAll checks passed. (Run pnpm demo:reset to remove the planted line.)');

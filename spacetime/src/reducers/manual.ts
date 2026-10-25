@@ -1,6 +1,6 @@
 import { SenderError, t } from 'spacetimedb/server';
 import { audit, requireRole, type Ctx } from '../context';
-import { needsHuman } from '../autonomy';
+import { isTopClient, needsHuman } from '../autonomy';
 import { PERMISSIONS, isPermission, leverSummary, permissionNeedsHuman, type PermissionKey } from '../permissions';
 import { queueCommand } from '../payments/gateway';
 import { spacetimedb } from '../schema';
@@ -8,8 +8,8 @@ import { executeApproved } from './actions';
 
 /**
  * A controller moves a client to another tier from the console. Same CREDIT_REVIEW
- * path as the credit agent: tier 3 to 5 moves apply at once; tier 1 and 2, strategic
- * clients and moves onto tier 5 wait for a second controller (no self-approval).
+ * path as the credit agent: it applies at once, except for top clients (Tier 1 or
+ * strategic), which wait for a second controller (no self-approval).
  */
 export const proposeTierChange = spacetimedb.reducer(
   { clientId: t.string(), toTier: t.u8(), reasoning: t.string() },
@@ -33,7 +33,7 @@ export const proposeTierChange = spacetimedb.reducer(
     });
     audit(ctx, {
       action: auto ? 'AUTO_APPLIED' : 'PROPOSE', subjectType: 'work_item', subjectId: String(item.id), clientId, workItemId: item.id,
-      fromState: 'NEW', toState: item.state, detail: `${title} · ${auto ? 'applied: tier 3 to 5 move' : `needs a second controller: ${reason}`}`,
+      fromState: 'NEW', toState: item.state, detail: `${title} · ${auto ? 'applied' : `needs a second controller: ${reason}`}`,
       policyRef: 'manual',
     });
     if (auto) executeApproved(ctx, item.id);
@@ -44,8 +44,8 @@ const PermissionChange = t.object('PermissionChange', { key: t.string(), enabled
 
 /**
  * A controller switches fine-grained permissions (buy, sell, crypto withdrawals...) from the
- * console. Giving access back and routine cuts for tier 3 to 5 apply at once; tier 1 and 2,
- * strategic clients and turning off sell wait for a second controller.
+ * console. It applies at once, except for top clients (Tier 1 or strategic) and offboarding
+ * (every permission off), which wait for a second controller.
  */
 export const proposePermissionChange = spacetimedb.reducer(
   { clientId: t.string(), changes: t.array(PermissionChange), reasoning: t.string() },
@@ -62,7 +62,16 @@ export const proposePermissionChange = spacetimedb.reducer(
       if (!row || row.state === 'not_used') throw new SenderError(`${lever} is not part of ${c.name}'s contract`);
     }
 
-    const reason = permissionNeedsHuman({ tier: c.tier, strategic: c.strategic, changes });
+    // Offboarding: after this change, every permission under every product the client has is off.
+    const levers = new Set([...ctx.db.accessLever.clientId.filter(clientId)].filter((l) => l.state !== 'not_used').map((l) => l.lever));
+    const after = (key: PermissionKey) => {
+      const ch = changes.find((x) => x.key === key);
+      if (ch) return ch.enabled;
+      const row = ctx.db.permission.id.find(`${clientId}:${key}`);
+      return row ? row.enabled : ctx.db.accessLever.id.find(`${clientId}:${PERMISSIONS.find((p) => p.key === key)!.lever}`)?.state === 'active';
+    };
+    const offboards = PERMISSIONS.filter((p) => levers.has(p.lever)).every((p) => !after(p.key));
+    const reason = permissionNeedsHuman({ topClient: isTopClient(c.tier, c.strategic), offboards, changes });
     const auto = reason === undefined;
     const name = (k: string) => PERMISSIONS.find((p) => p.key === k)!.name;
     const title = `${c.name}: ${changes.map((ch) => `${name(ch.key)} ${ch.enabled ? 'on' : 'off'}`).join(', ')}`;

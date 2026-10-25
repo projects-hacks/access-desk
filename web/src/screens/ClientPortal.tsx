@@ -1,8 +1,534 @@
+import { useMemo, useState } from 'react';
+import { useTable } from 'spacetimedb/react';
+import { Select } from '../components/Select';
+import { SlidingPill } from '../components/SlidingPill';
+import { shortDate, useClientRows, type ClientRow } from '../lib/clients';
+import { demo } from '../lib/demo';
+import { money } from '../lib/format';
+import { PERMISSION_GROUPS, permissionOn } from '../lib/permissions';
+import { usePlatform } from '../lib/session';
+import { tables } from '../module_bindings';
+
+/** How the client hears about each paused permission: plain words, no internal codes. */
+const PAUSED_COPY: Record<string, string> = {
+  crypto_withdrawals: 'Crypto withdrawals',
+  fiat_withdrawals: 'Cash withdrawals',
+  transfers: 'Transfers between portfolios',
+  staking: 'Staking',
+  buy: 'Buying',
+  sell: 'Selling',
+  derivatives: 'Derivatives trading',
+  otc: 'OTC desk trades',
+  api: 'API trading',
+  borrowing: 'New borrowing',
+};
+
+const PAGES = { home: 'Home', assets: 'My assets', pay: 'Pay balance' } as const;
+type Page = keyof typeof PAGES;
+
+type Paused = { key: string; label: string; detail?: string };
+type Holding = { asset: string; quantity: number; valueCents: bigint };
+
+const COIN: Record<string, { name: string; color: string; glyph: string }> = {
+  BTC: { name: 'Bitcoin', color: '#f7931a', glyph: '₿' },
+  ETH: { name: 'Ethereum', color: '#627eea', glyph: 'Ξ' },
+  SOL: { name: 'Solana', color: '#9945ff', glyph: 'S' },
+  USDC: { name: 'USD Coin', color: '#2775ca', glyph: '$' },
+  USD: { name: 'US Dollar', color: '#098551', glyph: '$' },
+};
+
+/** Everything the client can't do right now, from permissions, levers and holds. */
+function pausedFor(row: ClientRow, permissions: Parameters<typeof permissionOn>[1]): Paused[] {
+  const out: Paused[] = [];
+  for (const g of PERMISSION_GROUPS) {
+    const lever = row.levers.find((l) => l.key === g.lever);
+    if (!lever || lever.state === 'not_used' || lever.state === 'active') continue;
+    const fine = g.items.filter((p) =>
+      permissions.some((x) => x.clientId === row.client.id && x.key === p.key),
+    );
+    if (fine.length) {
+      for (const p of g.items)
+        if (!permissionOn(row, permissions, p.key, g.lever))
+          out.push({ key: p.key, label: PAUSED_COPY[p.key] ?? p.name });
+    } else if (g.lever === 'trading') {
+      // Agent steps on trading: no new positions / close-only stop buying but keep selling.
+      if (lever.state === 'off')
+        out.push({ key: 'buy', label: 'Buying' }, { key: 'sell', label: 'Selling' });
+      else if (/OTC/i.test(lever.detail)) out.push({ key: 'otc', label: 'OTC desk trades' });
+      else out.push({ key: 'buy', label: 'Buying', detail: lever.detail });
+    } else {
+      // Other agent steps (a hold, read-only API...): one line for the product.
+      out.push({ key: g.lever, label: g.name, detail: lever.detail });
+    }
+  }
+  return out;
+}
+
+const can = (paused: Paused[], ...keys: string[]) => !paused.some((p) => keys.includes(p.key));
+const usesLever = (row: ClientRow, lever: string) =>
+  row.levers.some((l) => l.key === lever && l.state !== 'not_used');
+
+/**
+ * What the client sees on their own platform, laid out like a retail exchange's web app
+ * (sidebar · balance and assets · trade panel): their money, what's paused and why, and
+ * how to get it back.
+ */
 export function ClientPortal() {
+  const rows = useClientRows();
+  const [permissions] = useTable(tables.permission);
+  const [holdings] = useTable(tables.custodyHolding);
+  const platform = usePlatform();
+  // Starts on the most overdue client with something paused, so there's a restriction to show.
+  const [clientId, setClientId] = useState('');
+  const [page, setPage] = useState<Page>('home');
+  const [panel, setPanel] = useState<'trade' | 'withdraw'>('trade');
+  const [dismissed, setDismissed] = useState('');
+
+  const sorted = useMemo(
+    () => [...rows].sort((a, b) => a.client.name.localeCompare(b.client.name)),
+    [rows],
+  );
+  const row =
+    rows.find((r) => r.client.id === clientId) ??
+    [...rows]
+      .filter((r) => pausedFor(r, permissions).length)
+      .sort((a, b) => b.daysPastDue - a.daysPastDue)[0] ??
+    sorted[0];
+  if (!row) return <div className="empty">Loading…</div>;
+
+  const paused = pausedFor(row, permissions);
+  const own = holdings
+    .filter((h) => h.clientId === row.client.id)
+    .sort((a, b) => Number(b.valueCents - a.valueCents));
+  const total = own.reduce((s, h) => s + h.valueCents, 0n);
+  const usd = own.find((h) => h.asset === 'USD')?.valueCents ?? 0n;
+  const showBanner = paused.length > 0 && dismissed !== row.client.id;
+
   return (
     <section>
-      <h2>Client portal</h2>
-      <p>What the client sees: balance, restrictions, pay-to-restore.</p>
+      <div className="screen-head">
+        <div>
+          <h2>Client view</h2>
+          <p className="muted">What a client sees in their own app when access is paused.</p>
+        </div>
+        <label className="viewing-as">
+          <span className="eyebrow">Viewing as</span>
+          <Select
+            label="Client"
+            value={row.client.id}
+            onChange={(id) => {
+              setClientId(id);
+              setPage('home');
+              setPanel('trade');
+            }}
+            options={sorted.map((r) => ({
+              value: r.client.id,
+              label: r.client.name,
+              hint: pausedFor(r, permissions).length ? 'paused' : undefined,
+            }))}
+          />
+        </label>
+      </div>
+
+      <div className="cx">
+        <aside className="cx-side">
+          <div className="cx-logo" title={platform?.name ?? 'Northstar Prime'} />
+          <nav aria-label="Client app">
+            {(Object.keys(PAGES) as Page[]).map((p) => (
+              <button
+                key={p}
+                className={page === p ? 'active' : ''}
+                aria-current={page === p ? 'page' : undefined}
+                onClick={() => setPage(p)}
+              >
+                <span className="cx-navdot" />
+                {PAGES[p]}
+                {p === 'pay' && row.overdueCents > 0n && <span className="cx-reddot" />}
+              </button>
+            ))}
+          </nav>
+          <div className="cx-who">
+            <strong>{row.client.name}</strong>
+            <span>{platform?.name ?? 'Northstar Prime'}</span>
+          </div>
+        </aside>
+
+        <div className="cx-main">
+          <header className="cx-head">
+            <h3>{PAGES[page]}</h3>
+            <div className="cx-search">Search for an asset</div>
+          </header>
+          <div className="cx-content">
+            {showBanner && (
+              <div className="cx-alert" role="status">
+                <span className="cx-alert-icon">!</span>
+                <div>
+                  <strong>Some actions on your account are paused</strong>
+                  <p>
+                    {row.overdueCents > 0n
+                      ? `${money(row.overdueCents)} is ${row.daysPastDue} days overdue. ${paused
+                          .map((p) => p.label)
+                          .join(', ')} paused until it's paid; access comes back automatically.`
+                      : `${paused.map((p) => p.label).join(', ')} paused. Contact your relationship manager.`}
+                  </p>
+                  {row.overdueCents > 0n && page !== 'pay' && (
+                    <button className="cx-link" onClick={() => setPage('pay')}>
+                      Pay {money(row.overdueCents)}
+                    </button>
+                  )}
+                </div>
+                <button
+                  className="cx-close"
+                  aria-label="Dismiss"
+                  onClick={() => setDismissed(row.client.id)}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            {page === 'home' && (
+              <>
+                <div className="cx-card">
+                  <div className="cx-card-title">My balance</div>
+                  <div className="cx-balance">
+                    <span className="cx-cur">$</span>
+                    {money(total).replace('$', '')}
+                  </div>
+                </div>
+                <h4 className="cx-section">Your assets</h4>
+                <Assets holdings={own} />
+                <h4 className="cx-section">Account access</h4>
+                <Access row={row} paused={paused} />
+              </>
+            )}
+            {page === 'assets' && <Assets holdings={own} />}
+            {page === 'pay' && <Pay row={row} wire={platform?.wireInstructions ?? ''} />}
+          </div>
+        </div>
+
+        <aside className="cx-panel">
+          {panel === 'trade' ? (
+            <TradePanel row={row} paused={paused} onWithdraw={() => setPanel('withdraw')} />
+          ) : (
+            <WithdrawPanel row={row} paused={paused} usd={usd} onBack={() => setPanel('trade')} />
+          )}
+        </aside>
+      </div>
     </section>
+  );
+}
+
+function Assets({ holdings }: { holdings: Holding[] }) {
+  if (!holdings.length) return <div className="cx-card muted">No assets held with us.</div>;
+  return (
+    <div className="cx-card cx-rows">
+      {holdings.map((h) => {
+        const c = COIN[h.asset] ?? { name: h.asset, color: '#5b616e', glyph: h.asset[0] };
+        return (
+          <div key={h.asset} className="cx-asset-row">
+            <span className="cx-coin" style={{ background: c.color }}>
+              {c.glyph}
+            </span>
+            <span className="cx-asset-name">
+              <strong>{c.name}</strong>
+              <span>{h.asset}</span>
+            </span>
+            <span className="cx-qty">
+              {h.asset === 'USD'
+                ? 'Cash'
+                : `${h.quantity.toLocaleString('en-US', { maximumFractionDigits: 4 })} ${h.asset}`}
+            </span>
+            <span className="cx-amt">{money(h.valueCents)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Access({ row, paused }: { row: ClientRow; paused: Paused[] }) {
+  if (!paused.length)
+    return <div className="cx-card cx-ok">Everything on your account is available.</div>;
+  return (
+    <div className="cx-card cx-rows">
+      {paused.map((p) => (
+        <div key={p.key} className="cx-access-row">
+          <span>{p.label}</span>
+          <span className="cx-tag">{p.detail ?? 'Paused'}</span>
+        </div>
+      ))}
+      <p className="cx-foot">
+        Paused until your overdue balance is paid. Everything else keeps working
+        {usesLever(row, 'trading') && can(paused, 'sell')
+          ? ', including selling and closing positions.'
+          : '.'}
+      </p>
+    </div>
+  );
+}
+
+const SIDES = { buy: 'Buy', sell: 'Sell', convert: 'Convert' } as const;
+type Side = keyof typeof SIDES;
+
+/** Right panel: buy / sell / convert, and the money actions underneath. */
+function TradePanel({
+  row,
+  paused,
+  onWithdraw,
+}: {
+  row: ClientRow;
+  paused: Paused[];
+  onWithdraw: () => void;
+}) {
+  const [side, setSide] = useState<Side>('buy');
+  const [note, setNote] = useState(false);
+  const trading = usesLever(row, 'trading');
+  const blocked = !trading || (side !== 'convert' && !can(paused, side));
+  const withdrawals = usesLever(row, 'withdrawals');
+  const cashBlocked = !can(paused, 'fiat_withdrawals');
+  const cryptoBlocked = !can(paused, 'crypto_withdrawals');
+
+  const actions = [
+    // Custody isn't on every account: those actions say so instead of "Paused".
+    {
+      key: 'send',
+      icon: '↑',
+      label: 'Send crypto',
+      off: !withdrawals || cryptoBlocked,
+      why: withdrawals ? 'Paused' : 'Not on your account',
+    },
+    {
+      key: 'receive',
+      icon: '↓',
+      label: 'Receive crypto',
+      off: !withdrawals,
+      why: 'Not on your account',
+    },
+    { key: 'deposit', icon: '⊟', label: 'Deposit cash', off: false, why: '' },
+    {
+      key: 'withdraw',
+      icon: '⊟',
+      label: 'Withdraw cash',
+      off: !withdrawals || cashBlocked,
+      why: withdrawals ? 'Paused' : 'Not on your account',
+    },
+  ];
+
+  return (
+    <>
+      <div className="cx-sides" role="tablist">
+        <SlidingPill active={side} className="dark" />
+        {(Object.keys(SIDES) as Side[]).map((s) => (
+          <button
+            key={s}
+            role="tab"
+            data-active={side === s}
+            aria-selected={side === s}
+            onClick={() => {
+              setSide(s);
+              setNote(false);
+            }}
+          >
+            {SIDES[s]}
+          </button>
+        ))}
+      </div>
+      <span className="cx-chip">One-time order ▾</span>
+      <div className="cx-big">
+        0 USD <span className="cx-chip">Max</span>
+      </div>
+      <div className="cx-conv">↕ 0 BTC</div>
+      <button className="btn primary cx-cta" disabled={blocked} onClick={() => setNote(true)}>
+        {!trading
+          ? 'Trading not on your account'
+          : blocked
+            ? `${SIDES[side]}ing is paused`
+            : `Review ${SIDES[side].toLowerCase()}`}
+      </button>
+      {trading && blocked && (
+        <p className="cx-why">
+          {SIDES[side]}ing is paused until your overdue balance is paid.
+          {side === 'buy' && can(paused, 'sell')
+            ? ' You can still sell and close positions, so your hedges stay intact.'
+            : ''}
+        </p>
+      )}
+      {note && <p className="cx-foot">Order entry isn't part of this demo.</p>}
+
+      <hr className="cx-rule" />
+      <div className="cx-actions">
+        {actions.map((a) => (
+          <button
+            key={a.key}
+            className={a.off ? 'off' : ''}
+            onClick={a.key === 'withdraw' ? onWithdraw : undefined}
+            disabled={a.key !== 'withdraw' && a.off}
+          >
+            <span className="cx-action-icon">{a.icon}</span>
+            {a.label}
+            {a.off && <span className={`cx-tag ${a.why === 'Paused' ? '' : 'na'}`}>{a.why}</span>}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+type WithdrawResult = {
+  decision: string;
+  requestedCents: string;
+  releasedCents: string;
+  heldCents: string;
+  reason: string;
+};
+
+function WithdrawPanel({
+  row,
+  paused,
+  usd,
+  onBack,
+}: {
+  row: ClientRow;
+  paused: Paused[];
+  usd: bigint;
+  onBack: () => void;
+}) {
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<WithdrawResult>();
+  const [error, setError] = useState<string>();
+  const frozen =
+    !usesLever(row, 'withdrawals') ||
+    !can(paused, 'fiat_withdrawals') ||
+    row.levers.some((l) => l.key === 'withdrawals' && l.state === 'off');
+  const value = Number(amount);
+
+  async function withdraw() {
+    if (
+      !confirm(
+        `Send a real demo withdrawal of $${value.toLocaleString()} through the bank sandbox? It changes the shared demo data.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError(undefined);
+    setResult(undefined);
+    try {
+      setResult(await demo<WithdrawResult>('withdraw', { clientId: row.client.id, amount: value }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button className="cx-back" onClick={onBack} aria-label="Back">
+        ←
+      </button>
+      <h3 className="cx-panel-title">Withdraw cash</h3>
+      <div className="cx-big cx-input">
+        <input
+          inputMode="decimal"
+          placeholder="0"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+          aria-label="Amount in US dollars"
+          disabled={frozen}
+        />
+        USD
+      </div>
+      <div className="cx-field">
+        <span>From</span>
+        <strong>USD balance · {money(usd)}</strong>
+      </div>
+      <div className="cx-field">
+        <span>To</span>
+        <strong>Bank account on file</strong>
+      </div>
+      <button
+        className="btn primary cx-cta"
+        disabled={frozen || busy || !(value > 0)}
+        onClick={withdraw}
+      >
+        {frozen ? 'Cash withdrawals are paused' : busy ? 'Sending…' : 'Continue'}
+      </button>
+      {frozen && usesLever(row, 'withdrawals') && (
+        <p className="cx-why">Cash withdrawals are paused until your overdue balance is paid.</p>
+      )}
+      {error && <p className="notice bad">{error}</p>}
+      {result && <WithdrawOutcome r={result} />}
+    </>
+  );
+}
+
+function WithdrawOutcome({ r }: { r: WithdrawResult }) {
+  const released = BigInt(r.releasedCents);
+  const held = BigInt(r.heldCents);
+  const tone = held === 0n ? 'good' : released > 0n ? 'warn' : 'bad';
+  return (
+    <div className={`cx-outcome ${tone}`}>
+      <strong>
+        {held === 0n
+          ? `${money(released)} is on its way`
+          : released > 0n
+            ? `${money(released)} sent · ${money(held)} held`
+            : 'Withdrawal held'}
+      </strong>
+      {held > 0n && (
+        <p>
+          {money(held)} stays in your account until your overdue balance is paid
+          {r.reason ? ` (${r.reason})` : ''}.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Pay({ row, wire }: { row: ClientRow; wire: string }) {
+  const open = row.invoices.filter(
+    (i) => i.status !== 'void' && i.paidCents < i.amountCents && i.status !== 'disputed',
+  );
+  if (!open.length)
+    return (
+      <div className="cx-card">
+        <div className="cx-balance">You're all paid up</div>
+        <p className="muted">Nothing is owed. Any paused access comes back automatically.</p>
+      </div>
+    );
+  return (
+    <>
+      <div className="cx-card">
+        <div className="cx-card-title">Amount due</div>
+        <div className="cx-balance">
+          <span className="cx-cur">$</span>
+          {money(row.unpaidCents).replace('$', '')}
+        </div>
+        {row.overdueCents > 0n && <p className="cx-why">{money(row.overdueCents)} is past due.</p>}
+      </div>
+      <div className="cx-card cx-rows">
+        {open.map((i) => (
+          <div key={i.id} className="cx-asset-row">
+            <span className="cx-asset-name">
+              <strong>{i.label || i.id}</strong>
+              <span>
+                {i.id} · due {shortDate(i.dueOn)}
+              </span>
+            </span>
+            <span className="cx-amt">{money(i.amountCents - i.paidCents)}</span>
+          </div>
+        ))}
+      </div>
+      <h4 className="cx-section">Pay by wire</h4>
+      <div className="cx-card">
+        <p className="cx-wire">{wire || '—'}</p>
+        <p className="cx-foot">
+          Use <strong className="mono">{row.client.id}</strong> and the invoice numbers as the
+          reference. Access comes back as soon as the payment arrives.
+        </p>
+      </div>
+    </>
   );
 }

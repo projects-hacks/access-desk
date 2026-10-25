@@ -111,14 +111,15 @@ export function runTieOut(ctx: Ctx, trigger: string) {
   });
   for (const b of breaks) ctx.db.tieOutBreak.insert({ id: 0n, runId: run.id, ...b });
 
-  const open = [...ctx.db.workItem.iter()].some((w) => w.kind === 'BOOKS_BREAK' && (w.state === 'PROPOSED' || w.state === 'NEEDS_INFO'));
-  if (status === 'break' && !open) {
+  // Logged, not escalated: one item per distinct unexplained amount, so reruns don't repeat it.
+  const logged = [...ctx.db.workItem.iter()].some((w) => w.kind === 'BOOKS_BREAK' && w.amountCents === unexplainedTotal);
+  if (status === 'break' && !logged) {
     createWorkItem(ctx, {
       kind: 'BOOKS_BREAK', clientId: '', subjectId: `tie_out_run:${run.id}`, amountCents: unexplainedTotal,
       title: `Books don't tie out: ${formatUsd(unexplainedTotal)} unexplained`,
       proposal: { runId: String(run.id), breaks: breaks.filter((b) => b.kind === 'unexplained').map((b) => ({ ...b, amountCents: b.amountCents.toString() })) },
       reasoning: 'Bank, ledger and receivables disagree by more than queued journals and in-transit items explain.',
-      policyRef: '', confidence: 1, requiredRole: 'CONTROLLER', autoApplied: false,
+      policyRef: '', confidence: 1, requiredRole: 'CONTROLLER', autoApplied: true,
     });
   }
   audit(ctx, { action: 'TIE_OUT', subjectType: 'tie_out_run', subjectId: String(run.id), toState: status, detail: `${trigger}: ${status}${unexplainedTotal ? `, ${formatUsd(unexplainedTotal)} unexplained` : ''}` });

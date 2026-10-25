@@ -68,10 +68,10 @@ function onIncoming(ctx: Ctx, m: Movement, previous: Movement | undefined) {
     setMatchStatus(ctx, m.id, 'exception');
     createWorkItem(ctx, {
       kind: 'UNIDENTIFIED_CASH', clientId: '', subjectId: m.id, amountCents: m.amountCents,
-      title: `Unidentified ${formatUsd(m.amountCents)} ${m.rail} from ${m.origName || m.origAccount}`,
+      title: `Parked ${formatUsd(m.amountCents)} ${m.rail} from ${m.origName || m.origAccount} as unapplied cash`,
       proposal: { movementId: m.id, origAccount: m.origAccount, origName: m.origName },
-      reasoning: 'The sender is not in the CRM and the payment quotes no client or invoice. Nobody is restricted while this is open.',
-      policyRef: 'pol-001', confidence: 0, requiredRole: 'ACCOUNTANT', autoApplied: false,
+      reasoning: 'The sender is not in the CRM and the payment quotes no client or invoice, so the cash stays on the books as unapplied until a payer claims it. Nobody is restricted because of it.',
+      policyRef: 'pol-001', confidence: 0, requiredRole: 'ACCOUNTANT', autoApplied: true,
     });
     return;
   }
@@ -107,13 +107,15 @@ function onIncoming(ctx: Ctx, m: Movement, previous: Movement | undefined) {
   if (result.kind === 'duplicate') {
     setMatchStatus(ctx, m.id, 'exception');
     ctx.db.clientCredit.insert({ id: 0n, clientId: payer.clientId, kind: 'unapplied_cash', amountCents: m.amountCents, movementId: m.id });
-    createWorkItem(ctx, {
+    // Sent straight back through the bank: the refund wire clears the credit when it comes back through the feed.
+    const refund = createWorkItem(ctx, {
       kind: 'REFUND', clientId: payer.clientId, subjectId: m.id, amountCents: m.amountCents,
-      title: `Possible duplicate: ${formatUsd(m.amountCents)} for ${result.invoiceIds.join(', ')}, already paid`,
-      proposal: { movementId: m.id, refundCents: m.amountCents, invoices: result.invoiceIds },
-      reasoning: 'Every quoted invoice was already paid by an earlier wire with the same amount. The cash is held as unapplied credit; refund it or keep it as credit.',
-      policyRef: 'pol-013', confidence: 0.9, requiredRole: 'CONTROLLER', autoApplied: false,
+      title: `Duplicate ${formatUsd(m.amountCents)} for ${result.invoiceIds.join(', ')} refunded`,
+      proposal: { movementId: m.id, invoices: result.invoiceIds, refundCents: m.amountCents },
+      reasoning: 'Every quoted invoice was already paid by an earlier wire with the same amount, so the second wire is sent back to the account it came from.',
+      policyRef: 'pol-013', confidence: 0.9, requiredRole: 'CONTROLLER', autoApplied: true,
     });
+    onPaymentApproved(ctx, refund.id);
     return;
   }
   if (result.kind === 'none') {
@@ -122,38 +124,33 @@ function onIncoming(ctx: Ctx, m: Movement, previous: Movement | undefined) {
     createWorkItem(ctx, {
       kind: 'UNAPPLIED_CASH', clientId: payer.clientId, subjectId: m.id, amountCents: m.amountCents,
       title: `${formatUsd(m.amountCents)} from ${m.origName} with nothing to apply to`,
-      proposal: { movementId: m.id }, reasoning: result.reason, policyRef: 'pol-001', confidence: 0.5,
-      requiredRole: 'ACCOUNTANT', autoApplied: false,
+      proposal: { movementId: m.id }, reasoning: `${result.reason} Held as credit on the account.`, policyRef: 'pol-001', confidence: 0.5,
+      requiredRole: 'ACCOUNTANT', autoApplied: true,
     });
     return;
   }
 
   const plan = result.plan;
-  const trusted = payer.via === 'account' || payer.via === 'wallet';
-  const auto = trusted && (plan.method !== 'partial' || plan.usedReferences);
   const policyRef = plan.method === 'short_fee' ? 'pol-002' : plan.method === 'overpaid' ? 'pol-012' : payer.relation !== 'self' ? 'pol-004' : 'pol-001';
 
-  if (!auto) {
-    setMatchStatus(ctx, m.id, 'proposed');
-    const newIdentity = payer.via === 'name' && m.origAccount ? { kind: 'bank_account', value: m.origAccount, label: `${m.origName} · new account` } : undefined;
-    createWorkItem(ctx, {
-      kind: 'PAYMENT_MATCH', clientId: payer.clientId, subjectId: m.id, amountCents: m.amountCents,
-      title: `Confirm ${formatUsd(m.amountCents)} from ${m.origName} → ${plan.allocations.map((a) => a.invoiceId).join(', ')}`,
-      proposal: { movementId: m.id, plan, newIdentity },
-      reasoning: `${plan.basis}. Payer identified by ${describeVia(payer)}${newIdentity ? `; account ${m.origAccount} is not in the CRM yet and will be added on approval` : ''}.`,
-      policyRef, confidence: payer.via === 'name' ? 0.8 : 0.6, requiredRole: 'ACCOUNTANT', autoApplied: false,
-    });
-    return;
-  }
+  // Every plan applies, including a payer known only by name (its new account joins the CRM)
+  // and a partial payment that quotes no invoice (applied oldest first by the plan).
 
+  const newAccount = payer.via === 'name' && m.origAccount ? m.origAccount : undefined;
+  if (newAccount) {
+    const id = `${payer.clientId}:acct:${newAccount}`;
+    if (!ctx.db.payerIdentity.id.find(id)) {
+      ctx.db.payerIdentity.insert({ id, clientId: payer.clientId, kind: 'bank_account', value: newAccount, label: `${m.origName} · new account`, relation: 'self', verified: true });
+    }
+  }
   // Cash billing already applied (history) reconciles quietly; anything new becomes a visible auto-applied item.
   const item = isAlreadyApplied(ctx, plan)
     ? undefined
     : createWorkItem(ctx, {
         kind: 'PAYMENT_MATCH', clientId: payer.clientId, subjectId: m.id, amountCents: m.amountCents,
         title: matchTitle(m, plan, payer), proposal: { movementId: m.id, plan },
-        reasoning: `${plan.basis}. Payer identified by ${describeVia(payer)}.`,
-        policyRef, confidence: 0.98, requiredRole: 'ACCOUNTANT', autoApplied: true,
+        reasoning: `${plan.basis}. Payer identified by ${describeVia(payer)}${newAccount ? `; account ${newAccount} added to the CRM` : ''}.`,
+        policyRef, confidence: payer.via === 'name' ? 0.8 : 0.98, requiredRole: 'ACCOUNTANT', autoApplied: true,
       });
   const applied = applyPlan(ctx, m, payer.clientId, plan, policyRef, item?.id);
   if (!item && !m.isHistory) {
@@ -244,10 +241,10 @@ function onOutgoing(ctx: Ctx, m: Movement) {
   } else {
     setMatchStatus(ctx, m.id, 'exception');
     createWorkItem(ctx, {
-      kind: 'UNIDENTIFIED_CASH', clientId: '', subjectId: m.id, amountCents: m.amountCents,
+      kind: 'UNEXPLAINED_OUTFLOW', clientId: '', subjectId: m.id, amountCents: m.amountCents,
       title: `Unexplained ${formatUsd(m.amountCents)} leaving ${m.platformAccount}`,
-      proposal: { movementId: m.id }, reasoning: 'Money left a platform account with no matching instruction.',
-      policyRef: '', confidence: 0, requiredRole: 'CONTROLLER', autoApplied: false,
+      proposal: { movementId: m.id }, reasoning: 'Money left a platform account with no matching instruction. Logged for the books.',
+      policyRef: '', confidence: 0, requiredRole: 'CONTROLLER', autoApplied: true,
     });
     return;
   }

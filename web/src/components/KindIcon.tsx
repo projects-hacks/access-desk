@@ -1,5 +1,5 @@
 import {
-  AlertTriangle, Bell, CircleHelp, FileCheck2, Flag, Gauge, Link2, Lock, RotateCcw, Scale, ShieldAlert, Undo2,
+  AlertTriangle, Bell, CircleHelp, Coins, FileCheck2, Flag, Gauge, Link2, Lock, OctagonAlert, RotateCcw, Scale, ShieldAlert, Undo2,
   Unlock, Wallet, type LucideIcon,
 } from 'lucide-react';
 
@@ -18,6 +18,8 @@ const ICONS: Record<string, LucideIcon> = {
   EXPLOIT_FLAG: Flag,
   BOOKS_BREAK: Scale,
   SYSTEM_EXCEPTION: AlertTriangle,
+  UNEXPLAINED_OUTFLOW: OctagonAlert,
+  UNAPPLIED_CASH: Coins,
   PERMISSION_CHANGE: ShieldAlert,
 };
 

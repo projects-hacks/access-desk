@@ -4,6 +4,7 @@ import { createWorkItem, overdueCents, recomputeInvoice, releaseHoldsIfCured, wi
 import { GL, cr, dr, queueCommand, queueJournal } from '../payments/gateway';
 import { cureState, defaultedInvoices } from '../payments/deadlines';
 import { formatUsd } from '../payments/match';
+import { isTopClient, lowConfidence } from '../autonomy';
 import { spacetimedb } from '../schema';
 import { applyCreditReview, applyPolicyDraft } from './credit';
 import { applyPermissionChange } from './manual';
@@ -13,9 +14,10 @@ import { applyPermissionChange } from './manual';
  * contract, the platform's capabilities and policy before a work item exists.
  * Approval (or policy auto-approval) executes it through the gateway.
  *
- * Auto-approval: an active policy covers the kind. A person is needed only to
- * restrict a top client (Tier 1 or strategic) and for offboarding steps
- * (close-only, full freeze). Debits, notices and restores never wait.
+ * Auto-approval: an active policy covers the kind and the agent's confidence clears
+ * MIN_AUTO_CONFIDENCE (autonomy.ts). A person is needed only to restrict a top client
+ * (Tier 1 or strategic), for offboarding steps (close-only, full freeze) and below that
+ * confidence. Debits, notices and restores never wait otherwise.
  */
 
 const PROPOSERS = ['AGENT', 'CONTROLLER', 'ADMIN'] as const;
@@ -70,8 +72,7 @@ function policyActive(ctx: Ctx, policyId: string): boolean {
 export function canAutoApply(ctx: Ctx, kind: string, clientId: string): boolean {
   const policy = AUTO_POLICY[kind];
   const c = ctx.db.client.id.find(clientId);
-  const topClient = !!c && (c.tier <= 1 || c.strategic);
-  return !!policy && policyActive(ctx, policy) && !!c && !(kind === 'RESTRICTION' && topClient);
+  return !!policy && policyActive(ctx, policy) && !!c && !(kind === 'RESTRICTION' && isTopClient(c.tier, c.strategic));
 }
 
 /** Create the work item; execute right away when policy allows. */
@@ -80,7 +81,8 @@ function propose(ctx: Ctx, w: {
   reasoning: string; policyRef: string; clausesCited: string[]; confidence: number; needsPerson?: boolean; boundariesJson?: string;
 }) {
   requireRole(ctx, PROPOSERS);
-  const auto = !w.needsPerson && canAutoApply(ctx, w.kind, w.clientId);
+  // Below the confidence threshold the agent hands the decision to a person.
+  const auto = !w.needsPerson && !lowConfidence(w.confidence) && canAutoApply(ctx, w.kind, w.clientId);
   const item = createWorkItem(ctx, {
     kind: w.kind, clientId: w.clientId, subjectId: w.clientId, title: w.title, amountCents: w.amountCents,
     proposal: w.proposal, reasoning: w.reasoning, policyRef: w.policyRef, confidence: w.confidence,
@@ -300,7 +302,7 @@ function flagCureWithdrawal(ctx: Ctx, name: string, clientId: string, requestId:
   createWorkItem(ctx, {
     kind: 'EXPLOIT_FLAG', clientId, subjectId: `access_request:${requestId}`, amountCents: releasedCents,
     title: `${name} withdrew ${formatUsd(releasedCents)} during its cure period`,
-    proposal: evidence, policyRef: 'pol-006', confidence: 0.9, requiredRole: 'CONTROLLER', autoApplied: false,
+    proposal: evidence, policyRef: 'pol-006', confidence: 0.9, requiredRole: 'CONTROLLER', autoApplied: true,
     reasoning: `In default on ${formatUsd(inDefaultCents)} with the cure period running until ${cure.dueOn}. The withdrawal had to be honored (§9.1), `
       + `and custody cash is now ${formatUsd(leftCents)}, below what is in default.`,
   });

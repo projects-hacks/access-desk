@@ -13,7 +13,7 @@ const BASELINE = [
   ['pol-008', 'Never force a hedged book to close-only; stop new positions instead', { when: 'client has open hedged positions', then: 'NO_NEW_POSITIONS, not CLOSE_ONLY' }],
   ['pol-011', 'Release holds automatically once nothing is overdue', { when: 'matched payment clears overdue', then: 'release hold, restore withdrawals' }],
   ['pol-012', 'Overpayments are held as credit on account', { when: 'payment exceeds quoted invoices', then: 'apply, credit the excess' }],
-  ['pol-013', 'Duplicate payments: hold as unapplied cash and propose a refund', { when: 'quoted invoices already paid', then: 'propose refund to controller' }],
+  ['pol-013', 'Duplicate payments are refunded to the account they came from', { when: 'quoted invoices already paid by an identical wire', then: 'refund through the bank automatically' }],
   ['pol-015', 'Returned payments reverse their applications and reopen the invoices', { when: 'bank returns a payment', then: 'reverse applications' }],
   ['pol-020', "Downgrade a client's tier on score or exploit flag, with controller approval", { when: 'formula tier worse than current, or an exploit flag', then: 'propose up to two steps down to a controller' }],
   ['pol-021', "Upgrade a client's tier one step at a time, with controller approval", { when: 'reliability clears the band line by 3+ points, no recent_late flag', then: 'propose one step up to a controller' }],

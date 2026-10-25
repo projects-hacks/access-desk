@@ -18,6 +18,7 @@ class WorkItemKind(StrEnum):
     # Raised by the system itself, never proposed by agents.
     PAYMENT_REVERSAL = "PAYMENT_REVERSAL"
     UNIDENTIFIED_CASH = "UNIDENTIFIED_CASH"
+    UNEXPLAINED_OUTFLOW = "UNEXPLAINED_OUTFLOW"
     BOOKS_BREAK = "BOOKS_BREAK"
     SYSTEM_EXCEPTION = "SYSTEM_EXCEPTION"
 

@@ -135,7 +135,7 @@ export const failGatewayCommand = spacetimedb.reducer(
         kind: 'SYSTEM_EXCEPTION', clientId: '', subjectId: `gateway_command:${id}`, amountCents: 0n,
         title: `Gateway could not ${cmd.type.toLowerCase().replace(/_/g, ' ')} (${cmd.key})`,
         proposal: { commandId: String(id), error }, reasoning: error, policyRef: '', confidence: 1,
-        requiredRole: 'CONTROLLER', autoApplied: false,
+        requiredRole: 'CONTROLLER', autoApplied: true,
       });
     }
   },

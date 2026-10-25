@@ -1,49 +1,46 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { needsHuman, type AutonomyInput } from './autonomy';
+import { lowConfidence, needsHuman, type AutonomyInput } from './autonomy';
 
 const review = (over: Partial<AutonomyInput> = {}, proposal: object = { action: 'tier_change', to_tier: 4 }): AutonomyInput => ({
   kind: 'CREDIT_REVIEW', tier: 3, strategic: false, confidence: 0.8, proposal, ...over,
 });
 
-test('a regular tier 3 downgrade to tier 4 applies on its own', () => {
+test('tier changes and reviews apply on their own, at any tier, whatever the move', () => {
   assert.equal(needsHuman(review()), undefined);
-  assert.equal(needsHuman(review({ tier: 4 }, { action: 'tier_change', to_tier: 3 })), undefined);
-});
-
-test('tier 1 and 2 clients always go to a controller, whatever the proposal', () => {
-  for (const tier of [1, 2]) {
-    assert.match(needsHuman(review({ tier }, { action: 'tier_change', to_tier: 3 })) ?? '', /client/);
-    assert.ok(needsHuman({ kind: 'POLICY_DRAFT', tier, strategic: false, confidence: 0.9, proposal: { rule: { terms: [{ lever: 'reminder' }] } } }));
-    assert.ok(needsHuman({ kind: 'EXPLOIT_FLAG', tier, strategic: false, confidence: 0.9, proposal: {} }));
+  for (const tier of [2, 3, 4, 5]) {
+    assert.equal(needsHuman(review({ tier }, { action: 'tier_change', to_tier: 5 })), undefined);
+    assert.equal(needsHuman(review({ tier }, { action: 'tier_change', to_tier: 1 })), undefined);
   }
+  assert.equal(needsHuman(review({}, { action: 'review' })), undefined);
 });
 
-test('strategic clients always go to a controller, even at tier 3', () => {
+test('below the confidence threshold any proposal goes to a person, except exploit alerts', () => {
+  assert.match(needsHuman(review({ confidence: 0.09 })) ?? '', /confidence 0.09 is below 0.1/);
+  assert.equal(needsHuman(review({ confidence: 0.1 })), undefined);
+  assert.equal(needsHuman(review({ confidence: 0.3 })), undefined);
+  assert.ok(lowConfidence(0.05));
+});
+
+test('top clients (Tier 1 or strategic) always go to a controller', () => {
   assert.equal(needsHuman(review({ strategic: true })), 'strategic client');
+  assert.equal(needsHuman(review({ tier: 1 })), 'tier 1 client');
 });
 
-test('the worst cases still need a person', () => {
-  assert.match(needsHuman(review({}, { action: 'review' })) ?? '', /review/);
-  assert.match(needsHuman(review({ tier: 4 }, { action: 'tier_change', to_tier: 5 })) ?? '', /tier 5/);
-  assert.match(needsHuman(review({}, { action: 'tier_change', to_tier: 2 })) ?? '', /tier 2/);
-  assert.match(needsHuman(review({ confidence: 0.5 })) ?? '', /confidence/);
+test('an unreadable tier is never applied', () => {
   assert.match(needsHuman(review({}, { action: 'tier_change', to_tier: 9 })) ?? '', /unreadable/);
 });
 
-test('company policies: reminders and prepay apply, custody debit and cross-default do not', () => {
-  const draft = (levers: string[], over: Partial<AutonomyInput> = {}): AutonomyInput => ({
-    kind: 'POLICY_DRAFT', tier: 4, strategic: false, confidence: 0.8,
-    proposal: { rule: { terms: levers.map((lever) => ({ lever })) } }, ...over,
+test('an exploit fix (a policy draft editing the tier guidelines) always waits for a person', () => {
+  const draft = (over: Partial<AutonomyInput> = {}): AutonomyInput => ({
+    kind: 'POLICY_DRAFT', tier: 4, strategic: false, confidence: 0.95, proposal: { rule: { terms: [{ lever: 'prepay' }] } }, ...over,
   });
-  assert.equal(needsHuman(draft(['prepay', 'reminder'])), undefined);
-  assert.match(needsHuman(draft(['reminder', 'custody_debit'])) ?? '', /custody debit/);
-  assert.match(needsHuman(draft(['cross_default'])) ?? '', /cross default/);
-  assert.match(needsHuman(draft(['reminder'], { confidence: 0.4 })) ?? '', /confidence/);
+  assert.match(needsHuman(draft()) ?? '', /exploit fix/);
+  assert.match(needsHuman(draft({ tier: 5, confidence: 1 })) ?? '', /exploit fix/);
 });
 
-test('exploit alerts on tier 3 to 5 clients are acknowledged automatically, whatever the confidence', () => {
-  const flag = (over: Partial<AutonomyInput> = {}): AutonomyInput => ({ kind: 'EXPLOIT_FLAG', tier: 4, strategic: false, confidence: 0.3, proposal: {}, ...over });
+test('exploit alerts are acknowledged automatically, for any client, whatever the confidence', () => {
+  const flag = (over: Partial<AutonomyInput> = {}): AutonomyInput => ({ kind: 'EXPLOIT_FLAG', tier: 4, strategic: false, confidence: 0.03, proposal: {}, ...over });
   assert.equal(needsHuman(flag()), undefined);
-  assert.equal(needsHuman(flag({ strategic: true })), 'strategic client');
+  assert.equal(needsHuman(flag({ tier: 1, strategic: true })), undefined);
 });
