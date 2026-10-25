@@ -551,11 +551,11 @@ pre.raw { margin: 0; padding: 10px 12px; font-family: var(--mono); font-size: 12
 .activity-day { width: 100%; }
 .activity-date { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 8px; }
 .activity-list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
-.activity-list li { display: grid; grid-template-columns: 72px 1fr; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--border); }
-.activity-list li:last-child { border-bottom: 0; }
-.activity-list li.by-person { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
-.activity-list li.refused { background: #fffafa; box-shadow: inset 3px 0 0 var(--bad); }
-.activity-list li.refused .activity-what { color: var(--bad); }
+.activity-list > li { display: grid; grid-template-columns: 72px 1fr; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+.activity-list > li:last-child { border-bottom: 0; }
+.activity-list > li.by-person { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.activity-list > li.refused { background: #fffafa; box-shadow: inset 3px 0 0 var(--bad); }
+.activity-list > li.refused .activity-what { color: var(--bad); }
 .activity-policy { font-size: 12px; color: var(--faint); }
 .activity-time { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; padding-top: 2px; }
 .activity-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; align-items: flex-start; }
@@ -564,7 +564,7 @@ pre.raw { margin: 0; padding: 10px 12px; font-family: var(--mono); font-size: 12
 .activity-client { color: var(--muted); }
 .activity-client::before { content: '· '; }
 .activity-detail { font-size: 13px; overflow-wrap: anywhere; }
-.activity-points { margin: 2px 0 0; padding-left: 18px; }
+.activity-points { margin: 2px 0 0; padding-left: 18px; list-style: disc; align-self: stretch; }
 .activity-points li { margin: 1px 0; }
 ul.activity-why { padding-left: 26px; }
 .actor { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
@@ -574,7 +574,7 @@ ul.activity-why { padding-left: 26px; }
 .activity-override { font-size: 12px; font-weight: 600; color: var(--accent); }
 .activity-why { margin: 2px 0 0; padding: 6px 12px; border-left: 2px solid var(--accent); color: var(--text); font-size: 13px; background: var(--surface); border-radius: 0 8px 8px 0; }
 .reveal-stack .activity-day { animation: reveal-in 0.42s ease-out backwards; animation-delay: 380ms; }
-@media (max-width: 720px) { .activity-list li { grid-template-columns: 1fr; gap: 4px; } }
+@media (max-width: 720px) { .activity-list > li { grid-template-columns: 1fr; gap: 4px; } }
 .seats { display: inline-flex; gap: 2px; padding: 2px; margin-left: 4px; border-radius: 999px; background: var(--surface); }
 .seats button { font: inherit; font-size: 12px; font-weight: 500; padding: 3px 10px; border: 0; border-radius: 999px; background: none; color: var(--muted); cursor: pointer; white-space: nowrap; }
 .seats button:hover { color: var(--text); }
