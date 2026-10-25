@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react';
+import { Activity, Eye, Gauge, Inbox, Users } from 'lucide-react';
 import { useTable } from 'spacetimedb/react';
 import { SlidingPill } from './components/SlidingPill';
 import { Splash } from './components/Splash';
@@ -11,11 +12,11 @@ import { CreditDesk } from './screens/CreditDesk';
 import { WorkQueue } from './screens/WorkQueue';
 
 const SCREENS = {
-  clients: { label: 'Clients', component: Clients },
-  approvals: { label: 'Approvals', component: WorkQueue },
-  credit: { label: 'Credit', component: CreditDesk },
-  activity: { label: 'Activity', component: AuditLog },
-  portal: { label: 'Client view', component: ClientPortal },
+  clients: { label: 'Clients', component: Clients, icon: Users },
+  approvals: { label: 'Approvals', component: WorkQueue, icon: Inbox },
+  credit: { label: 'Credit', component: CreditDesk, icon: Gauge },
+  activity: { label: 'Activity', component: AuditLog, icon: Activity },
+  portal: { label: 'Client view', component: ClientPortal, icon: Eye },
 } as const;
 
 type ScreenKey = keyof typeof SCREENS;
@@ -49,6 +50,10 @@ export function App() {
               aria-current={key === screen ? 'page' : undefined}
               onClick={() => setScreen(key)}
             >
+              {(() => {
+                const Icon = SCREENS[key].icon;
+                return <Icon size={15} aria-hidden />;
+              })()}
               {SCREENS[key].label}
               {key === 'approvals' && waiting > 0 && <span className="pip">{waiting}</span>}
             </button>

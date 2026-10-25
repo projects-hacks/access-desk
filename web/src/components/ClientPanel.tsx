@@ -1,20 +1,22 @@
 import { useMemo, useState } from 'react';
+import { FileText, SlidersHorizontal, StickyNote, Wallet, type LucideIcon } from 'lucide-react';
 import { useReducer, useTable } from 'spacetimedb/react';
 import { shortDate, type ClientRow, type Lever } from '../lib/clients';
 import { label, money } from '../lib/format';
 import { useSession } from '../lib/session';
 import { reducers, tables } from '../module_bindings';
+import { Avatar } from './Avatar';
 import { Badge } from './Badge';
 import { MoneyTab } from './MoneyTab';
 import { Select } from './Select';
 
 export type PanelMode = 'overview' | 'money' | 'access' | 'notes';
 
-const MODES: { key: PanelMode; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'money', label: 'Money' },
-  { key: 'access', label: 'Change access' },
-  { key: 'notes', label: 'Notes' },
+const MODES: { key: PanelMode; label: string; icon: LucideIcon }[] = [
+  { key: 'overview', label: 'Overview', icon: FileText },
+  { key: 'money', label: 'Money', icon: Wallet },
+  { key: 'access', label: 'Change access', icon: SlidersHorizontal },
+  { key: 'notes', label: 'Notes', icon: StickyNote },
 ];
 
 /** Everything about one client, plus the two things a person can do here: change access, leave a note. */
@@ -33,7 +35,8 @@ export function ClientPanel({
   return (
     <aside className="drawer" aria-label={c.name}>
       <div className="drawer-head">
-        <div>
+        <Avatar id={c.id} name={c.name} size="lg" />
+        <div className="drawer-title">
           <div className="eyebrow">
             T{c.tier} · {c.segment} · <span className="mono">{c.id}</span>
             {c.relationshipManager && ` · RM ${c.relationshipManager}`}
@@ -57,6 +60,7 @@ export function ClientPanel({
             className={mode === m.key ? 'active' : ''}
             onClick={() => onMode(m.key)}
           >
+            <m.icon size={14} aria-hidden />
             {m.label}
           </button>
         ))}

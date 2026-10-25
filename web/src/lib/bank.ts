@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTable } from 'spacetimedb/react';
 import { tables } from '../module_bindings';
 import type { AuditEvent, CashMovement, PaymentApplication, TieOutRun } from '../module_bindings/types';
-import { parseJson } from './format';
+import { label, parseJson } from './format';
 
 /** Live bank movements (the Nessie window), newest first. History stays out of the subscription. */
 export function useBankFeed(): [CashMovement[], boolean] {
@@ -131,3 +131,28 @@ export function actor(e: AuditEvent): string {
     default: return e.actorName || e.actorRole.toLowerCase();
   }
 }
+
+const VERB: Record<string, string> = {
+  APPROVED: 'approved', REJECTED: 'rejected', WITHDRAWN: 'withdrew', POSTED: 'completed',
+  NEEDS_INFO: 'asked for more on', PROPOSED: 'reopened',
+};
+
+/** One audit event as a sentence: "approved · Move Halcyon from tier 1 to tier 2". */
+export function narrate(e: AuditEvent, title?: string): { verb: string; what: string } {
+  switch (e.action) {
+    case 'TRANSITION':
+      if (!e.allowed) return { verb: 'was stopped', what: `${e.detail}${title ? ` · ${title}` : ''}` };
+      return { verb: VERB[e.toState] ?? label(e.toState).toLowerCase(), what: title ?? e.detail };
+    case 'AUTO_APPLIED': return { verb: 'did on its own', what: e.detail };
+    case 'PROPOSE': return { verb: 'proposed', what: e.detail };
+    case 'CASH_RECEIVED': return { verb: 'received', what: e.detail };
+    case 'HOLD_PLACED': return { verb: 'placed a hold', what: e.detail };
+    case 'HOLD_RELEASED': return { verb: 'released a hold', what: e.detail };
+    case 'ADVANCE_CLOCK': return { verb: 'moved the clock', what: `to ${e.toState}` };
+    case 'DEADLINE_SET': case 'DEADLINE_DUE': case 'DEADLINE_MET': return { verb: label(e.action).toLowerCase(), what: e.detail };
+    default: return { verb: label(e.action).toLowerCase(), what: e.detail };
+  }
+}
+
+/** When an audit event happened, in milliseconds. */
+export const eventMs = (e: AuditEvent) => Number(e.at.microsSinceUnixEpoch / 1000n);

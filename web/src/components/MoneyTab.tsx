@@ -56,7 +56,7 @@ export function MoneyTab({ row }: { row: ClientRow }) {
           {holdings.map((h) => (
             <li key={h.id}>
               <span>{h.asset}</span>
-              <span className="mono">
+              <span className="tnum">
                 {h.asset === 'USD' ? '' : `${h.quantity.toLocaleString('en-US', { maximumFractionDigits: 4 })} · `}
                 {money(h.valueCents)}
               </span>
@@ -102,7 +102,7 @@ export function MoneyTab({ row }: { row: ClientRow }) {
             <li key={a.id} className="stack">
               <span className="row spread">
                 <strong>{a.nickname}</strong>
-                <span className="mono">{money(a.postedCents)}</span>
+                <span className="tnum">{money(a.postedCents)}</span>
               </span>
               <span className="eyebrow">
                 Acct <span className="mono">…{a.accountNumber.slice(-4)}</span> · statement as of {shortDate(a.asOf)}

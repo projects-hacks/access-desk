@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { useReducer, useTable } from 'spacetimedb/react';
 import { Badge, StateBadge } from '../components/Badge';
+import { KindIcon } from '../components/KindIcon';
 import { SlidingPill } from '../components/SlidingPill';
 import { LeverChips, stateAfter, useLevers } from '../components/LeverChips';
 import { label, money, parseJson, percent } from '../lib/format';
@@ -105,7 +106,7 @@ export function WorkQueue() {
                 >
                   <td className="mono muted">{String(w.id).padStart(3, '0')}</td>
                   <td>
-                    <span className="tag">{label(w.kind)}</span>
+                    <span className="tag kind"><KindIcon kind={w.kind} />{label(w.kind)}</span>
                     <div className="title">{w.title}</div>
                   </td>
                   <td>
