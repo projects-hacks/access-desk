@@ -72,3 +72,9 @@ test('exploit alerts are acknowledged automatically, for any client, whatever th
   assert.equal(needsHuman(flag()), undefined);
   assert.equal(needsHuman(flag({ tier: 1, strategic: true })), undefined);
 });
+
+test('an exception or a case no policy covers always waits for a person, however sure the agent is', () => {
+  for (const confidence of [0.5, 0.99]) {
+    assert.match(needsHuman({ kind: 'NOVEL_CASE', tier: 5, strategic: false, confidence, proposal: {} }) ?? '', /only a person/);
+  }
+});

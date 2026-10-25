@@ -51,7 +51,7 @@ export function AutonomyBand() {
         <div className="eyebrow band-label"><Hand size={14} aria-hidden /> Waiting on you</div>
         <div className={`band-value ${d.waiting ? 'warn' : 'good'}`}>
           {d.waiting}
-          <span className="band-sub">{d.waiting ? 'top clients, offboarding, unknowns' : 'nothing needs you'}</span>
+          <span className="band-sub">{d.waiting ? 'decisions only a person can make' : 'nothing needs you'}</span>
         </div>
       </div>
       <div className="band-cell">

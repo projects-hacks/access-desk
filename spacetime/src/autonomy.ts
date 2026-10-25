@@ -48,6 +48,8 @@ export function needsHuman(i: AutonomyInput): string | undefined {
   }
   // Exploit alerts are warnings to read, not actions.
   if (i.kind === 'EXPLOIT_FLAG') return undefined;
+  // An exception, or a situation no policy covers, is never the agent's to grant.
+  if (i.kind === 'NOVEL_CASE') return 'no policy covers it, so only a person can decide';
   if (isTopClient(i.tier, i.strategic)) return i.strategic ? 'strategic client' : 'tier 1 client';
   const p = (i.proposal ?? {}) as { action?: string; to_tier?: number; decided_by?: string; baseline?: { action?: string; to_tier?: number } };
   if (i.kind === 'CREDIT_REVIEW' && p.action === 'tier_change') {
