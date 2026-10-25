@@ -3,7 +3,7 @@ import {
   AppWindow, ArrowUpRight, BookOpen, Check, ChevronDown, ChevronUp, CircleCheck, Clock, Eye, Gauge, Hand, KeyRound, Landmark,
   Link2, Loader2, PanelRightClose, PlugZap, ShieldHalf, ShieldX, Sparkles, User, X, type LucideIcon,
 } from 'lucide-react';
-import { AGENTS, clock, EARLIER_LIMIT, isAgent, offset, useAgents, type EpisodeView, type Need } from '../lib/agents';
+import { AGENTS, clock, EARLIER_LIMIT, isAgent, offset, sameNews, useAgents, withoutClient, type EpisodeView, type Need } from '../lib/agents';
 import type { EpisodeStep } from '../module_bindings/types';
 import { Hint } from './Hint';
 
@@ -172,7 +172,7 @@ function NowCard({ view, fresh }: { view: EpisodeView; fresh: (s: EpisodeStep) =
         </div>
         <div className="ap-trigger">{view.episode.trigger}</div>
         <Steps view={view} fresh={fresh} />
-        {!view.running && view.episode.outcome && view.episode.outcome !== view.episode.trigger && (
+        {!view.running && view.episode.outcome && !sameNews(view.episode.outcome, view.episode.trigger, view.clientName) && (
           <div className={`ap-outcome ${view.episode.kind}`}>
             <Outcome size={16} aria-hidden />
             <span>{view.episode.outcome}</span>
@@ -193,7 +193,7 @@ function EarlierRow({ view, open, onToggle }: { view: EpisodeView; open: boolean
         <span className="ap-row-text">
           <span className="ap-row-trigger">{view.episode.trigger}</span>
           <span className={`ap-row-outcome ${view.episode.kind}`}>
-            {view.episode.outcome && view.episode.outcome !== view.episode.trigger ? view.episode.outcome : kind.badge}
+            {view.episode.outcome && !sameNews(view.episode.outcome, view.episode.trigger, view.clientName) ? view.episode.outcome : kind.badge}
           </span>
         </span>
         <span className="ap-row-side">
@@ -223,8 +223,8 @@ function NeedCard({ need, onOpen }: { need: Need; onOpen: () => void }) {
       <div className="ap-need-text">
         <Hand size={16} aria-hidden />
         <span>
-          <strong>{need.title}</strong>
-          {need.detail && <span className="muted">{need.detail}</span>}
+          <strong>{withoutClient(need.title, need.clientName)}</strong>
+          {need.detail && !sameNews(need.detail, need.title, need.clientName) && <span className="muted">{withoutClient(need.detail, need.clientName)}</span>}
         </span>
       </div>
       <div className="ap-need-foot">

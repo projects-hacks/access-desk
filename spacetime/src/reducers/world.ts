@@ -80,7 +80,7 @@ function moveClock(ctx: Ctx, days: number, trigger: string) {
   const to = simDate(ctx);
   // A new day changes how late everyone is: Learning rescores and Access rechecks the clients with something overdue.
   const late = new Set([...ctx.db.invoice.iter()].filter((i) => i.dueOn < to && i.paidCents < i.amountCents && i.status !== 'disputed').map((i) => i.clientId));
-  for (const clientId of late) route(ctx, 'daily', clientId, `New day ${to}: something is overdue`);
+  for (const clientId of late) route(ctx, 'daily', clientId, 'Daily review of overdue invoices');
   audit(ctx, { action: 'ADVANCE_CLOCK', subjectType: 'clock', subjectId: '1', fromState: from, toState: to, detail: trigger });
   runTieOut(ctx, `clock moved to ${to}`);
 }

@@ -64,6 +64,25 @@ export function offset(deltaMs: number): string {
 /** Display wording for rows the module (or an agent) wrote: see `plainText`. */
 export const tidy = plainText;
 
+const FILLER = new Set(['the', 'a', 'an', 'of', 'to', 'from', 'for', 'on', 'in', 'and', 'moved', 'changed', 'now', 'is', 'was']);
+const words = (s: string, client: string) =>
+  new Set(s.toLowerCase().replace(client.toLowerCase(), ' ').split(/[^a-z0-9$.,]+/).filter((w) => w && !FILLER.has(w)));
+
+/** The same news in other words ("Kestrel: tier 3 → 4" and "Moved from tier 3 to tier 4."), so it is shown once. */
+export function sameNews(a: string, b: string, client = ''): boolean {
+  if (!a || !b) return false;
+  const [x, y] = [words(a, client), words(b, client)];
+  const [small, big] = x.size <= y.size ? [x, y] : [y, x];
+  if (!small.size) return true;
+  return [...small].filter((w) => big.has(w)).length / small.size >= 0.8;
+}
+
+/** "Cobalt Ridge Treasury: earlier reminders…" → "Earlier reminders…" where the client is already shown. */
+export function withoutClient(text: string, client: string): string {
+  const rest = client && text.startsWith(`${client}: `) ? text.slice(client.length + 2) : text;
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
+
 /** A guardrail chip's wording: bare policy or contract references become plain statements. */
 function checkLabel(c: { ok: boolean; label: string }, names: Map<string, string>): string {
   const label = tidy(c.label, names);

@@ -171,7 +171,7 @@ export function Clients() {
                   <td>
                     <Access row={r} />
                   </td>
-                  <td className="next">{r.next}</td>
+                  <td className="next" title={r.next}><span className="clamp-2">{r.next}</span></td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <RowMenu
                       name={r.client.name}

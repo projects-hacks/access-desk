@@ -41,7 +41,7 @@ export const access: Agent = {
     } else if (p.wait) {
       if (p.recordWait) await recordWait(ctx, view, p.wait);
       done.push(`waiting (${p.wait.code})`);
-    } else if (!overdueInvoices(view, ctx.today).length && !ctx.task.reason.startsWith('New day') && !p.bookkeeping.length) {
+    } else if (!overdueInvoices(view, ctx.today).length && !ctx.task.reason.startsWith('Daily review') && !p.bookkeeping.length) {
       await say(ctx, `${view.client.name} is current; nothing to restrict.`);
     }
     return done.join(' · ') || 'nothing to do';

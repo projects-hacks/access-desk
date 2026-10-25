@@ -172,6 +172,15 @@ th.num .sort { width: 100%; text-align: right; }
 .table.clients td { vertical-align: middle; }
 .table.clients .title { margin-top: 0; }
 .table td.next { color: var(--muted); font-size: 13px; max-width: 220px; }
+.clamp-2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* The client column stays in view when the table scrolls sideways (e.g. next to the agents panel). */
+.table.clients tbody tr { background: var(--surface); }
+.table.clients th:first-child, .table.clients td:first-child { position: sticky; left: 0; z-index: 1; background: inherit; }
+.table.clients thead tr { background: var(--surface-2); }
+.table.clients tbody tr:hover { background: var(--surface-2); }
+.table.clients tbody tr.selected { background: var(--accent-soft); }
+.app.agents-open .table.clients th, .app.agents-open .table.clients td { padding-left: 14px; padding-right: 14px; }
+.app.agents-open .table.clients td:first-child { min-width: 200px; }
 .star { color: var(--accent); font-weight: 500; font-size: 12px; }
 .access { display: flex; flex-wrap: wrap; gap: 4px; }
 .access-tag { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
@@ -821,7 +830,7 @@ i.open { background: #f2c2c6; }
   .app.agents-open > .topbar, .app.agents-open > .alertbar, .app.agents-open > main { padding-right: 372px; }
   .ap { width: 340px; }
 }
-.ap { position: fixed; top: 76px; right: 16px; bottom: 16px; width: 380px; z-index: 8; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: 0 1px 2px rgb(10 11 13 / 0.04), 0 16px 40px -16px rgb(10 11 13 / 0.18); animation: ap-in 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+.ap { position: fixed; top: 76px; right: 16px; bottom: 16px; width: 380px; z-index: 8; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 1px 2px rgb(10 11 13 / 0.03), 0 12px 32px -18px rgb(10 11 13 / 0.14); animation: ap-in 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes ap-in { from { transform: translateX(24px); opacity: 0; } }
 .ap-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 12px 16px; border-bottom: 1px solid var(--border); }
 .ap-title { display: flex; align-items: center; gap: 8px; color: var(--accent); }
@@ -829,7 +838,7 @@ i.open { background: #f2c2c6; }
 .ap-live { display: flex; align-items: center; gap: 5px; margin-left: 2px; font-size: 11px; color: var(--muted); }
 .ap-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: ap-pulse 1.8s infinite; }
 @keyframes ap-pulse { 0% { box-shadow: 0 0 0 0 rgb(0 82 255 / 0.45); } 70% { box-shadow: 0 0 0 6px rgb(0 82 255 / 0); } 100% { box-shadow: 0 0 0 0 rgb(0 82 255 / 0); } }
-.ap-collapse { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--muted); cursor: pointer; }
+.ap-collapse { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--muted); cursor: pointer; }
 .ap-collapse:hover { background: var(--surface-2); color: var(--text); }
 .ap-collapse:focus-visible, .ap-row:focus-visible, .ap-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ap-down, .ap-backdrop { display: none; }
@@ -839,7 +848,7 @@ i.open { background: #f2c2c6; }
 
 .ap-roster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .ap-chip { height: 100%; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 8px; border: 1px solid transparent; border-radius: 10px; background: var(--surface-2); transition: background 0.3s, border-color 0.3s; }
-.ap-chip.on { background: var(--accent-soft); border-color: #b9ccff; }
+.ap-chip.on { background: var(--accent-soft); border-color: #d3e0ff; }
 .ap-chip-text { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 .ap-chip-text strong { font-size: 13px; font-weight: 600; }
 .ap-chip-text em { font-style: normal; font-size: 11px; color: var(--muted); }
@@ -862,7 +871,7 @@ i.open { background: #f2c2c6; }
 .ap-more, .ap-empty { margin: 0; font-size: 12px; color: var(--muted); }
 .ap-empty { padding: 20px 8px; text-align: center; border: 1px dashed var(--border-strong); border-radius: 12px; }
 
-.ap-need { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid #f1d29b; border-radius: 12px; background: #fffaf0; animation: ap-row-in 0.35s ease-out both; }
+.ap-need { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid #f3e4c6; border-radius: 12px; background: #fffcf6; animation: ap-row-in 0.35s ease-out both; }
 .ap-need-text { display: flex; gap: 8px; align-items: flex-start; color: var(--warn); }
 .ap-need-text svg { flex: none; margin-top: 1px; }
 .ap-need-text > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; color: var(--text); }
@@ -873,10 +882,10 @@ i.open { background: #f2c2c6; }
 .ap-need-foot .btn { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; font-size: 12.5px; }
 @keyframes ap-row-in { from { opacity: 0; transform: translateY(-6px); } }
 
-.ap-card { border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); overflow: hidden; transition: border-color 0.6s, box-shadow 0.8s; animation: ap-row-in 0.35s ease-out both; }
-.ap-card.running { border-color: #8fb0ff; box-shadow: 0 0 0 3px rgb(0 82 255 / 0.1), 0 10px 28px -14px rgb(0 82 255 / 0.45); }
-.ap-card.stopped { border-color: #f0a1a8; }
-.ap-card.waiting { border-color: #f1d29b; }
+.ap-card { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; transition: border-color 0.6s, box-shadow 0.8s; animation: ap-row-in 0.35s ease-out both; }
+.ap-card.running { border-color: #bcd0ff; box-shadow: 0 0 0 3px rgb(0 82 255 / 0.06); }
+.ap-card.stopped { border-color: #f6cfd4; }
+.ap-card.waiting { border-color: #f3e4c6; }
 .ap-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 14px 0; }
 .ap-card-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ap-client { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
@@ -897,7 +906,7 @@ i.open { background: #f2c2c6; }
 .ap-step.enter { animation: ap-step-in 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 @keyframes ap-step-in { from { opacity: 0; transform: translateY(8px); } }
 .ap-rail { position: relative; display: flex; justify-content: center; }
-.ap-line { position: absolute; top: 30px; bottom: -10px; left: 12.5px; width: 1px; background: var(--border-strong); }
+.ap-line { position: absolute; top: 30px; bottom: -10px; left: 12.5px; width: 1px; background: var(--border); }
 .ap-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .ap-who { display: flex; align-items: center; gap: 6px; height: 20px; font-size: 12px; }
 .ap-who strong { font-weight: 600; white-space: nowrap; }
@@ -913,8 +922,8 @@ i.open { background: #f2c2c6; }
 .ap-t { padding-top: 3px; font-size: 11px; line-height: 20px; color: var(--faint); white-space: nowrap; }
 .ap-checks { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 1px; }
 .ap-check { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 4px 8px 4px 6px; border: 1px solid transparent; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 1; }
-.ap-check.ok { background: var(--good-soft); color: var(--good); border-color: #c5e8d5; }
-.ap-check.no { background: var(--bad-soft); color: var(--bad); border-color: #f6cfd4; }
+.ap-check.ok { background: #f3faf6; color: var(--good); border-color: #dcefe4; }
+.ap-check.no { background: #fdf3f4; color: var(--bad); border-color: #f6d9dc; }
 .ap-check.pending { background: var(--surface-2); color: var(--faint); border-color: var(--border); }
 .ap-check svg { flex: none; }
 .ap-check.pending svg { animation: ap-spin 1s linear infinite; }
