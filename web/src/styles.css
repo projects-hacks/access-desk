@@ -1152,3 +1152,23 @@ main { container-type: inline-size; }
   .credit .credit-grid { grid-template-columns: minmax(0, 1fr); }
   .credit .credit-grid > *, .credit .accuracy { min-width: 0; overflow-x: auto; }
 }
+
+/* Presenter scenarios: a small control at the bottom left, out of the way of the agents panel. */
+.scn { position: fixed; left: 20px; bottom: 20px; z-index: 40; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.scn-fab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; font-weight: 600; box-shadow: 0 4px 16px rgb(0 0 0 / 0.08); cursor: pointer; }
+.scn-fab:hover { border-color: var(--accent); color: var(--accent); }
+.scn-card { width: min(360px, calc(100vw - 40px)); max-height: min(560px, calc(100vh - 120px)); overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 12px 36px rgb(0 0 0 / 0.14); padding: 14px; }
+.scn-head { display: flex; align-items: center; justify-content: space-between; }
+.scn-x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; }
+.scn-note { margin: 4px 0 10px; font-size: 12px; color: var(--muted); }
+.scn-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.scn-list button { position: relative; width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 9px 34px 9px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.scn-list button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.scn-list button:disabled { opacity: 0.6; cursor: default; }
+.scn-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.scn-shows { font-size: 12px; color: var(--muted); }
+.scn-spin { position: absolute; right: 12px; top: 12px; color: var(--accent); animation: ap-spin 1s linear infinite; }
+.scn-result { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; display: flex; flex-direction: column; gap: 3px; }
+.scn-result.good { background: #ecfdf3; color: #14532d; }
+.scn-result.bad { background: #fef2f2; color: #7f1d1d; }
+@media (max-width: 720px) { .scn { left: 12px; bottom: 12px; } }

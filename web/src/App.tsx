@@ -6,6 +6,7 @@ import { AlertBar } from './components/AlertBar';
 import { SlidingPill } from './components/SlidingPill';
 import { Splash } from './components/Splash';
 import { PlatformDate, SessionPill, TopBar } from './components/TopBar';
+import { ScenarioMenu } from './components/ScenarioMenu';
 import { reasonFor } from './lib/autonomy';
 import { tables } from './module_bindings';
 import { AuditLog } from './screens/AuditLog';
@@ -88,6 +89,7 @@ export function App() {
         <SessionPill />
       </header>
       <TopBar />
+      <ScenarioMenu onTriggered={() => setAgentsOpen(true)} />
       <AlertBar onOpen={() => setScreen('bank')} />
       {/* Keyed so each screen staggers in again when you switch to it. */}
       <main key={screen} className="reveal-stack">

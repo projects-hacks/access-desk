@@ -7,6 +7,7 @@ import { resetBank, settleWire } from '../integrations/nessie/reset';
 import { postIncomingWire } from '../integrations/nessie/payments-in';
 import type { SeedPlan } from '../integrations/nessie/seed-plan';
 import { env } from '../lib/env';
+import { SCENARIOS, scenarioRunner, type ScenarioKind } from './scenarios';
 import type { Gateway } from '../gateway/executor';
 import type { PlatformSimulator } from '../platform/simulator';
 import type { Sync } from '../sync';
@@ -57,6 +58,7 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
     conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([
       tables.clock, tables.cashMovement, tables.workItem, tables.paymentApplication, tables.hold,
       tables.tieOutRun, tables.gatewayCommand, tables.auditEvent, tables.accessRequest, tables.custodyHolding, tables.invoice,
+      tables.client, tables.accessLever, tables.deadline,
     ]),
   );
   const db = conn.db;
@@ -124,6 +126,25 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
       payer: { clientId }, amount: cents / 100, remittance: `PAYMENT ${due.map((i) => i.id).join(' ')}`.slice(0, 140),
       network: 'FEDWIRE', charges: 0, status: 'posted',
     });
+  });
+
+  /**
+   * Scenarios for a live demo: one real event each (a wire, an RM note, a withdrawal) for a client
+   * that fits it now. Everything after the event is the desk responding as it always does.
+   */
+  const scenarios = scenarioRunner({
+    conn, ds, simDate, receiveWire,
+    withdraw: (clientId, amount) => conn.reducers.requestCustodyWithdrawal({ clientId, amountCents: BigInt(toCents(amount)) }),
+  });
+  app.get('/demo/scenarios', async () => Object.entries(SCENARIOS).map(([kind, label]) => ({ kind, label })));
+  app.post('/demo/scenario', async (req, reply) => {
+    const kind = (req.body as { kind?: string } | undefined)?.kind;
+    if (!kind || !(kind in SCENARIOS)) return reply.code(400).send({ error: `kind must be one of ${Object.keys(SCENARIOS).join(', ')}` });
+    try {
+      return await scenarios.run(kind as ScenarioKind);
+    } catch (e) {
+      return reply.code(409).send({ error: e instanceof Error ? e.message : String(e) });
+    }
   });
 
   /** A wire lands in the platform's collections account at Nessie (and leaves the payer's, when we know them). */
