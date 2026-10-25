@@ -8,13 +8,13 @@ import { tables } from './module_bindings';
 import { AuditLog } from './screens/AuditLog';
 import { ClientPortal } from './screens/ClientPortal';
 import { Clients } from './screens/Clients';
-import { CreditDesk } from './screens/CreditDesk';
+import { CreditAnalyst } from './screens/credit/CreditAnalyst';
 import { WorkQueue } from './screens/WorkQueue';
 
 const SCREENS = {
   clients: { label: 'Clients', component: Clients },
   approvals: { label: 'Approvals', component: WorkQueue },
-  credit: { label: 'Credit', component: CreditDesk },
+  credit: { label: 'Credit Analyst', component: CreditAnalyst },
   audit: { label: 'Audit log', component: AuditLog },
   portal: { label: 'Client view', component: ClientPortal },
 } as const;

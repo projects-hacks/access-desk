@@ -161,7 +161,10 @@ export function useCreditPolicy() {
     const model = activeRule<{ weights?: Weights }>(policies, 'credit-model');
     const tiers = activeRule<{ tiers?: TierRule[] }>(policies, 'credit-tiers');
     const version = (id: string) =>
-      Math.max(0, ...policies.filter((p) => p.policyId === id && p.status === 'active').map((p) => p.version));
+      Math.max(
+        0,
+        ...policies.filter((p) => p.policyId === id && p.status === 'active').map((p) => p.version),
+      );
     return {
       weights: model?.weights ?? DEFAULT_WEIGHTS,
       tiers: tiers?.tiers?.length === 5 ? tiers.tiers : VERTICAL_TIERS,
@@ -182,7 +185,9 @@ export function tierByPercentile(scores: number[], tiers: TierRule[]): (score: n
   const sorted = [...scores].sort((a, b) => b - a);
   const n = sorted.length || 1;
   // The lowest score that still makes each tier.
-  const floors = tiers.map((t) => sorted[Math.min(n - 1, Math.max(0, Math.ceil((t.topPct / 100) * n) - 1))] ?? 0);
+  const floors = tiers.map(
+    (t) => sorted[Math.min(n - 1, Math.max(0, Math.ceil((t.topPct / 100) * n) - 1))] ?? 0,
+  );
   return (score) => {
     for (let i = 0; i < tiers.length; i++) if (score >= floors[i]!) return tiers[i]!.tier;
     return tiers.at(-1)!.tier;
@@ -190,7 +195,10 @@ export function tierByPercentile(scores: number[], tiers: TierRule[]): (score: n
 }
 
 /** Every client scored, with drivers, trend, patterns and the tier the scores suggest. */
-export function useCreditBook(weights: Weights = DEFAULT_WEIGHTS, tierRules: TierRule[] = VERTICAL_TIERS) {
+export function useCreditBook(
+  weights: Weights = DEFAULT_WEIGHTS,
+  tierRules: TierRule[] = VERTICAL_TIERS,
+) {
   const today = useClock()?.simDate ?? '';
   const rows = useClientRows();
   const [invoices] = useTable(tables.invoice);
@@ -216,10 +224,21 @@ export function useCreditBook(weights: Weights = DEFAULT_WEIGHTS, tierRules: Tie
     for (const a of applications)
       if (!a.reversed) appsByInvoice.set(a.invoiceId, (appsByInvoice.get(a.invoiceId) ?? 0) + 1);
 
-    // Revenue and bill size are compared on a log scale against the largest client.
+    // Revenue and bill size are percentile ranks across the book, so value spreads 0–100.
     const revenueOf = (inv: Invoice[]) =>
-      inv.filter((i) => i.issuedOn >= start && i.status !== 'void').reduce((s, i) => s + Number(i.amountCents), 0);
-    const maxRevenue = Math.max(1, ...rows.map((r) => revenueOf(invBy.get(r.client.id) ?? [])));
+      inv
+        .filter((i) => i.issuedOn >= start && i.status !== 'void')
+        .reduce((s, i) => s + Number(i.amountCents), 0);
+    const monthlyOf = (inv: Invoice[]) => {
+      const own = inv.filter((i) => i.issuedOn >= start && i.status !== 'void');
+      return revenueOf(inv) / (new Set(own.map((i) => ymOf(i.issuedOn))).size || 1);
+    };
+    const rankOf = (all: number[]) => {
+      const sorted = [...all].sort((a, b) => a - b);
+      return (v: number) => (v > 0 && sorted.length > 1 ? sorted.indexOf(v) / (sorted.length - 1) : 0);
+    };
+    const revenueRank = rankOf(rows.map((r) => revenueOf(invBy.get(r.client.id) ?? [])));
+    const monthlyRank = rankOf(rows.map((r) => monthlyOf(invBy.get(r.client.id) ?? [])));
 
     const scored = rows.map((row): Omit<ScoredClient, 'suggestedTier'> => {
       const c = row.client;
@@ -229,8 +248,12 @@ export function useCreditBook(weights: Weights = DEFAULT_WEIGHTS, tierRules: Tie
       const onTime = paid.filter((i) => i.paidOn! <= i.dueOn).length;
       const lateDays = due.map((i) => Math.max(0, daysBetween(i.dueOn, i.paidOn ?? today)));
       const avgLate = lateDays.length ? lateDays.reduce((s, d) => s + d, 0) / lateDays.length : 0;
-      const missed = due.filter((i) => !i.paidOn && i.status !== 'disputed' && daysBetween(i.dueOn, today) > 30).length;
-      const partials = inv.filter((i) => (appsByInvoice.get(i.id) ?? 0) > 1 || i.status === 'partially_paid').length;
+      const missed = due.filter(
+        (i) => !i.paidOn && i.status !== 'disputed' && daysBetween(i.dueOn, today) > 30,
+      ).length;
+      const partials = inv.filter(
+        (i) => (appsByInvoice.get(i.id) ?? 0) > 1 || i.status === 'partially_paid',
+      ).length;
       const disputesN = (dispBy.get(c.id) ?? []).length;
 
       const rel = {
@@ -244,24 +267,35 @@ export function useCreditBook(weights: Weights = DEFAULT_WEIGHTS, tierRules: Tie
       const billed = new Set(inv.map((i) => ymOf(i.issuedOn))).size || 1;
       const products = row.levers.filter((l) => l.state !== 'not_used').length;
       const val = {
-        revenue: revenue > 0 ? clamp(Math.log10(revenue) / Math.log10(maxRevenue)) : 0,
-        monthly: revenue > 0 ? clamp(Math.log10(revenue / billed) / Math.log10(maxRevenue / 6)) : 0,
+        revenue: revenueRank(revenue),
+        monthly: monthlyRank(monthlyOf(invBy.get(c.id) ?? [])),
         breadth: products / 4,
       };
       const profile = profiles.find((p) => p.clientId === c.id);
       const valueScore = profile
         ? profile.valueScore
-        : Math.round(100 * VALUE_DRIVERS.reduce((s, d) => s + weights.value[d.key] * val[d.key], 0));
+        : Math.round(
+            100 * VALUE_DRIVERS.reduce((s, d) => s + weights.value[d.key] * val[d.key], 0),
+          );
       const reliabilityScore = profile
         ? profile.reliabilityScore
-        : Math.round(100 * RELIABILITY_DRIVERS.reduce((s, d) => s + weights.reliability[d.key] * rel[d.key], 0));
+        : Math.round(
+            100 *
+              RELIABILITY_DRIVERS.reduce((s, d) => s + weights.reliability[d.key] * rel[d.key], 0),
+          );
 
       const monthStatus = window.map((ym): ScoredClient['months'][number] => {
         const m = inv.filter((i) => ymOf(i.dueOn) === ym);
         if (!m.length) return 'none';
-        if (m.some((i) => i.status === 'disputed' || (dispBy.get(c.id) ?? []).some((d) => d.invoiceId === i.id)))
+        if (
+          m.some(
+            (i) =>
+              i.status === 'disputed' || (dispBy.get(c.id) ?? []).some((d) => d.invoiceId === i.id),
+          )
+        )
           return 'disputed';
-        if (m.some((i) => (appsByInvoice.get(i.id) ?? 0) > 1 || i.status === 'partially_paid')) return 'partial';
+        if (m.some((i) => (appsByInvoice.get(i.id) ?? 0) > 1 || i.status === 'partially_paid'))
+          return 'partial';
         if (m.some((i) => !i.paidOn)) return ym < today.slice(0, 7) ? 'open' : 'none';
         return m.every((i) => i.paidOn! <= i.dueOn) ? 'ontime' : 'late';
       });
@@ -274,9 +308,11 @@ export function useCreditBook(weights: Weights = DEFAULT_WEIGHTS, tierRules: Tie
 
       // Patterns: the agent's flags first, then the in-app detectors.
       const patterns = new Set<PatternKey>(
-        (flags.filter((f) => f.clientId === c.id && f.status !== 'cleared').map((f) => f.pattern) as string[]).filter(
-          (p): p is PatternKey => p in PATTERNS,
-        ),
+        (
+          flags
+            .filter((f) => f.clientId === c.id && f.status !== 'cleared')
+            .map((f) => f.pattern) as string[]
+        ).filter((p): p is PatternKey => p in PATTERNS),
       );
       const paidMonths = new Set(paid.map((i) => ymOf(i.paidOn!))).size;
       if (billed >= 8 && paidMonths > 0 && paidMonths <= 3) patterns.add('seasonal');
@@ -288,7 +324,8 @@ export function useCreditBook(weights: Weights = DEFAULT_WEIGHTS, tierRules: Tie
       }).length;
       if (cure > 0 && lastMinute >= 3) patterns.add('last_minute');
       if (partials >= 2) patterns.add('aging_reset');
-      if ((payersBy.get(c.id) ?? []).filter((p) => p.kind === 'affiliate').length >= 2) patterns.add('entity_shuffle');
+      if ((payersBy.get(c.id) ?? []).filter((p) => p.kind === 'affiliate').length >= 2)
+        patterns.add('entity_shuffle');
       if (disputesN >= 3) patterns.add('dispute_to_delay');
 
       const ar = row.unpaidCents;
@@ -299,7 +336,11 @@ export function useCreditBook(weights: Weights = DEFAULT_WEIGHTS, tierRules: Tie
         reliability: reliabilityScore,
         score: Math.round(0.5 * valueScore + 0.5 * reliabilityScore),
         fromAgent: !!profile,
-        valueDrivers: VALUE_DRIVERS.map((d) => ({ ...d, weight: weights.value[d.key], value: val[d.key] })),
+        valueDrivers: VALUE_DRIVERS.map((d) => ({
+          ...d,
+          weight: weights.value[d.key],
+          value: val[d.key],
+        })),
         reliabilityDrivers: RELIABILITY_DRIVERS.map((d) => ({
           ...d,
           weight: weights.reliability[d.key],

@@ -8,17 +8,33 @@ export const TIER_COLORS: Record<number, string> = {
   5: '#cf202f',
 };
 
-export function Sparkline({ values, width = 72, height = 22 }: { values: number[]; width?: number; height?: number }) {
+export function Sparkline({
+  values,
+  width = 72,
+  height = 22,
+}: {
+  values: number[];
+  width?: number;
+  height?: number;
+}) {
   if (values.length < 2) return null;
   const lo = Math.min(...values, 0);
   const hi = Math.max(...values, 100);
   const pts = values
-    .map((v, i) => `${(i / (values.length - 1)) * width},${height - ((v - lo) / (hi - lo || 1)) * height}`)
+    .map(
+      (v, i) =>
+        `${(i / (values.length - 1)) * width},${height - ((v - lo) / (hi - lo || 1)) * height}`,
+    )
     .join(' ');
   const up = values.at(-1)! >= values[0]!;
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
-      <polyline points={pts} fill="none" stroke={up ? 'var(--good)' : 'var(--bad)'} strokeWidth="1.5" />
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={up ? 'var(--good)' : 'var(--bad)'}
+        strokeWidth="1.5"
+      />
     </svg>
   );
 }
@@ -50,7 +66,12 @@ export function Scatter({
   const x = (v: number) => pad.l + (v / 100) * (W - pad.l - pad.r);
   const y = (v: number) => H - pad.b - (v / 100) * (H - pad.t - pad.b);
   return (
-    <svg className="scatter" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Value against reliability, one dot per client">
+    <svg
+      className="scatter"
+      viewBox={`0 0 ${W} ${H}`}
+      role="img"
+      aria-label="Value against reliability, one dot per client"
+    >
       {[0, 25, 50, 75, 100].map((g) => (
         <g key={g}>
           <line x1={x(g)} x2={x(g)} y1={y(0)} y2={y(100)} className="grid" />
@@ -60,7 +81,13 @@ export function Scatter({
       <text x={x(50)} y={H - 6} className="axis" textAnchor="middle">
         Value score →
       </text>
-      <text x={10} y={y(50)} className="axis" textAnchor="middle" transform={`rotate(-90 10 ${y(50)})`}>
+      <text
+        x={10}
+        y={y(50)}
+        className="axis"
+        textAnchor="middle"
+        transform={`rotate(-90 10 ${y(50)})`}
+      >
         Reliability →
       </text>
       <text x={x(100) - 4} y={y(100) + 12} className="quad" textAnchor="end">
@@ -89,15 +116,28 @@ export function Scatter({
 }
 
 /** Score histogram in bins of 5, bars coloured by the tier each bin falls in. */
-export function Histogram({ scores, tierOf }: { scores: number[]; tierOf: (score: number) => number }) {
+export function Histogram({
+  scores,
+  tierOf,
+}: {
+  scores: number[];
+  tierOf: (score: number) => number;
+}) {
   const bins = Array.from({ length: 20 }, (_, i) => i * 5);
-  const counts = bins.map((b) => scores.filter((s) => s >= b && (b === 95 ? s <= 100 : s < b + 5)).length);
+  const counts = bins.map(
+    (b) => scores.filter((s) => s >= b && (b === 95 ? s <= 100 : s < b + 5)).length,
+  );
   const max = Math.max(1, ...counts);
   const W = 560;
   const H = 150;
   const bw = W / bins.length;
   return (
-    <svg className="histogram" viewBox={`0 0 ${W} ${H + 18}`} role="img" aria-label="How many clients at each score">
+    <svg
+      className="histogram"
+      viewBox={`0 0 ${W} ${H + 18}`}
+      role="img"
+      aria-label="How many clients at each score"
+    >
       {bins.map((b, i) => {
         const h = (counts[i]! / max) * (H - 4);
         return (
