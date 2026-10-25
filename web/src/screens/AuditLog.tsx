@@ -7,6 +7,7 @@ import { sameNews } from '../lib/agents';
 import { actor, agentOf } from '../lib/bank';
 import { LEVERS } from '../lib/clients';
 import { label, plainText, simDay } from '../lib/format';
+import { useSimTime } from '../lib/session';
 import { tables } from '../module_bindings';
 import type { AuditEvent } from '../module_bindings/types';
 
@@ -74,6 +75,7 @@ export function AuditLog() {
   const [clients] = useTable(tables.client);
   const [items] = useTable(tables.workItem);
   const [policies] = useTable(tables.policy);
+  const simTime = useSimTime();
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PAGE);
@@ -136,10 +138,10 @@ export function AuditLog() {
   function download() {
     const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const rows = shown.map((e) => [
-      e.simDate, e.at.toDate().toISOString(), who(e), sentence(e), clientName.get(e.clientId) ?? e.clientId,
+      e.simDate, simTime(e.at, e.simDate), who(e), sentence(e), clientName.get(e.clientId) ?? e.clientId,
       plainText(e.detail, clientName), e.allowed ? 'took effect' : 'refused', e.policyRef ? (policyTitle.get(e.policyRef)?.title ?? '') : '',
     ]);
-    const csv = [['Business day', 'Time (UTC)', 'Who', 'What', 'Client', 'Detail', 'Outcome', 'Policy'], ...rows].map((r) => r.map(cell).join(',')).join('\n');
+    const csv = [['Business day', 'Time', 'Who', 'What', 'Client', 'Detail', 'Outcome', 'Policy'], ...rows].map((r) => r.map(cell).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = Object.assign(document.createElement('a'), { href: url, download: `audit-log-${filter}.csv` });
     a.click();
@@ -229,12 +231,7 @@ export function AuditLog() {
                   const after = override ? overrides.restrictedBy.get(e.clientId) : undefined;
                   return (
                     <li key={String(e.id)} className={isRefused(e) ? 'refused' : isPerson(e) ? 'by-person' : ''}>
-                      <span className="activity-time">
-                        {e.at.toDate().toLocaleTimeString([], {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </span>
+                      <span className="activity-time">{simTime(e.at, e.simDate)}</span>
                       <div className="activity-body">
                         <div className="activity-line">
                           <Actor e={e} name={who(e)} kind={item?.kind} />

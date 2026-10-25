@@ -7,7 +7,7 @@ import { AGENTS, clock, EARLIER_LIMIT, isAgent, offset, sameNews, useAgents, wit
 import type { EpisodeStep } from '../module_bindings/types';
 import { Hint } from './Hint';
 import { simDay } from '../lib/format';
-import { useSession } from '../lib/session';
+import { useSession, useSimTime } from '../lib/session';
 
 type Actor = { name: string; role?: string; about: string; icon: LucideIcon; hue: number; low?: boolean; ink?: boolean };
 
@@ -155,7 +155,7 @@ function Steps({ view, fresh }: { view: EpisodeView; fresh?: (s: EpisodeStep) =>
   );
 }
 
-function NowCard({ view, fresh }: { view: EpisodeView; fresh: (s: EpisodeStep) => boolean }) {
+function NowCard({ view, fresh, at }: { view: EpisodeView; fresh: (s: EpisodeStep) => boolean; at: string }) {
   const kind = kindOf(view.episode.kind);
   const Outcome = kind.icon;
   const tone = view.running ? 'running' : view.episode.kind;
@@ -169,7 +169,7 @@ function NowCard({ view, fresh }: { view: EpisodeView; fresh: (s: EpisodeStep) =
             <span className="ap-client">{view.clientName}</span>
           </div>
           <span className="ap-clock">
-            {!view.running && view.totalMs > 0 ? offset(view.totalMs) : clock(view.episode.startedAt, true)}
+            {at}{!view.running && view.totalMs > 0 ? ` · ${offset(view.totalMs)}` : ''}
           </span>
         </div>
         <div className="ap-trigger">{view.episode.trigger}</div>
@@ -185,7 +185,7 @@ function NowCard({ view, fresh }: { view: EpisodeView; fresh: (s: EpisodeStep) =
   );
 }
 
-function EarlierRow({ view, open, onToggle }: { view: EpisodeView; open: boolean; onToggle: () => void }) {
+function EarlierRow({ view, open, onToggle, at }: { view: EpisodeView; open: boolean; onToggle: () => void; at: string }) {
   const kind = kindOf(view.episode.kind);
   const Icon = view.running ? Loader2 : kind.icon;
   return (
@@ -205,7 +205,7 @@ function EarlierRow({ view, open, onToggle }: { view: EpisodeView; open: boolean
           </span>
         </span>
         <span className="ap-row-side">
-          <span>{clock(view.episode.startedAt, true)}</span>
+          <span>{at}</span>
           {open ? <ChevronUp size={13} aria-hidden /> : <ChevronDown size={13} aria-hidden />}
         </span>
       </button>
@@ -247,6 +247,8 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
 }) {
   const { roster, needs, now, today, earlier, total, before, beforeDay, working, isFresh } = useAgents();
   const { connected } = useSession();
+  const simTime = useSimTime();
+  const timeOf = (v: EpisodeView) => simTime(v.episode.startedAt, v.episode.simDate) || clock(v.episode.startedAt);
   const [expanded, setExpanded] = useState<Set<bigint>>(new Set());
   const toggle = (id: bigint) =>
     setExpanded((s) => {
@@ -314,7 +316,7 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
             {needs.length > 3 && <p className="ap-more">+{needs.length - 3} more in approvals</p>}
           </section>
         )}
-        {now && <NowCard view={now} fresh={isFresh} />}
+        {now && <NowCard view={now} fresh={isFresh} at={timeOf(now)} />}
         <section className="ap-section">
           <div className="ap-headrow">
             <h4 className="ap-head">Today · {simDay(today).replace(/, \d{4}$/, '')}</h4>
@@ -323,7 +325,7 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
           {earlier.length ? (
             <ul className="ap-list">
               {earlier.map((v) => (
-                <EarlierRow key={v.episode.id} view={v} open={expanded.has(v.episode.id)} onToggle={() => toggle(v.episode.id)} />
+                <EarlierRow key={v.episode.id} view={v} at={timeOf(v)} open={expanded.has(v.episode.id)} onToggle={() => toggle(v.episode.id)} />
               ))}
             </ul>
           ) : (
@@ -337,7 +339,7 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
             </div>
             <ul className="ap-list">
               {before.map((v) => (
-                <EarlierRow key={v.episode.id} view={v} open={expanded.has(v.episode.id)} onToggle={() => toggle(v.episode.id)} />
+                <EarlierRow key={v.episode.id} view={v} at={timeOf(v)} open={expanded.has(v.episode.id)} onToggle={() => toggle(v.episode.id)} />
               ))}
             </ul>
           </section>

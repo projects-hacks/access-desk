@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import { useTable } from 'spacetimedb/react';
 import { tables } from '../module_bindings';
 import type { AgentTask, Episode, EpisodeStep } from '../module_bindings/types';
-import { useNow } from './bank';
+import { ago, useNow } from './bank';
 import { plainText } from './format';
 
 /** The four Factory Droids, in roster order: who they are to the people watching, and what each is for. */
@@ -202,7 +202,7 @@ export function useAgents(): AgentsView {
         : queued.length
           ? `${queued.length} in line`
           : last
-            ? `idle · last ${clock(last.updatedAt)}`
+            ? `idle · last active ${ago(now - ms(last.updatedAt))}`
             : 'idle';
       return { key, name, role, purpose, working: running.length > 0, status };
     });
