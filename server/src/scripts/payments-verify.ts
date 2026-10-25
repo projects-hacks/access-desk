@@ -10,7 +10,7 @@ const ds = loadDataset();
 const { conn } = await connectStdb();
 await new Promise<void>((resolve) =>
   conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([
-    tables.invoice, tables.cashMovement, tables.paymentApplication, tables.clientCredit, tables.workItem, tables.clock,
+    tables.invoice, tables.cashMovement, tables.paymentApplication, tables.clientCredit, tables.workItem, tables.clock, tables.payerIdentity,
   ]),
 );
 const db = conn.db;

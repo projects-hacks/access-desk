@@ -8,7 +8,7 @@ import { connectStdb } from '../lib/stdb';
 
 const { conn } = await connectStdb();
 await new Promise<void>((resolve) =>
-  conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([tables.tieOutRun, tables.tieOutBreak, tables.workItem, tables.ledgerEntry]),
+  conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([tables.tieOutRun, tables.tieOutBreak, tables.workItem, tables.ledgerEntry, tables.gatewayCommand]),
 );
 const db = conn.db;
 let failed = 0;
@@ -20,6 +20,10 @@ const latest = () => [...db.tieOutRun.iter()].sort((a, b) => (a.id < b.id ? 1 : 
 const breaksOf = (runId: bigint) => [...db.tieOutBreak.iter()].filter((b) => b.runId === runId);
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Let the gateway finish first (a reset's duplicate refund, its journal and the refund wire coming back).
+const busy = () => [...db.gatewayCommand.iter()].some((c) => c.status === 'queued' || c.status === 'executing');
+for (let t = 0; t < 80 && busy(); t++) await wait(250);
+await wait(3_000);
 await conn.reducers.tieOut({ trigger: 'verify' });
 await wait(500);
 const run = latest()!;

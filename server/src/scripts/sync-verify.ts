@@ -66,7 +66,9 @@ expectCount('asset_price', [...db.assetPrice.iter()].length, 3);
 expectCount('owed_to_client', [...db.owedToClient.iter()].length, owedToClient(ds).length);
 expectCount('position', [...db.position.iter()].length, ds.clients.flatMap(positionsFor).length);
 expectCount('loan', [...db.loan.iter()].length, ds.loans.length);
-expectCount('cash_movement', [...db.cashMovement.iter()].length, visibleBank.length + visibleChain.length + ds.history.cash.length);
+// Wires the desk itself sent since (refunds RF-, custody withdrawals CW-) and demo wires (JD-) aren't in the seed.
+const ours = (ref: string) => /^(RF|CW|JD)-/.test(ref);
+expectCount('cash_movement', [...db.cashMovement.iter()].filter((m) => !ours(m.bankRef)).length, visibleBank.length + visibleChain.length + ds.history.cash.length);
 expectCount('precedent', [...db.precedent.iter()].filter((p) => p.source === 'history').length, ds.history.precedents.length);
 expectCount('metric_snapshot', [...db.metricSnapshot.iter()].length, ds.history.metrics.length);
 
@@ -147,15 +149,15 @@ for (const d of db.dispute.iter()) {
 const rawIds = new Set([...db.rawRecord.iter()].map((r) => r.id));
 for (const m of db.cashMovement.iter()) check(rawIds.has(m.rawId), `cash ${m.bankRef}: raw record ${m.rawId} missing`);
 
-// 6. Every incoming payer resolves to a client, except the two planted unknowns.
+// 6. Every incoming payer resolves to a client, except the planted unknown wallet. (Harbor & Pine's new
+//    account joins the CRM when its payment is matched by name and amount.)
 const identities = new Map([...db.payerIdentity.iter()].filter((p) => p.kind === 'bank_account' || p.kind === 'wallet').map((p) => [p.value, p.clientId]));
 const unresolved = [...db.cashMovement.iter()]
   .filter((m) => m.direction === 'in' && !identities.has(m.origAccount))
   .map((m) => m.bankRef)
   .sort();
-const harbor = ds.movements.find((m) => m.caseId === 'new-bank-account')?.id;
 const unknownWallet = ds.onchain.find((p) => p.caseId === 'unknown-wallet');
-const expectedUnresolved = [harbor, unknownWallet && unknownWallet.valueDate <= simDate ? `TX-${unknownWallet.txHash.slice(2, 10)}` : undefined]
+const expectedUnresolved = [unknownWallet && unknownWallet.valueDate <= simDate ? `TX-${unknownWallet.txHash.slice(2, 10)}` : undefined]
   .filter((x): x is string => !!x)
   .sort();
 check(JSON.stringify(unresolved) === JSON.stringify(expectedUnresolved),
