@@ -938,7 +938,7 @@ i.open { background: #f2c2c6; }
 .ap-reason.list.open { max-height: none; }
 .ap-reason.list li { margin: 1px 0; }
 .ap-reason.list li::marker { color: #a3a8b0; }
-.ap-points { margin: 0; padding-left: 16px; }
+.ap-points { margin: 0; padding-left: 16px; display: block; -webkit-line-clamp: unset; overflow: visible; }
 .ap-points li { margin: 1px 0; }
 .ap-points li::marker { color: #a3a8b0; }
 .ap-t { padding-top: 3px; font-size: 11px; line-height: 20px; color: var(--faint); white-space: nowrap; }

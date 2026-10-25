@@ -98,7 +98,7 @@ function StepRow({ step, t0, last, animate }: { step: EpisodeStep; t0: number; l
           ) : (
             <strong className="low" style={{ '--h': a.hue } as CSSProperties}>{a.name}</strong>
           )}
-          {isAgent(step.actor) && <span className="ap-droid">· Droid</span>}
+          {isAgent(step.actor) && step.actor !== 'learning' && <span className="ap-droid">· Droid</span>}
           {typing && <span className="ap-reasoning">reasoning</span>}
         </div>
         {bulletLines(step.text) ? (
