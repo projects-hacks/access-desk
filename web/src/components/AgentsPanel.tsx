@@ -160,9 +160,36 @@ function Steps({ view, fresh }: { view: EpisodeView; fresh?: (s: EpisodeStep) =>
   return (
     <ol className="ap-steps">
       {steps.map((s, i) => (
-        <StepRow key={s.id} step={s} t0={t0} last={i === steps.length - 1} animate={!!fresh?.(s)} />
+        <StepRow key={s.id} step={s} t0={t0} last={i === steps.length - 1 && !view.working.length} animate={!!fresh?.(s)} />
       ))}
+      {view.working.map((key, i) => <WorkingRow key={key} agentKey={key} last={i === view.working.length - 1} />)}
     </ol>
+  );
+}
+
+/** An agent still at work on this episode: who, so a long Droid session never looks stuck. */
+function WorkingRow({ agentKey, last }: { agentKey: string; last: boolean }) {
+  const a = ACTORS[agentKey];
+  if (!a) return null;
+  const Icon = a.icon;
+  return (
+    <li className="ap-step enter">
+      <span className="ap-rail">
+        <span className="ap-ico" style={{ '--h': a.hue } as CSSProperties}>
+          <Icon size={14} aria-hidden />
+        </span>
+        {!last && <span className="ap-line" />}
+      </span>
+      <div className="ap-body">
+        <div className="ap-who">
+          <strong style={{ '--h': a.hue } as CSSProperties}>{a.name}</strong>
+          {agentKey !== 'learning' && <span className="ap-droid">· Droid</span>}
+          <span className="ap-reasoning">working</span>
+        </div>
+        <div className="ap-text muted">Looking into it: reading the client's history, payments and similar cases before acting.</div>
+      </div>
+      <Loader2 size={13} className="ap-spin" aria-hidden />
+    </li>
   );
 }
 
@@ -180,7 +207,7 @@ function NowCard({ view, fresh, at }: { view: EpisodeView; fresh: (s: EpisodeSte
             <span className="ap-client">{view.clientName}</span>
           </div>
           <span className="ap-clock">
-            {at}{!view.running && view.totalMs > 0 ? ` · ${offset(view.totalMs)}` : ''}
+            {view.running ? `since ${at}` : at}{!view.running && view.totalMs > 0 ? ` · ${offset(view.totalMs)}` : ''}
           </span>
         </div>
         <div className="ap-trigger">{view.episode.trigger}</div>
@@ -216,7 +243,7 @@ function EarlierRow({ view, open, onToggle, at }: { view: EpisodeView; open: boo
           </span>
         </span>
         <span className="ap-row-side">
-          <span>{at}</span>
+          <span>{view.running ? `since ${at}` : at}</span>
           {open ? <ChevronUp size={13} aria-hidden /> : <ChevronDown size={13} aria-hidden />}
         </span>
       </button>

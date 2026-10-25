@@ -947,6 +947,7 @@ i.open { background: #f2c2c6; }
 .ap-check svg { flex: none; }
 .ap-check.pending svg { animation: ap-spin 1s linear infinite; }
 @keyframes ap-spin { to { transform: rotate(360deg); } }
+.ap-step > .ap-spin { margin-top: 5px; color: var(--accent); animation: ap-spin 1s linear infinite; }
 .ap-instead { display: flex; gap: 6px; font-size: 12px; line-height: 1.4; color: var(--bad); animation: ap-step-in 0.35s ease-out both; }
 .ap-instead strong { white-space: nowrap; }
 

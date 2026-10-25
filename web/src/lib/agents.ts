@@ -35,6 +35,8 @@ export type EpisodeView = {
   clientName: string;
   steps: EpisodeStep[];
   running: boolean;
+  /** Agents working on this episode right now (a Droid session can take a minute or two). */
+  working: string[];
   /** Last step minus first, in milliseconds. */
   totalMs: number;
 };
@@ -192,6 +194,7 @@ export function useAgents(): AgentsView {
           clientName: nameOf(episode.clientId),
           steps: list,
           running,
+          working: [...new Set(tasks.filter((t) => t.episodeId === raw.id && t.status === 'running' && open(t)).map((t) => t.agent))],
           settling: running || now - landed < SETTLE_MS,
           totalMs: list.length > 1 ? ms(list[list.length - 1]!.at) - ms(list[0]!.at) : 0,
         };
