@@ -30,6 +30,16 @@ const ACTORS: Record<string, Actor> = {
 
 /** Each agent's current status line, for the hover card on its name in the timeline. */
 const StatusContext = createContext<Record<string, string>>({});
+const InvestigationContext = createContext<Map<bigint, { tool: string; summary: string }[]>>(new Map());
+
+/** What each investigation step looked at, as a person would name it. */
+const TOOL_LABEL: Record<string, string> = {
+  rm_note: 'The note', policy_search: 'Policies', contract: 'Contract', exposure: 'Exposure',
+  custody_activity: 'Custody', precedents: 'Past decisions', proposal: 'Plan',
+};
+
+/** A person's step that starts "Name: …" (an RM's note) is theirs, by name. */
+const PERSON_LINE = /^([A-Z][\w.'-]+(?: [A-Z][\w.'-]+)+): ([\s\S]+)$/;
 
 /** Click or Enter/Space on something that is not a button. */
 const activate = (fn: () => void) => ({
@@ -74,7 +84,11 @@ function StepRow({ step, t0, last, animate }: { step: EpisodeStep; t0: number; l
   // Whether the step arrived live is decided once, when it first appears.
   const [live] = useState(animate);
   const [open, setOpen] = useState(false);
-  const a: Actor = ACTORS[step.actor] ?? { name: step.actor, about: '', icon: Sparkles, hue: 255, low: true };
+  const said = step.actor === 'person' ? PERSON_LINE.exec(step.text) : null;
+  const base: Actor = ACTORS[step.actor] ?? { name: step.actor, about: '', icon: Sparkles, hue: 255, low: true };
+  const a: Actor = said && said[1] !== 'Maya Chen' ? { ...base, name: said[1]!, about: 'Relationship manager for this client.' } : base;
+  if (said && said[1] !== 'Maya Chen') step = { ...step, text: said[2]! };
+  const investigation = useContext(InvestigationContext).get(step.workItemId);
   const status = useContext(StatusContext)[step.actor];
   const Icon = a.icon;
   const { typed, checked } = useReveal(step, live);
@@ -134,6 +148,13 @@ function StepRow({ step, t0, last, animate }: { step: EpisodeStep; t0: number; l
             {`“${step.reason.slice(0, typed)}${typing ? '▍' : '”'}`}
           </div>
         ))}
+        {investigation && !typing && (
+          <ol className="ap-investigation">
+            {investigation.map((s, i) => (
+              <li key={i}><strong>{TOOL_LABEL[s.tool] ?? s.tool}</strong><span>{s.summary}</span></li>
+            ))}
+          </ol>
+        )}
         {step.checks.length > 0 && !typing && (
           <div className="ap-checks">
             {step.checks.map((c, i) =>
@@ -289,7 +310,7 @@ function NeedCard({ need, onOpen }: { need: Need; onOpen: () => void }) {
 export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
   open: boolean; onToggle: () => void; onOpenApprovals: (need: Need) => void; onOpenAudit: () => void;
 }) {
-  const { roster, needs, now, today, earlier, total, before, beforeDay, learned, working, isFresh } = useAgents();
+  const { roster, needs, now, today, earlier, total, before, beforeDay, learned, working, isFresh, investigations } = useAgents();
   const { connected } = useSession();
   const simTime = useSimTime();
   // Running: when it began ("since 12:35"); finished: when it last moved.
@@ -320,6 +341,7 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
   }
 
   return (
+    <InvestigationContext.Provider value={investigations}>
     <StatusContext.Provider value={Object.fromEntries(roster.map((r) => [r.key, r.status]))}>
       {/* Only shown on a phone: tapping outside the sheet puts it away. */}
       <div className="ap-backdrop" onClick={onToggle} />
@@ -400,5 +422,6 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
       </div>
     </aside>
     </StatusContext.Provider>
+    </InvestigationContext.Provider>
   );
 }

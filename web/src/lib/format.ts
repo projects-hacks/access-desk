@@ -87,7 +87,7 @@ export function plainText(text: string, names: Map<string, string> = new Map()):
   const out = plainDates(patternWords(text))
     // Formula asides like "(1.00 vs >= 0.9)" are for the evaluator, not the reader.
     .replace(/\s*\([^()]*(?:>=|<=)[^()]*\)/g, '')
-    .replace(/\bpol-\d+:ORG-\d+\b/gi, "this client's own policy")
+    .replace(/\bpol-\d+:ORG-\d+(?:@\d+)?/gi, "this client's own policy")
     .replace(/\bORG-\d+\b/g, (id) => names.get(id) ?? 'the client')
     .replace(/\bpol-\d+\b/gi, 'policy')
     // Bank and work item refs mean nothing in a sentence; the screen shows the payment itself.

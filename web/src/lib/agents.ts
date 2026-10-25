@@ -4,7 +4,7 @@ import { tables } from '../module_bindings';
 import type { AgentTask, Episode, EpisodeStep } from '../module_bindings/types';
 import { ago, useNow } from './bank';
 import { waitingReason } from './autonomy';
-import { bulletLines, plainText } from './format';
+import { bulletLines, parseJson, plainText } from './format';
 
 /** The four Factory Droids, in roster order: who they are to the people watching, and what each is for. */
 export const AGENTS = [
@@ -122,6 +122,8 @@ export type AgentsView = {
   ready: boolean;
   roster: AgentStatus[];
   needs: Need[];
+  /** What an agent looked at before proposing, by request: the chain under its step. */
+  investigations: Map<bigint, { tool: string; summary: string }[]>;
   /** The newest episode that is running, or finished moments ago. */
   now?: EpisodeView;
   /** The platform's business day ('YYYY-MM-DD'). */
@@ -170,7 +172,7 @@ export function useAgents(): AgentsView {
         text: tidy(raw.text, names),
         reason: raw.reason ? tidy(raw.reason, names) : '',
         instead: raw.instead ? tidy(raw.instead, names) : '',
-        checks: raw.checks.map((c) => ({ ...c, label: checkLabel(c, names) })),
+        checks: raw.checks.filter((c) => c.label.toLowerCase() !== 'none').map((c) => ({ ...c, label: checkLabel(c, names) })),
       };
       stepsBy.set(s.episodeId, [...(stepsBy.get(s.episodeId) ?? []), s]);
     }
@@ -259,6 +261,10 @@ export function useAgents(): AgentsView {
       ready,
       roster,
       needs,
+      investigations: new Map(items.flatMap((w) => {
+        const inv = parseJson<{ investigation?: { tool: string; summary: string }[] }>(w.proposalJson, {}).investigation;
+        return inv?.length ? [[w.id, inv.map((s) => ({ tool: s.tool, summary: tidy(s.summary, names) }))] as const] : [];
+      })),
       now: live,
       today,
       earlier: earlier.slice(0, EARLIER_LIMIT),
