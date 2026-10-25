@@ -96,6 +96,8 @@ function checkLabel(c: { ok: boolean; label: string }, names: Map<string, string
   const label = tidy(c.label, names);
   if (label === 'Policy') return c.ok ? 'Within policy' : 'Against policy';
   if (label === 'Contract') return c.ok ? 'Within the contract' : 'Against the contract';
+  // A client's own policy comes through as just the client's name.
+  if ([...names.values()].includes(label)) return c.ok ? "Within this client's own policy" : "Against this client's own policy";
   return label;
 }
 
