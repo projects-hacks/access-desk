@@ -223,11 +223,15 @@ function onOutgoing(ctx: Ctx, m: Movement) {
       reasoning: 'The bank returned this payment after it was applied, so the applications are reversed and the invoices are due again.',
       requiredRole: 'ACCOUNTANT', autoApplied: true,
     });
+    // What we applied ourselves is moved back to unapplied cash by the reversal journal; the cash
+    // leaving the bank then comes out of unapplied. Only billing's own (prior) applications reopen
+    // receivables here. Booking both against receivables would count the return twice.
+    const ours = ourAppliedCash(ctx, original.id);
     reverseApplications(ctx, original.id, m.valueOn, item.id);
-    // Cash left the bank and the invoices are owed again.
     if (!isBooked(ctx, m.bankRef)) {
+      const fromUnapplied = ours < m.amountCents ? ours : m.amountCents;
       queueJournal(ctx, `JE-R-${m.bankRef}`, m.valueOn, m.bankRef, `Returned payment ${original.bankRef}`,
-        [dr(GL.RECEIVABLES, m.amountCents), cr(cash, m.amountCents)], item.id);
+        [dr(GL.UNAPPLIED_CASH, fromUnapplied), dr(GL.RECEIVABLES, m.amountCents - fromUnapplied), cr(cash, m.amountCents)], item.id);
     }
     setMatchStatus(ctx, original.id, 'reversed');
     setMatchStatus(ctx, m.id, 'matched');
@@ -262,6 +266,13 @@ function onOutgoing(ctx: Ctx, m: Movement) {
     return;
   }
   setMatchStatus(ctx, m.id, 'matched');
+}
+
+/** Cash we applied ourselves from a movement (not billing's own applications, not write-offs), not yet reversed. */
+function ourAppliedCash(ctx: Ctx, movementId: string): bigint {
+  return [...ctx.db.paymentApplication.movementId.filter(movementId)]
+    .filter((a) => !a.reversed && a.method !== 'prior' && a.method !== 'write_off')
+    .reduce((s, a) => s + a.amountCents, 0n);
 }
 
 /** The approved withdrawal a wire out pays, if its CW reference, amount and client agree. */
