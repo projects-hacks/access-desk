@@ -1007,3 +1007,14 @@ i.open { background: #f2c2c6; }
 .cx-orders li.refused strong { color: var(--warn); }
 .cx-pay { margin-top: 14px; }
 .cx-card .notice { margin-top: 10px; }
+
+/* An agent's reasoning, one point per line */
+.why-list { margin: 0 0 4px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; line-height: 1.5; }
+.why-list li::marker { color: var(--faint); }
+
+/* The controller this console acts as */
+.controller { display: inline-flex; align-items: center; gap: 8px; padding-right: 4px; }
+.controller-avatar { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--text); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+.controller-name { display: flex; flex-direction: column; line-height: 1.15; }
+.controller-name strong { font-size: 13px; font-weight: 600; }
+.controller-name span { font-size: 11px; color: var(--muted); }

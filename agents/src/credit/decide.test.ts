@@ -155,7 +155,11 @@ test("the model's choice replaces the baseline and drafts a policy", async () =>
   assert.equal(p.proposal.policy_key, `pol-020:${JUNIPER}@1`);
   assert.equal((p.proposal.baseline as { action: string }).action, 'stay');
   assert.ok((p.proposal.guardrails as string[]).includes('flag cap: restriction_eve fired, tier no better than 3'));
-  assert.match(p.reasoning, /Terms: prepay; cure days 5 days at renewal\. Success: share paid within grace >= 0\.8 over 3 months; restriction_eve stops firing within 6 months\./);
+  assert.match(p.reasoning, /^- Change: prepay required\.$/m);
+  assert.match(p.reasoning, /^- Change: cure period of 5 days at renewal\.$/m);
+  assert.match(p.reasoning, /^- Works if: 80% of invoices paid within grace over 3 months\.$/m);
+  assert.match(p.reasoning, /^- Works if: no more payments timed to the day before a restriction over 6 months\.$/m);
+  assert.doesNotMatch(p.reasoning, /[—;]/);
 });
 
 test('a company policy that was already activated gets the next version', () => {

@@ -58,6 +58,8 @@ export function plainDates(text: string): string {
  */
 export function plainText(text: string, names: Map<string, string> = new Map()): string {
   const out = plainDates(text)
+    // Formula asides like "(1.00 vs >= 0.9)" are for the evaluator, not the reader.
+    .replace(/\s*\([^()]*(?:>=|<=)[^()]*\)/g, '')
     .replace(/\bpol-\d+:ORG-\d+\b/gi, "this client's own policy")
     .replace(/\bORG-\d+\b/g, (id) => names.get(id) ?? 'the client')
     .replace(/\bpol-\d+\b/gi, 'policy')
@@ -76,4 +78,29 @@ export function plainText(text: string, names: Map<string, string> = new Map()):
     .replace(/\s{2,}/g, ' ')
     .trim();
   return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+/**
+ * Reasoning as separate points. Agents write one point per "- " line; older text written as one
+ * paragraph is split at sentence ends and semicolons. Dashes used as punctuation become commas.
+ */
+export function points(text: string): string[] {
+  const clean = text
+    .replace(/\s*[—–]\s*/g, ', ')
+    // Older proposals spelled their criteria as formulas.
+    .replace(/share paid within grace >= 1(?:\.0+)?\b/g, 'every invoice paid within grace')
+    .replace(/share paid within grace >= (0?\.\d+)/g, (_m, x: string) => `${Math.round(Number(x) * 100)}% of invoices paid within grace`)
+    .replace(/mean days late <= ([\d.]+)/g, 'average lateness of $1 days or less')
+    .replace(/max days late <= ([\d.]+)/g, 'no invoice more than $1 days late')
+    .replace(/\bEvidence: /g, 'Invoices: ')
+    .replace(/\bTerms: /g, 'Change: ')
+    .replace(/\bSuccess: /g, 'Works if: ');
+  const lines = clean.split('\n').map((l) => l.trim()).filter(Boolean);
+  const raw = lines.length > 1 && lines.every((l) => l.startsWith('- '))
+    ? lines.map((l) => l.slice(2))
+    : clean.split(/;\s+|(?<=[a-z0-9)%][.!?])\s+(?=[A-Z])/);
+  return raw
+    .map((p) => p.trim().replace(/[.;]+$/, ''))
+    .filter(Boolean)
+    .map((p) => `${p.charAt(0).toUpperCase()}${p.slice(1)}.`);
 }

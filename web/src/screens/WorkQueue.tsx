@@ -6,7 +6,7 @@ import { KindIcon } from '../components/KindIcon';
 import { SlidingPill } from '../components/SlidingPill';
 import { CollapseButton, useSlideClose } from '../components/useSlideClose';
 import { LeverChips, stateAfter, useLevers } from '../components/LeverChips';
-import { label, money, parseJson, percent, plainDates, plainText } from '../lib/format';
+import { label, money, parseJson, percent, plainDates, plainText, points } from '../lib/format';
 import { REASONS, reasonFor, waitingReason } from '../lib/autonomy';
 import { useSession } from '../lib/session';
 import { reducers, tables } from '../module_bindings';
@@ -350,7 +350,13 @@ function Drawer({
       <div className="drawer-body">
         {waiting && <p className="notice info waiting">{waiting}</p>}
         <h4>Why</h4>
-        <p>{item.reasoning ? plain(item.reasoning) : <span className="muted">No reasoning given.</span>}</p>
+        {item.reasoning ? (
+          <ul className="why-list">
+            {points(item.reasoning).map((p, i) => <li key={i}>{plain(p)}</li>)}
+          </ul>
+        ) : (
+          <p className="muted">No reasoning given.</p>
+        )}
         {proposal.plan?.basis && proposal.plan.basis !== item.reasoning && (
           <p className="muted">{plain(proposal.plan.basis)}</p>
         )}

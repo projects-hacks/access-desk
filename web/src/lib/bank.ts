@@ -168,6 +168,7 @@ function narrateRaw(e: AuditEvent, title?: string): { verb: string; what: string
     case 'ADVANCE_CLOCK': return { verb: 'moved the clock', what: `to ${e.toState}` };
     case 'DEADLINE_SET': case 'DEADLINE_DUE': case 'DEADLINE_MET': return { verb: label(e.action).toLowerCase(), what: e.detail };
     case 'AGENT_WAITED': return { verb: 'held off', what: e.detail };
+    case 'POLICY_OUTCOME': return { verb: 'checked a client policy', what: e.detail };
     case 'GUARDRAIL_REFUSED': return { verb: 'was refused', what: e.detail };
     case 'ORDER_PLACED': return { verb: 'placed an order', what: e.detail };
     case 'ORDER_REFUSED': return { verb: 'had an order refused', what: e.detail };

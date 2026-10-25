@@ -5,9 +5,8 @@ import {
 } from 'lucide-react';
 import { useTable } from 'spacetimedb/react';
 import { actor, ago, eventMs, isNews, narrate, useNow } from '../lib/bank';
-import { seat, switchController, type Seat } from '../lib/config';
 import { tables } from '../module_bindings';
-import { simDay } from '../lib/format';
+import { label, simDay } from '../lib/format';
 import { useClock, usePlatform, useSession } from '../lib/session';
 
 /** The platform's business date and what the desk is doing right now. */
@@ -72,6 +71,8 @@ function AgentTicker() {
   );
 }
 
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
+
 /** Connection state and who this browser is acting as. */
 export function SessionPill() {
   const session = useSession();
@@ -83,20 +84,13 @@ export function SessionPill() {
       <span className={`dot ${session.connected ? 'on' : 'off'}`} />
       {!session.connected && <span>{session.error ? 'Connection error' : 'Connecting…'}</span>}
       {session.connected && !session.role && <span>Read-only</span>}
-      {/* Two seats, because nobody approves their own proposal: A proposes, B approves. */}
       {session.role && (
-        <span className="seats" role="group" aria-label="Acting as">
-          {(['a', 'b'] as Seat[]).map((s) => (
-            <button
-              key={s}
-              className={s === seat ? 'active' : ''}
-              aria-pressed={s === seat}
-              onClick={() => s !== seat && switchController(s)}
-              title={`Act as Controller ${s.toUpperCase()}`}
-            >
-              Controller {s.toUpperCase()}
-            </button>
-          ))}
+        <span className="controller">
+          <span className="controller-avatar" aria-hidden>{initials(session.name ?? '')}</span>
+          <span className="controller-name">
+            <strong>{session.name}</strong>
+            <span>{session.role === 'CONTROLLER' ? 'Controller' : label(session.role)}</span>
+          </span>
         </span>
       )}
     </div>

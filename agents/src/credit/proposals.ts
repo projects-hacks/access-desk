@@ -99,16 +99,35 @@ function decisionMeta(o: Outcome) {
   };
 }
 
+/** One point per line, each a short plain sentence: the console shows them as bullets. */
+const bulletLines = (lines: string[]) => lines.map(plainSentence).filter(Boolean).map((l) => `- ${l}`).join('\n');
+
+/** A model's sentence in the desk's voice: no dashes for punctuation, no stray separators. */
+export function plainSentence(text: string): string {
+  const t = text
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/;\s+(\w)/g, (_m, c: string) => `. ${c.toUpperCase()}`)
+    .replace(/\s*;\s*$/, '')
+    .replace(/\.;/g, '.')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!t) return '';
+  const s = t.charAt(0).toUpperCase() + t.slice(1);
+  return /[.!?]$/.test(s) ? s : `${s}.`;
+}
+
+const invoiceList = (ids: string[]) => ids.slice(0, 6).join(', ') + (ids.length > 6 ? ` and ${ids.length - 6} more` : '');
+
 function reasoningOf(scores: Scores, flags: Flag[], o: Outcome): string {
   if (o.decidedBy === 'rules' || !o.choice) return template(o.final, scores, flags);
   const d = o.choice;
   const base = o.baseline;
-  const cited = d.cited_invoice_ids.slice(0, 10).join(', ') + (d.cited_invoice_ids.length > 10 ? ` and ${d.cited_invoice_ids.length - 10} more` : '');
-  const rules = { tier_change: `tier ${base.current} -> ${base.toTier}`, review: 'a review', stay: `keep tier ${base.current}` }[base.action];
-  const parts = [d.reasons.join(' ')];
-  if (cited) parts.push(`Evidence: ${cited}.`);
-  parts.push(`The rules alone would ${base.action !== 'stay' ? 'propose ' : ''}${rules}.`);
-  return parts.join(' ');
+  const rules = { tier_change: `move to tier ${base.toTier}`, review: 'ask for a review', stay: `keep tier ${base.current}` }[base.action];
+  return bulletLines([
+    ...d.reasons,
+    ...(d.cited_invoice_ids.length ? [`Invoices: ${invoiceList(d.cited_invoice_ids)}`] : []),
+    `The rules alone would ${rules}`,
+  ]);
 }
 
 export function reviewProposal(book: ClientBook, scores: Scores, flags: Flag[], o: Outcome, subject: string): Proposal {
@@ -122,13 +141,37 @@ export function reviewProposal(book: ClientBook, scores: Scores, flags: Flag[], 
   };
 }
 
-const termText = (lever: string, value: number | null, atRenewal: boolean) =>
-  `${lever.replaceAll('_', ' ')}${value !== null ? ` ${value} days` : ''}${atRenewal ? ' at renewal' : ''}`;
+function termText(lever: string, value: number | null, atRenewal: boolean): string {
+  const when = atRenewal ? ' at renewal' : '';
+  switch (lever) {
+    case 'reminder': return `Reminder ${value} days before each due date${when}`;
+    case 'grace_days': return `Grace period of ${value} days${when}`;
+    case 'cure_days': return `Cure period of ${value} days${when}`;
+    case 'prepay': return `Prepay required${when}`;
+    case 'custody_debit': return `Overdue fees collected from custody${when}`;
+    case 'cross_default': return `Cross-default across products${when}`;
+    default: return `${lever.replaceAll('_', ' ')}${value !== null ? ` ${value} days` : ''}${when}`;
+  }
+}
+
+/** The detectors' patterns, as a controller would name them. */
+const PATTERN_WORDS: Record<string, string> = {
+  restriction_eve: 'payments timed to the day before a restriction',
+  partial_reset: 'small partial payments that reset the clock',
+  pays_restricted_only: 'paying only the restricted product',
+  quarter_end: 'payments held back until quarter end',
+  recent_late: 'late payments',
+  lateness_jump: 'late payments',
+  dispute_delay: 'disputes that delay payment',
+};
 
 function criterionText(metric: string, target: number, pattern: string | null, months: number): string {
-  if (metric === 'pattern_not_firing') return `${pattern} stops firing within ${months} months`;
-  const op = metric === 'share_paid_within_grace' ? '>=' : '<=';
-  return `${metric.replaceAll('_', ' ')} ${op} ${Number(target.toPrecision(6))} over ${months} months`;
+  const over = `over ${months} ${months === 1 ? 'month' : 'months'}`;
+  if (metric === 'pattern_not_firing') return `no more ${PATTERN_WORDS[pattern ?? ''] ?? (pattern ?? 'of the pattern').replaceAll('_', ' ')} ${over}`;
+  if (metric === 'share_paid_within_grace') return target >= 1 ? `every invoice paid within grace ${over}` : `${Math.round(target * 100)}% of invoices paid within grace ${over}`;
+  if (metric === 'mean_days_late') return `average lateness of ${Number(target.toPrecision(3))} days or less ${over}`;
+  if (metric === 'max_days_late') return `no invoice more than ${Number(target.toPrecision(3))} days late ${over}`;
+  return `${metric.replaceAll('_', ' ')} at ${Number(target.toPrecision(6))} ${over}`;
 }
 
 /** The policy row to save as a draft, and the proposal that asks a controller to activate it. */
@@ -139,13 +182,17 @@ export function policyDraft(book: ClientBook, scores: Scores, o: Outcome, rows: 
   const policyId = companyPolicyId(p, cid);
   const version = nextVersion(rows, policyId);
   const rule = ruleJson(p, cid, today);
-  const learned = `${d.reasons.join('; ')} Evidence: ${d.cited_invoice_ids.join(', ')}.`;
   const key = `${policyId}@${version}`;
-  const terms = p.terms.map((t) => termText(t.lever, t.value, t.at_renewal)).join('; ');
+  const learned = [...d.reasons.map(plainSentence), ...(d.cited_invoice_ids.length ? [`Invoices: ${invoiceList(d.cited_invoice_ids)}.`] : [])].join(' ');
   const proposal: Proposal = {
     kind: 'POLICY_DRAFT', clientId: cid, subjectId: `policy:${key}`, title: `${book.client.name}: ${p.title}`, amountCents: scores.exposureCents,
     proposal: { policy_key: key, policy_id: policyId, version, title: p.title, rule, ...decisionMeta(o) },
-    reasoning: `${learned} Terms: ${terms}. Success: ${p.success_criteria.map((k) => criterionText(k.metric, k.target, k.pattern, k.window_months)).join('; ')}.`,
+    reasoning: bulletLines([
+      ...d.reasons,
+      ...(d.cited_invoice_ids.length ? [`Invoices: ${invoiceList(d.cited_invoice_ids)}`] : []),
+      ...p.terms.map((t) => `Change: ${termText(t.lever, t.value, t.at_renewal).toLowerCase()}`),
+      ...p.success_criteria.map((k) => `Works if: ${criterionText(k.metric, k.target, k.pattern, k.window_months)}`),
+    ]),
     policyRef: policyId, confidence: d.confidence, requiredRole: 'CONTROLLER',
   };
   return { policyId, version, title: p.title, ruleJson: JSON.stringify(rule), learnedFrom: learned, proposal };
