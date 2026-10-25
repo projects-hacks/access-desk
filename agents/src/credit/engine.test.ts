@@ -6,7 +6,7 @@ import type { ClientBook, Dispute } from './model';
 import { reliability, scoreBook, wholeScore } from './scoring';
 import { decide } from './tiers';
 
-/** Rajeev's dataset (fixtures/book.json, the demo morning); the answer key is the Seat 1 build plan. client -> [tier now, expected "stay" | "review" | new tier] */
+/** Rajeev's dataset (fixtures/book.json, the demo morning) and the tier each client should get, set by hand. client -> [tier now, expected "stay" | "review" | new tier] */
 const KEY: Record<string, [number, string | number]> = {
   'ORG-90101': [1, 'review'], // Halcyon
   'ORG-90107': [1, 'stay'], // Redwing
