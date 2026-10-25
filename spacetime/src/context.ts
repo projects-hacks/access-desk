@@ -1,4 +1,5 @@
 import { SenderError, type ReducerCtx } from 'spacetimedb/server';
+import { stepFromAudit } from './agents';
 import type { Role } from './roles';
 import type { spacetimedb } from './schema';
 
@@ -61,4 +62,5 @@ export function audit(ctx: Ctx, e: AuditInput) {
     detail: e.detail ?? '',
     policyRef: e.policyRef ?? '',
   });
+  stepFromAudit(ctx, e);
 }

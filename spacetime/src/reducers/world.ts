@@ -9,6 +9,7 @@ import { evaluateDeadlines } from '../payments/deadlines';
 import { clockTick } from '../tables/world';
 import { sendDefaultNotices } from './actions';
 import { requeueStuckCommands } from '../payments/gateway';
+import { requeueStuckTasks, route } from '../agents';
 
 /** Runs on first publish (and after a data reset). The publisher becomes ADMIN. */
 export const init = spacetimedb.init((ctx) => {
@@ -77,6 +78,9 @@ function moveClock(ctx: Ctx, days: number, trigger: string) {
     if (stop) break;
   }
   const to = simDate(ctx);
+  // A new day changes how late everyone is: Learning rescores and Access rechecks the clients with something overdue.
+  const late = new Set([...ctx.db.invoice.iter()].filter((i) => i.dueOn < to && i.paidCents < i.amountCents && i.status !== 'disputed').map((i) => i.clientId));
+  for (const clientId of late) route(ctx, 'daily', clientId, `New day ${to}: something is overdue`);
   audit(ctx, { action: 'ADVANCE_CLOCK', subjectType: 'clock', subjectId: '1', fromState: from, toState: to, detail: trigger });
   runTieOut(ctx, `clock moved to ${to}`);
 }
@@ -111,6 +115,7 @@ export const tickClock = spacetimedb.reducer({ onSchedule: clockTick }, { tick: 
     moveClock(ctx, 1, 'clock running');
   }
   requeueStuckCommands(ctx);
+  requeueStuckTasks(ctx);
 });
 
 /** Demo reset: back to the morning of the demo. */
@@ -170,6 +175,10 @@ export const resetWorld = spacetimedb.reducer({ simDate: t.string() }, (ctx, { s
   wipe(db.permission.iter(), (r: { id: string }) => r.id, (k) => db.permission.id.delete(k));
   wipe(db.tieOutBreak.iter(), (r: { id: bigint }) => r.id, (k) => db.tieOutBreak.id.delete(k));
   wipe(db.auditEvent.iter(), (r: { id: bigint }) => r.id, (k) => db.auditEvent.id.delete(k));
+  wipe(db.tradeOrder.iter(), (r: { id: bigint }) => r.id, (k) => db.tradeOrder.id.delete(k));
+  wipe(db.agentTask.iter(), (r: { id: bigint }) => r.id, (k) => db.agentTask.id.delete(k));
+  wipe(db.episode.iter(), (r: { id: bigint }) => r.id, (k) => db.episode.id.delete(k));
+  wipe(db.episodeStep.iter(), (r: { id: bigint }) => r.id, (k) => db.episodeStep.id.delete(k));
   for (const p of [...db.policy.iter()]) if (p.learnedFrom !== 'baseline' && db.policy.key.delete(p.key)) rows++;
   seedBaselinePolicies(ctx);
   ctx.db.clock.id.update({ id: 1, simDate, secondsPerDay: 0, runUntil: undefined, updatedAt: ctx.timestamp });

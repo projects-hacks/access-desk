@@ -4,6 +4,11 @@ import { createWorkItem, recomputeInvoice } from '../payments/apply';
 import { startCure } from '../payments/deadlines';
 import { CAN_EXECUTE } from '../roles';
 import { spacetimedb } from '../schema';
+import { route, step } from '../agents';
+import { formatUsd } from '../payments/match';
+import { LEVER_LABEL } from './actions';
+
+const capitalize = (s: string) => `${s[0]?.toUpperCase() ?? ''}${s.slice(1)}`;
 
 /** Retries before a command is marked failed and escalated. */
 const MAX_ATTEMPTS = 5;
@@ -54,6 +59,12 @@ export const completeGatewayCommand = spacetimedb.reducer(
       case 'CUSTODY_WITHDRAWAL':
         applyHoldings(ctx, result.holdings);
         break;
+      case 'TRADE': {
+        applyHoldings(ctx, result.holdings);
+        const order = ctx.db.tradeOrder.id.find(BigInt(action.orderId));
+        if (order) ctx.db.tradeOrder.id.update({ ...order, status: 'filled' });
+        break;
+      }
       case 'POST_JOURNAL': {
         const j = action.journal as { journalId: string; postedOn: string; ref: string; memo: string; lines: { account: string; debitCents: string; creditCents: string }[] };
         j.lines.forEach((l, n) => {
@@ -97,9 +108,30 @@ export const completeGatewayCommand = spacetimedb.reducer(
       action: 'COMMAND_DONE', subjectType: 'gateway_command', subjectId: String(id), workItemId: cmd.workItemId,
       fromState: 'executing', toState: 'done', detail: `${cmd.type} ${cmd.key}${externalRef ? ` → ${externalRef}` : ''}`,
     });
+    const done = gatewayStep(cmd.type, action);
+    const clientId = action.clientId ?? (cmd.workItemId !== undefined ? ctx.db.workItem.id.find(cmd.workItemId)?.clientId : undefined);
+    if (done) step(ctx, { clientId, actor: 'gateway', text: done, workItemId: cmd.workItemId });
     if (cmd.workItemId !== undefined) postWhenComplete(ctx, cmd.workItemId);
   },
 );
+
+/** What the platform or bank now shows, for the agents panel. Journals stay in the books. */
+function gatewayStep(type: string, action: { amountCents?: string | number; lever?: string; side?: string; asset?: string; quantity?: number }): string | undefined {
+  const amount = action.amountCents !== undefined ? formatUsd(BigInt(action.amountCents)) : '';
+  switch (type) {
+    case 'PLACE_HOLD': return `Hold of ${amount} written at the platform.`;
+    case 'RELEASE_HOLD': return 'Hold lifted at the platform.';
+    case 'SET_LEVER': return `${capitalize(LEVER_LABEL[action.lever ?? ''] ?? 'access')} updated at the platform.`;
+    case 'CUSTODY_WITHDRAWAL': return `${amount} sent from custody to the client's bank account.`;
+    case 'CUSTODY_DEBIT': return `${amount} debited from custody; the invoices are paid.`;
+    case 'APPLY_PAYMENT': return 'Payment applied to the invoices on the platform.';
+    case 'REVERSE_PAYMENT': return 'Invoices reopened on the platform.';
+    case 'REFUND': return `Refund of ${amount} sent back through the bank.`;
+    case 'SEND_NOTICE': return 'Notice delivered to the client.';
+    case 'TRADE': return `${action.side === 'buy' ? 'Bought' : 'Sold'} ${action.quantity?.toFixed(4)} ${action.asset} for ${amount} at the live price.`;
+    default: return undefined;
+  }
+}
 
 /** An approved work item is POSTED once every command it queued is done. */
 function postWhenComplete(ctx: Ctx, workItemId: bigint) {
@@ -113,6 +145,7 @@ function postWhenComplete(ctx: Ctx, workItemId: bigint) {
     action: 'TRANSITION', subjectType: 'work_item', subjectId: String(item.id), clientId: item.clientId, workItemId: item.id,
     fromState: 'APPROVED', toState: 'POSTED', detail: 'Every gateway command confirmed', policyRef: item.policyRef,
   });
+  if (item.kind === 'RESTRICTION' || item.kind === 'RESTORE') route(ctx, 'posted', item.clientId, `${item.title}: live at the platform`);
 }
 
 /** The write failed. Retryable failures go back in the queue; permanent ones are escalated to the controller. */
@@ -130,6 +163,10 @@ export const failGatewayCommand = spacetimedb.reducer(
       workItemId: cmd.workItemId, fromState: 'executing', toState: retry ? 'queued' : 'failed', allowed: retry,
       detail: `${cmd.type} ${cmd.key}: ${error}`,
     });
+    if (!retry && cmd.type === 'TRADE') {
+      const order = ctx.db.tradeOrder.id.find(BigInt(JSON.parse(cmd.actionJson).orderId));
+      if (order) ctx.db.tradeOrder.id.update({ ...order, status: 'failed', reason: 'The platform could not fill the order.' });
+    }
     if (!retry) {
       createWorkItem(ctx, {
         kind: 'SYSTEM_EXCEPTION', clientId: '', subjectId: `gateway_command:${id}`, amountCents: 0n,

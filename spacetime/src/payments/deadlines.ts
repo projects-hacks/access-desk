@@ -1,3 +1,4 @@
+import { route } from '../agents';
 import { addDays, audit, simDate, type Ctx } from '../context';
 
 /**
@@ -58,6 +59,7 @@ export function evaluateDeadlines(ctx: Ctx) {
       action: 'DEADLINE_DUE', subjectType: 'deadline', subjectId: String(d.id), clientId: d.clientId, workItemId: d.workItemId,
       fromState: 'open', toState: status, detail: `${d.kind.replace(/_/g, ' ')} ${status} on ${today}${d.clause ? ` (§${d.clause})` : ''}`,
     });
+    if (status !== 'due') route(ctx, 'deadline', d.clientId, `${d.kind.replace(/_/g, ' ')} ${status} on ${today}`);
   }
 }
 
@@ -72,5 +74,6 @@ export function closeDeadlinesIfCured(ctx: Ctx, clientId: string, cause: string)
       action: 'DEADLINE_MET', subjectType: 'deadline', subjectId: String(d.id), clientId, workItemId: d.workItemId,
       fromState: d.status, toState: 'met', detail: `${d.kind.replace(/_/g, ' ')} met: ${cause}`,
     });
+    route(ctx, 'deadline', clientId, `${d.kind.replace(/_/g, ' ')} met: ${cause}`);
   }
 }

@@ -18,5 +18,7 @@ export { recordPolicyOutcome, upsertCreditProfile, upsertExploitFlag } from './r
 export { proposePermissionChange, proposeTierChange } from './reducers/manual';
 export { proposeGuidelineChange, recordConsolePrecedent, setStrategic } from './reducers/guidelines';
 export {
-  bindPortal, myAccessRequests, myBankAccounts, myClient, myHoldings, myHolds, myInvoices, myLevers, myNotices, myPermissions,
+  bindPortal, myAccessRequests, myOrders, myBankAccounts, myClient, myHoldings, myHolds, myInvoices, myLevers, myNotices, myPermissions,
 } from './reducers/portal';
+export { claimAgentTask, completeAgentTask, failAgentTask, heartbeatAgentTask, queueSweep, recordAgentStep, recordGuardrail } from './reducers/agents';
+export { placeOrder } from './reducers/orders';

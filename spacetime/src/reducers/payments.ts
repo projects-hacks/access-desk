@@ -9,6 +9,7 @@ import { formatUsd, planMatch, type MatchPlan } from '../payments/match';
 import { spacetimedb } from '../schema';
 import { closeCashExceptions } from './matches';
 import { placeHoldFor } from './actions';
+import { arrivalText, route, step } from '../agents';
 
 /**
  * Payment checking. Runs in the same transaction as the cash being recorded,
@@ -17,6 +18,13 @@ import { placeHoldFor } from './actions';
 export function onCashMovement(ctx: Ctx, m: Movement, previous: Movement | undefined) {
   if (m.direction === 'in') onIncoming(ctx, m, previous);
   else onOutgoing(ctx, m);
+  // New cash wakes the agents for the client it belongs to (after payment checking, so they see the result).
+  if (m.isHistory || m.status !== 'posted' || previous?.status === 'posted') return;
+  if (m.direction === 'in') route(ctx, 'cash_in', resolvePayer(ctx, m)?.clientId, arrivalText(m));
+  else if (m.reverses) {
+    const original = [...ctx.db.cashMovement.bankRef.filter(m.reverses)][0];
+    if (original) route(ctx, 'payment_returned', resolvePayer(ctx, original)?.clientId, `${original.bankRef} returned (${m.returnCode ?? 'return'})`);
+  }
 }
 
 /** Cash removed from the source: undo whatever it did. */
@@ -63,6 +71,7 @@ function onIncoming(ctx: Ctx, m: Movement, previous: Movement | undefined) {
 
   // Cash in the bank is on the books first (unapplied), whatever happens next.
   bookReceipt(ctx, m, GL.UNAPPLIED_CASH);
+  if (!m.isHistory) step(ctx, { clientId: payer?.clientId, actor: 'bank', text: `${arrivalText(m)} landed.`, opens: arrivalText(m) });
 
   if (!payer) {
     setMatchStatus(ctx, m.id, 'exception');
@@ -203,6 +212,10 @@ function onOutgoing(ctx: Ctx, m: Movement) {
   if (m.reverses) {
     const original = [...ctx.db.cashMovement.bankRef.filter(m.reverses)][0];
     if (!original) throw new SenderError(`${m.bankRef} reverses unknown ${m.reverses}`);
+    if (!m.isHistory) {
+      const text = `${arrivalText(original)} returned by the bank (${m.returnCode ?? 'return'}).`;
+      step(ctx, { clientId: resolvePayer(ctx, original)?.clientId, actor: 'bank', text, opens: text });
+    }
     const item = createWorkItem(ctx, {
       kind: 'PAYMENT_REVERSAL', clientId: resolvePayer(ctx, original)?.clientId ?? '', subjectId: m.id,
       amountCents: m.amountCents, title: `${original.bankRef} returned (ACH ${m.returnCode ?? 'return'}) · invoices reopened`,

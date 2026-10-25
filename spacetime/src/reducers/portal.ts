@@ -5,6 +5,7 @@ import { spacetimedb } from '../schema';
 import { custodyHolding, hold } from '../tables/assets';
 import { accessLever, client, permission } from '../tables/clients';
 import { bankAccount, invoice } from '../tables/money';
+import { tradeOrder } from '../tables/orders';
 import { accessRequest, notice } from '../tables/work';
 
 type PortalCtx = ViewCtx<(typeof spacetimedb)['schemaType']>;
@@ -61,6 +62,11 @@ export const myBankAccounts = spacetimedb.view({ name: 'my_bank_accounts', publi
 export const myNotices = spacetimedb.view({ name: 'my_notices', public: true }, t.array(notice.rowType), (ctx) => {
   const id = myClientId(ctx);
   return id ? [...ctx.db.notice.clientId.filter(id)] : [];
+});
+
+export const myOrders = spacetimedb.view({ name: 'my_orders', public: true }, t.array(tradeOrder.rowType), (ctx) => {
+  const id = myClientId(ctx);
+  return id ? [...ctx.db.tradeOrder.clientId.filter(id)] : [];
 });
 
 /** Binds a browser identity to one client so the portal views return that client's rows. Never touches staff or service identities. */

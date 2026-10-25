@@ -5,6 +5,7 @@ import { GL, cr, dr, queueCommand, queueJournal } from '../payments/gateway';
 import { cureState, defaultedInvoices } from '../payments/deadlines';
 import { formatUsd } from '../payments/match';
 import { isTopClient, lowConfidence } from '../autonomy';
+import { route, stepChecks } from '../agents';
 import { spacetimedb } from '../schema';
 import { applyCreditReview, applyPolicyDraft } from './credit';
 import { applyGuidelineEffects } from './guidelines';
@@ -25,6 +26,7 @@ const PROPOSERS = ['AGENT', 'CONTROLLER', 'ADMIN'] as const;
 /** Kinds that may run without a person, and the policy that must be active for it. */
 const AUTO_POLICY: Record<string, string> = { CUSTODY_DEBIT: 'pol-005', RESTRICTION: 'pol-006', RESTORE: 'pol-011', REMINDER: 'pol-007' };
 const LEVERS = ['withdrawals', 'trading', 'api', 'financing'] as const;
+export const LEVER_LABEL: Record<string, string> = { withdrawals: 'withdrawals', trading: 'trading', api: 'API access', financing: 'financing' };
 /** Lever state and label after each restriction step. */
 const STEP_EFFECT: Record<string, { state: string; detail: string }> = {
   REQUIRE_PREPAY: { state: 'limited', detail: 'Prepay required' },
@@ -80,10 +82,17 @@ export function canAutoApply(ctx: Ctx, kind: string, clientId: string): boolean 
 function propose(ctx: Ctx, w: {
   kind: string; clientId: string; title: string; amountCents: bigint; proposal: Record<string, unknown>;
   reasoning: string; policyRef: string; clausesCited: string[]; confidence: number; needsPerson?: boolean; boundariesJson?: string;
+  /** Guardrails the proposal already passed, shown on its step. */
+  passed?: string[];
 }) {
   requireRole(ctx, PROPOSERS);
   // Below the confidence threshold the agent hands the decision to a person.
   const auto = !w.needsPerson && !lowConfidence(w.confidence) && canAutoApply(ctx, w.kind, w.clientId);
+  const c = ctx.db.client.id.find(w.clientId);
+  const top = !!c && w.kind === 'RESTRICTION' && isTopClient(c.tier, c.strategic);
+  const policy = AUTO_POLICY[w.kind];
+  const why = w.needsPerson ? 'Offboarding is outside agent authority' : top ? `${c!.name} is a top client` : lowConfidence(w.confidence)
+    ?? (policy && !policyActive(ctx, policy) ? `${policy} is not active` : !policy ? `${w.kind.toLowerCase().replace(/_/g, ' ')} always needs a person` : undefined);
   const item = createWorkItem(ctx, {
     kind: w.kind, clientId: w.clientId, subjectId: w.clientId, title: w.title, amountCents: w.amountCents,
     proposal: w.proposal, reasoning: w.reasoning, policyRef: w.policyRef, confidence: w.confidence,
@@ -92,6 +101,10 @@ function propose(ctx: Ctx, w: {
   if (w.clausesCited.length || w.boundariesJson) {
     ctx.db.workItem.id.update({ ...item, clausesCited: w.clausesCited, boundariesJson: w.boundariesJson ?? item.boundariesJson });
   }
+  stepChecks(ctx, item.id, [
+    ...(w.passed ?? []).map((label) => ({ ok: true, label })),
+    ...(auto ? [{ ok: true, label: policy! }, ...(w.kind === 'RESTRICTION' ? [{ ok: true, label: 'not a top client' }] : []), { ok: true, label: 'no approval needed' }] : []),
+  ], auto ? undefined : { waiting: `${why ?? 'Needs a person'}. Routed to a controller.` });
   if (auto) executeApproved(ctx, item.id);
   return item;
 }
@@ -129,6 +142,7 @@ export const proposeCustodyDebit = spacetimedb.reducer(
     const amount = chosen.reduce((s, id) => s + overdue.get(id)!.amountCents - overdue.get(id)!.paidCents, 0n);
     if (usdCash(ctx, clientId) < amount) throw new SenderError(`custody USD ${formatUsd(usdCash(ctx, clientId))} is less than ${formatUsd(amount)} owed`);
     propose(ctx, {
+      passed: [`§${debit.clause} debit consent`, `${formatUsd(amount)} ≤ custody cash`, 'only overdue, undisputed invoices'],
       kind: 'CUSTODY_DEBIT', clientId, amountCents: amount, policyRef, clausesCited: [debit.clause],
       title: `Debit ${formatUsd(amount)} from custody for ${chosen.join(', ')}`,
       proposal: { invoiceIds: chosen, amountCents: amount }, reasoning, confidence,
@@ -183,14 +197,17 @@ function restrict(
   const leverProduct: Record<string, string> = { withdrawals: 'CUSTODY', trading: 'TRADING', api: 'API', financing: 'FINANCING' };
   const setOff = clause(ctx, clientId, 'set_off');
   const cited: string[] = [];
+  const passed: string[] = [`${lever} is in the contract`, `the platform can ${step.replace(/_/g, ' ').toLowerCase()}`];
   if (lever === 'withdrawals') {
     if (!setOff?.allowed) throw new SenderError('no set-off right: withdrawals cannot be held');
     cited.push(setOff.clause);
+    passed.push(`§${setOff.clause} set-off right`);
   } else if (!products.has(leverProduct[lever]!) && !contract?.crossDefault) {
     throw new SenderError(`nothing overdue on ${lever}, and the contract has no cross-default`);
   }
   const hedged = [...ctx.db.position.clientId.filter(clientId)].some((p) => p.status === 'open' && p.hedgeGroup);
   if (lever === 'trading' && hedged && step === 'CLOSE_ONLY') throw new SenderError('pol-008: never force a hedged book to close-only; propose NO_NEW_POSITIONS');
+  if (lever === 'trading' && hedged) passed.push('pol-008 hedged book stays open');
   // §9.1: no restriction until a default notice has gone out and the cure period has run.
   const cure = clause(ctx, clientId, 'cure');
   if (cure?.allowed) {
@@ -199,17 +216,21 @@ function restrict(
     if (s.state === 'none') throw new SenderError(`§${cure.clause}: no default notice yet; send one (propose_notice), then the ${days}-day cure period runs`);
     if (s.state === 'running') throw new SenderError(`§${cure.clause}: cure period runs until ${s.dueOn} (notice of ${s.startedOn})`);
     cited.push(cure.clause);
+    passed.push(`§${cure.clause} cure period has run`);
   }
+  if (isHoldStep(lever, step)) passed.push(`hold ≤ ${formatUsd(owed)} overdue`);
 
   const isHold = lever === 'withdrawals' && step === 'HOLD_AMOUNT_OWED';
   propose(ctx, {
     kind: 'RESTRICTION', clientId, amountCents: isHold ? owed : 0n, policyRef, clausesCited: cited, needsPerson: offboarding,
     title: isHold ? `Hold ${formatUsd(owed)} of ${c.name}'s withdrawals`
-      : `${offboarding ? 'Offboarding: ' : ''}${step.replace(/_/g, ' ').toLowerCase()} on ${c.name}'s ${lever}`,
+      : `${offboarding ? 'Offboarding: ' : ''}${c.name}'s ${LEVER_LABEL[lever]}: ${(STEP_EFFECT[step]?.detail ?? step.replace(/_/g, ' ')).toLowerCase()}`,
     proposal: { lever, step, amountCents: isHold ? owed : 0n, invoiceIds: overdue.map((i) => i.id), clause: cited[0] ?? '' },
-    reasoning, confidence, boundariesJson,
+    reasoning, confidence, boundariesJson, passed,
   });
 }
+
+const isHoldStep = (lever: string, step: string) => lever === 'withdrawals' && step === 'HOLD_AMOUNT_OWED';
 
 /** Give access back on one lever (releases holds on withdrawals). */
 export const proposeRestore = spacetimedb.reducer(
@@ -276,6 +297,7 @@ export const requestCustodyWithdrawal = spacetimedb.reducer(
       action: 'WITHDRAWAL_REQUESTED', subjectType: 'access_request', subjectId: String(request.id), clientId,
       toState: request.decision, detail: `${c.name} asked ${formatUsd(amountCents)}: ${formatUsd(allowed)} approved, ${formatUsd(withheld)} held`,
     });
+    route(ctx, 'withdrawal', clientId, `Asked to withdraw ${formatUsd(amountCents)}`);
   },
 );
 
@@ -307,6 +329,7 @@ function flagCureWithdrawal(ctx: Ctx, name: string, clientId: string, requestId:
     reasoning: `In default on ${formatUsd(inDefaultCents)} with the cure period running until ${cure.dueOn}. The withdrawal had to be honored (§9.1), `
       + `and custody cash is now ${formatUsd(leftCents)}, below what is in default.`,
   });
+  route(ctx, 'exploit_flag', clientId, `Withdrew ${formatUsd(releasedCents)} during the cure period`);
 }
 
 // ── Execution on approval ───────────────────────────────────────────────────

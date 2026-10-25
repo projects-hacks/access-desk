@@ -38,10 +38,15 @@ import AddRmNoteReducer from "./add_rm_note_reducer";
 import AdvanceClockReducer from "./advance_clock_reducer";
 import AssignRoleReducer from "./assign_role_reducer";
 import BindPortalReducer from "./bind_portal_reducer";
+import ClaimAgentTaskReducer from "./claim_agent_task_reducer";
 import ClaimGatewayCommandReducer from "./claim_gateway_command_reducer";
+import CompleteAgentTaskReducer from "./complete_agent_task_reducer";
 import CompleteGatewayCommandReducer from "./complete_gateway_command_reducer";
+import FailAgentTaskReducer from "./fail_agent_task_reducer";
 import FailGatewayCommandReducer from "./fail_gateway_command_reducer";
+import HeartbeatAgentTaskReducer from "./heartbeat_agent_task_reducer";
 import PlaceHoldReducer from "./place_hold_reducer";
+import PlaceOrderReducer from "./place_order_reducer";
 import ProposeCustodyDebitReducer from "./propose_custody_debit_reducer";
 import ProposeGuidelineChangeReducer from "./propose_guideline_change_reducer";
 import ProposeNoticeReducer from "./propose_notice_reducer";
@@ -52,8 +57,11 @@ import ProposeRestrictionReducer from "./propose_restriction_reducer";
 import ProposeRestrictionWithBoundariesReducer from "./propose_restriction_with_boundaries_reducer";
 import ProposeTierChangeReducer from "./propose_tier_change_reducer";
 import ProposeWorkItemReducer from "./propose_work_item_reducer";
+import QueueSweepReducer from "./queue_sweep_reducer";
 import RecordAgentRunReducer from "./record_agent_run_reducer";
+import RecordAgentStepReducer from "./record_agent_step_reducer";
 import RecordConsolePrecedentReducer from "./record_console_precedent_reducer";
+import RecordGuardrailReducer from "./record_guardrail_reducer";
 import RecordInvestigationReducer from "./record_investigation_reducer";
 import RecordPolicyOutcomeReducer from "./record_policy_outcome_reducer";
 import RecordSyncErrorReducer from "./record_sync_error_reducer";
@@ -100,6 +108,7 @@ import AccessLeverRow from "./access_lever_table";
 import AccessRequestRow from "./access_request_table";
 import ActorRow from "./actor_table";
 import AgentRunRow from "./agent_run_table";
+import AgentTaskRow from "./agent_task_table";
 import AssetPriceRow from "./asset_price_table";
 import AuditEventRow from "./audit_event_table";
 import BankAccountRow from "./bank_account_table";
@@ -115,6 +124,8 @@ import CustodyHoldingRow from "./custody_holding_table";
 import DeadlineRow from "./deadline_table";
 import DecisionRow from "./decision_table";
 import DisputeRow from "./dispute_table";
+import EpisodeRow from "./episode_table";
+import EpisodeStepRow from "./episode_step_table";
 import ExploitFlagRow from "./exploit_flag_table";
 import GatewayCommandRow from "./gateway_command_table";
 import HoldRow from "./hold_table";
@@ -131,6 +142,7 @@ import MyHoldsRow from "./my_holds_table";
 import MyInvoicesRow from "./my_invoices_table";
 import MyLeversRow from "./my_levers_table";
 import MyNoticesRow from "./my_notices_table";
+import MyOrdersRow from "./my_orders_table";
 import MyPermissionsRow from "./my_permissions_table";
 import NoticeRow from "./notice_table";
 import OwedToClientRow from "./owed_to_client_table";
@@ -146,6 +158,7 @@ import RmNoteRow from "./rm_note_table";
 import SyncSourceRow from "./sync_source_table";
 import TieOutBreakRow from "./tie_out_break_table";
 import TieOutRunRow from "./tie_out_run_table";
+import TradeOrderRow from "./trade_order_table";
 import WorkItemRow from "./work_item_table";
 
 /** Type-only namespace exports for generated type groups. */
@@ -202,6 +215,29 @@ const tablesSchema = __schema({
       { name: 'agent_run_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, AgentRunRow),
+  agentTask: __table({
+    name: 'agent_task',
+    indexes: [
+      { accessor: 'agent', name: 'agent_task_agent_idx_btree', algorithm: 'btree', columns: [
+        'agent',
+      ] },
+      { accessor: 'clientId', name: 'agent_task_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'episodeId', name: 'agent_task_episode_id_idx_btree', algorithm: 'btree', columns: [
+        'episodeId',
+      ] },
+      { accessor: 'id', name: 'agent_task_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'status', name: 'agent_task_status_idx_btree', algorithm: 'btree', columns: [
+        'status',
+      ] },
+    ],
+    constraints: [
+      { name: 'agent_task_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, AgentTaskRow),
   assetPrice: __table({
     name: 'asset_price',
     indexes: [
@@ -397,6 +433,37 @@ const tablesSchema = __schema({
       { name: 'dispute_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, DisputeRow),
+  episode: __table({
+    name: 'episode',
+    indexes: [
+      { accessor: 'clientId', name: 'episode_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'episode_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'episode_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, EpisodeRow),
+  episodeStep: __table({
+    name: 'episode_step',
+    indexes: [
+      { accessor: 'episodeId', name: 'episode_step_episode_id_idx_btree', algorithm: 'btree', columns: [
+        'episodeId',
+      ] },
+      { accessor: 'id', name: 'episode_step_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'workItemId', name: 'episode_step_work_item_id_idx_btree', algorithm: 'btree', columns: [
+        'workItemId',
+      ] },
+    ],
+    constraints: [
+      { name: 'episode_step_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, EpisodeStepRow),
   exploitFlag: __table({
     name: 'exploit_flag',
     indexes: [
@@ -717,6 +784,20 @@ const tablesSchema = __schema({
       { name: 'tie_out_run_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, TieOutRunRow),
+  tradeOrder: __table({
+    name: 'trade_order',
+    indexes: [
+      { accessor: 'clientId', name: 'trade_order_client_id_idx_btree', algorithm: 'btree', columns: [
+        'clientId',
+      ] },
+      { accessor: 'id', name: 'trade_order_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'trade_order_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, TradeOrderRow),
   workItem: __table({
     name: 'work_item',
     indexes: [
@@ -787,6 +868,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyNoticesRow),
+  myOrders: __table({
+    name: 'my_orders',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyOrdersRow),
   myPermissions: __table({
     name: 'my_permissions',
     indexes: [
@@ -802,10 +890,15 @@ const reducersSchema = __reducers(
   __reducerSchema("advance_clock", AdvanceClockReducer),
   __reducerSchema("assign_role", AssignRoleReducer),
   __reducerSchema("bind_portal", BindPortalReducer),
+  __reducerSchema("claim_agent_task", ClaimAgentTaskReducer),
   __reducerSchema("claim_gateway_command", ClaimGatewayCommandReducer),
+  __reducerSchema("complete_agent_task", CompleteAgentTaskReducer),
   __reducerSchema("complete_gateway_command", CompleteGatewayCommandReducer),
+  __reducerSchema("fail_agent_task", FailAgentTaskReducer),
   __reducerSchema("fail_gateway_command", FailGatewayCommandReducer),
+  __reducerSchema("heartbeat_agent_task", HeartbeatAgentTaskReducer),
   __reducerSchema("place_hold", PlaceHoldReducer),
+  __reducerSchema("place_order", PlaceOrderReducer),
   __reducerSchema("propose_custody_debit", ProposeCustodyDebitReducer),
   __reducerSchema("propose_guideline_change", ProposeGuidelineChangeReducer),
   __reducerSchema("propose_notice", ProposeNoticeReducer),
@@ -816,8 +909,11 @@ const reducersSchema = __reducers(
   __reducerSchema("propose_restriction_with_boundaries", ProposeRestrictionWithBoundariesReducer),
   __reducerSchema("propose_tier_change", ProposeTierChangeReducer),
   __reducerSchema("propose_work_item", ProposeWorkItemReducer),
+  __reducerSchema("queue_sweep", QueueSweepReducer),
   __reducerSchema("record_agent_run", RecordAgentRunReducer),
+  __reducerSchema("record_agent_step", RecordAgentStepReducer),
   __reducerSchema("record_console_precedent", RecordConsolePrecedentReducer),
+  __reducerSchema("record_guardrail", RecordGuardrailReducer),
   __reducerSchema("record_investigation", RecordInvestigationReducer),
   __reducerSchema("record_policy_outcome", RecordPolicyOutcomeReducer),
   __reducerSchema("record_sync_error", RecordSyncErrorReducer),

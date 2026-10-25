@@ -1,4 +1,5 @@
 import { SenderError, t } from 'spacetimedb/server';
+import { route } from '../agents';
 import { actorOf, audit, requireRole } from '../context';
 import { needsHuman } from '../autonomy';
 import { CAN_APPROVE, CAN_POST, type Role } from '../roles';
@@ -99,6 +100,12 @@ export const transitionWorkItem = spacetimedb.reducer(
       onPaymentApproved(ctx, item.id);
       executeApproved(ctx, item.id);
     }
-    if (to === 'REJECTED') recordCreditPrecedent(ctx, item.id, 'Rejected', note);
+    if ((to === 'APPROVED' || to === 'REJECTED') && ['RESTRICTION', 'CUSTODY_DEBIT', 'NOVEL_CASE'].includes(item.kind)) {
+      route(ctx, 'decided', item.clientId, `A person ${to === 'APPROVED' ? 'approved' : 'rejected'}: ${item.title}`);
+    }
+    if (to === 'REJECTED') {
+      recordCreditPrecedent(ctx, item.id, 'Rejected', note);
+      if (ctx.db.actor.identity.find(item.proposedBy)?.role === 'AGENT') route(ctx, 'override', item.clientId, `A person rejected: ${item.title}`);
+    }
   },
 );

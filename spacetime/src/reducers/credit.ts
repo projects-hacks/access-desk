@@ -1,4 +1,5 @@
 import { SenderError, t } from 'spacetimedb/server';
+import { route } from '../agents';
 import { audit, requireRole, simDate, type Ctx } from '../context';
 import { spacetimedb } from '../schema';
 import { activatePolicyDraft, activatingWorkItem, rejectPolicyDraft } from './policies';
@@ -35,6 +36,7 @@ export const upsertCreditProfile = spacetimedb.reducer(
       toState: `reliability ${args.reliabilityScore} · value ${args.valueScore}`,
       detail: `coverage ${args.coverageRatio.toFixed(2)}x · settle ${args.expectedSettleOn ?? 'nothing open'}`,
     });
+    route(ctx, 'scored', args.clientId, `Credit profile moved to reliability ${args.reliabilityScore} · value ${args.valueScore}`);
   },
 );
 
@@ -63,6 +65,7 @@ export const upsertExploitFlag = spacetimedb.reducer(
       action: 'EXPLOIT_FLAGGED', subjectType: 'exploit_flag', subjectId: args.id, clientId: args.clientId,
       toState: args.status, detail: `${args.pattern} · ${args.months} months · score ${args.score.toFixed(2)}`,
     });
+    route(ctx, 'exploit_flag', args.clientId, `Exploit flag: ${args.pattern.replace(/_/g, ' ')}`);
   },
 );
 
@@ -126,6 +129,7 @@ export function applyCreditReview(ctx: Ctx, workItemId: bigint) {
       action: 'TIER_CHANGED', subjectType: 'client', subjectId: c.id, clientId: c.id, workItemId: item.id,
       fromState: String(c.tier), toState: String(to), detail: item.title, policyRef: item.policyRef,
     });
+    route(ctx, 'tier_changed', c.id, `Tier ${c.tier} → ${to}`);
   }
   recordCreditPrecedent(ctx, item.id, 'Approved', '');
 }
@@ -159,5 +163,6 @@ export const recordPolicyOutcome = spacetimedb.reducer(
       workItemId: precedent.workItemId, fromState: verdict(precedent.outcome), toState: verdict(outcome),
       detail: outcome, policyRef: policy.policyId,
     });
+    if (verdict(outcome) === 'failing') route(ctx, 'policy_failing', precedent.clientId, `${policy.title} is failing`);
   },
 );

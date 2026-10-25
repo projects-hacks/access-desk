@@ -53,6 +53,21 @@ export const AgentRun = __t.object("AgentRun", {
 });
 export type AgentRun = __Infer<typeof AgentRun>;
 
+export const AgentTask = __t.object("AgentTask", {
+  id: __t.u64(),
+  agent: __t.string(),
+  clientId: __t.string(),
+  reason: __t.string(),
+  episodeId: __t.u64(),
+  status: __t.string(),
+  claimedBy: __t.option(__t.identity()),
+  attempts: __t.u16(),
+  summary: __t.string(),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type AgentTask = __Infer<typeof AgentTask>;
+
 export const AssetPrice = __t.object("AssetPrice", {
   asset: __t.string(),
   priceCents: __t.i64(),
@@ -139,6 +154,12 @@ export const CashMovement = __t.object("CashMovement", {
   isHistory: __t.bool(),
 });
 export type CashMovement = __Infer<typeof CashMovement>;
+
+export const Check = __t.object("Check", {
+  ok: __t.bool(),
+  label: __t.string(),
+});
+export type Check = __Infer<typeof Check>;
 
 export const Client = __t.object("Client", {
   id: __t.string(),
@@ -256,6 +277,33 @@ export const Dispute = __t.object("Dispute", {
   resolution: __t.string(),
 });
 export type Dispute = __Infer<typeof Dispute>;
+
+export const Episode = __t.object("Episode", {
+  id: __t.u64(),
+  clientId: __t.string(),
+  trigger: __t.string(),
+  outcome: __t.string(),
+  kind: __t.string(),
+  startedAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type Episode = __Infer<typeof Episode>;
+
+export const EpisodeStep = __t.object("EpisodeStep", {
+  id: __t.u64(),
+  episodeId: __t.u64(),
+  clientId: __t.string(),
+  actor: __t.string(),
+  text: __t.string(),
+  reason: __t.string(),
+  get checks() {
+    return __t.array(Check);
+  },
+  instead: __t.string(),
+  workItemId: __t.u64(),
+  at: __t.timestamp(),
+});
+export type EpisodeStep = __Infer<typeof EpisodeStep>;
 
 export const ExploitFlag = __t.object("ExploitFlag", {
   id: __t.string(),
@@ -387,6 +435,9 @@ export type MyLevers = __Infer<typeof MyLevers>;
 
 export const MyNotices = __t.object("MyNotices", {});
 export type MyNotices = __Infer<typeof MyNotices>;
+
+export const MyOrders = __t.object("MyOrders", {});
+export type MyOrders = __Infer<typeof MyOrders>;
 
 export const MyPermissions = __t.object("MyPermissions", {});
 export type MyPermissions = __Infer<typeof MyPermissions>;
@@ -555,6 +606,20 @@ export const TieOutRun = __t.object("TieOutRun", {
   summaryJson: __t.string(),
 });
 export type TieOutRun = __Infer<typeof TieOutRun>;
+
+export const TradeOrder = __t.object("TradeOrder", {
+  id: __t.u64(),
+  clientId: __t.string(),
+  side: __t.string(),
+  asset: __t.string(),
+  amountCents: __t.i64(),
+  quantity: __t.f64(),
+  priceCents: __t.i64(),
+  status: __t.string(),
+  reason: __t.string(),
+  at: __t.timestamp(),
+});
+export type TradeOrder = __Infer<typeof TradeOrder>;
 
 export const WorkItem = __t.object("WorkItem", {
   id: __t.u64(),

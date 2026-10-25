@@ -1,4 +1,5 @@
 import { t } from 'spacetimedb/server';
+import { arrivalText, route } from '../agents';
 import { audit, requireRole } from '../context';
 import { CAN_SYNC } from '../roles';
 import { spacetimedb } from '../schema';
@@ -34,7 +35,10 @@ export const upsertClient = spacetimedb.reducer({ row: client.rowType }, (ctx, {
   const existing = ctx.db.client.id.find(row.id);
   // Status and tier belong to the system of work once imported (tier changes are controller-approved CREDIT_REVIEWs).
   if (existing) ctx.db.client.id.update({ ...row, status: existing.status, tier: existing.tier });
-  else ctx.db.client.insert(row);
+  else {
+    ctx.db.client.insert(row);
+    route(ctx, 'new_client', row.id, 'New client: first credit profile');
+  }
 });
 
 export const upsertPayerIdentity = spacetimedb.reducer({ row: payerIdentity.rowType }, (ctx, { row }) => {
@@ -79,9 +83,13 @@ export const upsertInvoice = spacetimedb.reducer({ row: invoice.rowType }, (ctx,
 
 export const upsertDispute = spacetimedb.reducer({ row: dispute.rowType }, (ctx, { row }) => {
   requireRole(ctx, CAN_SYNC);
-  if (ctx.db.dispute.id.find(row.id)) ctx.db.dispute.id.update(row);
+  const before = ctx.db.dispute.id.find(row.id);
+  if (before) ctx.db.dispute.id.update(row);
   else ctx.db.dispute.insert(row);
   recomputeInvoice(ctx, row.invoiceId);
+  if (!before || before.status !== row.status) {
+    route(ctx, 'dispute', row.clientId, `Dispute ${row.id} ${row.status} on ${row.invoiceId}`);
+  }
 });
 
 /**
@@ -101,7 +109,7 @@ export const upsertCashMovement = spacetimedb.reducer({ row: cashMovement.rowTyp
       subjectId: row.id,
       fromState: existing?.status,
       toState: row.status,
-      detail: `${row.direction} ${row.rail} ${row.amountCents} ${row.origName}`,
+      detail: existing ? `${arrivalText(row)}: ${row.status}` : arrivalText(row),
     });
   }
   onCashMovement(ctx, next, existing ?? undefined);

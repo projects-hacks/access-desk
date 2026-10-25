@@ -1,4 +1,5 @@
 import { SenderError, t } from 'spacetimedb/server';
+import { route } from '../agents';
 import { audit, requireRole } from '../context';
 import { spacetimedb } from '../schema';
 
@@ -24,6 +25,7 @@ export const addRmNote = spacetimedb.reducer(
       action: 'RM_NOTE', subjectType: 'rm_note', subjectId: String(note.id), clientId, workItemId,
       detail: `${note.author}: ${note.text}`,
     });
+    route(ctx, 'rm_note', clientId, `RM note from ${note.author}`);
   },
 );
 
