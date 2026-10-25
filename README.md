@@ -16,6 +16,7 @@ Built for Cal Hacks 13.0 on a fictional platform, Northstar Prime, with 30 insti
 
 ## How it works
 
+
 ```mermaid
 flowchart LR
     subgraph world["Real world"]
@@ -148,4 +149,4 @@ docs/        how each part works
 
 ## Docs
 
-[agents](docs/agents.md) · [why SpacetimeDB](docs/spacetimedb.md) · [the living platform](docs/world.md) · [payment checking](docs/payments.md) · [agent actions](docs/actions.md) · [credit](docs/credit.md) · [exploits](docs/exploits.md) · [gateway, ledger, tie-out](docs/books.md) · [bank](docs/bank.md) · [sync](docs/sync.md) · [schema](docs/schema.md) · [database](docs/database.md) · [model choice](docs/llm.md)
+[agents](docs/agents.md) · [money](docs/money.md) · [SpacetimeDB](docs/spacetimedb.md) · [the living platform](docs/world.md)

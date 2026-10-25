@@ -172,7 +172,7 @@ th.num .sort { width: 100%; text-align: right; }
 .table td.late { color: var(--bad); }
 .table.clients td { vertical-align: middle; }
 .table.clients .title { margin-top: 0; }
-.table td.next { color: var(--muted); font-size: 13px; max-width: 220px; }
+.table td.next { color: var(--muted); font-size: 13px; min-width: 190px; max-width: 260px; }
 .clamp-2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 /* The client column stays in view when the table scrolls sideways (e.g. next to the agents panel). */
 .table.clients tbody tr { background: var(--surface); }
@@ -431,7 +431,7 @@ th.num .sort { width: 100%; text-align: right; }
 .select.open, .select:focus-visible { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
 .select .chevron { color: var(--muted); transition: transform 0.2s; }
 .select.open .chevron { transform: rotate(180deg); }
-.select-list { list-style: none; margin: 0; outline: none; animation: select-in 0.14s ease-out; }
+.select-list { list-style: none; margin: 0; outline: none; animation: select-in 0.14s ease-out; overflow-y: auto; overscroll-behavior: contain; display: block; }
 .select-list li { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 8px; cursor: pointer; }
 .select-list li > span:first-child { flex: 1; }
 .select-list li.hover { background: var(--surface-2); }

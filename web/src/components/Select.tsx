@@ -18,7 +18,7 @@ export function Select<T extends string | number>({
   onChange: (value: T) => void;
   label: string;
 }) {
-  const [pos, setPos] = useState<{ top: number; left: number; width: number }>();
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number }>();
   const [hover, setHover] = useState(0);
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLUListElement>(null);
@@ -27,7 +27,16 @@ export function Select<T extends string | number>({
 
   const show = () => {
     const r = button.current!.getBoundingClientRect();
-    setPos({ top: r.bottom + 6, left: r.left, width: r.width });
+    // Opens where there is room (below unless above has clearly more), never past the screen's edges.
+    const below = window.innerHeight - r.bottom - 14;
+    const above = r.top - 14;
+    const wanted = Math.min(360, options.length * 40 + 12);
+    const down = below >= wanted || below >= above;
+    const width = Math.max(r.width, 180);
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+    setPos(down
+      ? { top: r.bottom + 6, left, width: r.width, maxHeight: Math.max(120, below) }
+      : { bottom: window.innerHeight - r.top + 6, left, width: r.width, maxHeight: Math.max(120, above) });
     setHover(
       Math.max(
         0,
@@ -115,7 +124,7 @@ export function Select<T extends string | number>({
             aria-activedescendant={`opt-${hover}`}
             tabIndex={-1}
             onKeyDown={onListKey}
-            style={{ top: pos.top, left: pos.left, minWidth: pos.width }}
+            style={{ top: pos.top, bottom: pos.bottom, left: pos.left, minWidth: pos.width, maxHeight: pos.maxHeight }}
           >
             {options.map((o, i) => (
               <li

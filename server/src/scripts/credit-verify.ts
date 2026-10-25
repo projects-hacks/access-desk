@@ -1,6 +1,6 @@
 /**
  * Checks the credit analyst's output in the shared database against the answer
- * key (docs/credit.md). Run after `pnpm demo:reset && pnpm sync` and one agent
+ * key (docs/agents.md). Run after `pnpm demo:reset && pnpm sync` and one agent
  * cycle (`pnpm agents`). Usage: pnpm credit:verify
  *
  * Tier 1 and 2 clients (and strategic ones) always wait for a controller; for tier 3 to 5 regular

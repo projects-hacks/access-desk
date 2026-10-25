@@ -121,7 +121,7 @@ export function useClientRows(): ClientRow[] {
                   : { label: 'Current', tone: 'good' };
 
       const next = waiting.length
-        ? `Approve: ${waiting[0]!.title}`
+        ? `Approve: ${withoutName(waiting[0]!.title, client.name)}`
         : cure
           ? `Cure period ends ${shortDate(cure.dueOn)}`
           : overdue.length && cureOver && !restricted
@@ -154,4 +154,10 @@ export function useClientRows(): ClientRow[] {
       };
     });
   }, [today, clients, contracts, invoices, levers, deadlines, items, profiles, flags]);
+}
+
+/** "Vantage Loop's API access: prepay required" → "API access: prepay required" where the row already names the client. */
+function withoutName(title: string, name: string): string {
+  const rest = title.startsWith(`${name}'s `) ? title.slice(name.length + 3) : title.startsWith(`${name}: `) ? title.slice(name.length + 2) : title;
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
 }
