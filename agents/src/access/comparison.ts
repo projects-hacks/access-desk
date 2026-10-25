@@ -39,7 +39,7 @@ export function cutoffComparison(v: ClientView, lever: string, step: string, owe
     full.push(`force-closes ${plural(positions.length, 'open position')}${hedges.length ? ` incl. ${hedges.length} hedged` : ''} (${usd(notional)} notional, est. ${usd(unwind)} unwind cost at ${UNWIND_COST_BPS} bps)`);
   }
   if (breaches.length || broken.length) full.push(`breaches ${listed([...breaches.map((b) => `the ${b.kind.replace(/_/g, ' ')} clause`), ...broken.map((id) => POLICY_NAMES[id] ?? 'a policy')])}`);
-  full.push('needs two approvers');
+  full.push("needs the controller's approval");
   full[0] = full[0]!.charAt(0).toUpperCase() + full[0]!.slice(1);
   return {
     kind: 'cutoff_comparison',

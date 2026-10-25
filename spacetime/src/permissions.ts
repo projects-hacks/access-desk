@@ -38,7 +38,7 @@ export function leverSummary(lever: string, enabled: (key: PermissionKey) => boo
   return { state, detail: `${off.map((p) => p.name).join(', ')} off` };
 }
 
-/** Why a person (a second controller) must approve, or undefined when it applies at once. */
+/** Why the controller must approve an agent's change, or undefined when it applies at once. */
 export function permissionNeedsHuman(i: { topClient: boolean; offboards: boolean; changes: { key: string; enabled: boolean }[] }): string | undefined {
   // Giving access back never waits.
   if (i.changes.every((c) => c.enabled)) return undefined;

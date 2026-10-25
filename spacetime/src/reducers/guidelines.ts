@@ -2,12 +2,13 @@ import { SenderError, t } from 'spacetimedb/server';
 import { actorOf, audit, requireRole, simDate, type Ctx } from '../context';
 import { createWorkItem } from '../payments/apply';
 import { spacetimedb } from '../schema';
+import { executeApproved } from './actions';
 
 /**
  * The credit console's levers on the tier guidelines: tier cutoffs and rules, the
  * reliability model's weights, and exploit fixes. Each is a draft policy plus a
- * POLICY_DRAFT work item, so it always waits for a controller (autonomy.ts) and is
- * activated by the existing policy flow (activatePolicyDraft).
+ * POLICY_DRAFT work item. The controller is the person in the loop, so it applies at
+ * once through the existing policy flow (activatePolicyDraft), like any manual change.
  */
 
 /** Policy ids the console drafts; exploit fixes are `exploit-fix-<pattern>`. */
@@ -44,12 +45,12 @@ export const proposeGuidelineChange = spacetimedb.reducer(
       learnedFrom: `console: ${who}`, approvedBy: undefined,
     });
     audit(ctx, { action: 'POLICY_SAVED', subjectType: 'policy', subjectId: key, clientId, toState: 'draft', detail: title.trim() });
-    // POLICY_DRAFT always waits for a person, so the proposer's colleague approves it.
-    createWorkItem(ctx, {
+    const item = createWorkItem(ctx, {
       kind: 'POLICY_DRAFT', clientId, subjectId: `policy:${key}`, amountCents: 0n, title: title.trim(),
       proposal: { policy_key: key, decided_by: who, rule }, reasoning: reasoning.trim(), policyRef: policyId,
-      confidence: 1, requiredRole: 'CONTROLLER', autoApplied: false,
+      confidence: 1, requiredRole: 'CONTROLLER', autoApplied: true,
     });
+    executeApproved(ctx, item.id);
   },
 );
 

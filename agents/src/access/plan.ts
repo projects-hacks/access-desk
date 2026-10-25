@@ -295,7 +295,7 @@ function cutoffLine(c: ReturnType<typeof cutoffComparison>, lever: string): stri
     ...f.clausesBreached.map((b) => `breach the ${b.kind.replace(/_/g, ' ')} clause`),
     f.policiesBreached.length > 0 && `break ${listed(f.policiesBreached.map((p) => POLICY_WORDS[p] ?? 'a policy'))}`,
   ].filter(Boolean) as string[];
-  return `A full cutoff would ${items.length ? `also ${listed(items)} and would ` : ''}need a second approver.`;
+  return `A full cutoff would ${items.length ? `also ${listed(items)} and would ` : ''}need the controller's approval.`;
 }
 
 /** Every overdue invoice USD custody covers, oldest first, in one debit (debits apply without a person). */
