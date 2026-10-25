@@ -33,6 +33,8 @@ const InjectSchema = z.object({
   status: z.enum(['posted', 'pending']).default('posted'),
 });
 
+const PaySchema = z.object({ clientId: z.string() });
+
 const WithdrawSchema = z.object({ clientId: z.string(), amount: z.number().positive().describe('Dollars requested') });
 
 const PortalAsSchema = z.object({ clientId: z.string().min(1), identity: z.string().regex(/^(0x)?[0-9a-fA-F]{64}$/, 'identity must be a 64-char hex identity') });
@@ -54,7 +56,7 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
   await new Promise<void>((resolve) =>
     conn.subscriptionBuilder().onApplied(() => resolve()).subscribe([
       tables.clock, tables.cashMovement, tables.workItem, tables.paymentApplication, tables.hold,
-      tables.tieOutRun, tables.gatewayCommand, tables.auditEvent, tables.accessRequest, tables.custodyHolding,
+      tables.tieOutRun, tables.gatewayCommand, tables.auditEvent, tables.accessRequest, tables.custodyHolding, tables.invoice,
     ]),
   );
   const db = conn.db;
@@ -101,11 +103,35 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
     const parsed = InjectSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
     const p = parsed.data;
+    if (p.payer.clientId && !ds.clients.some((c) => c.id === p.payer.clientId)) return reply.code(400).send({ error: `unknown client ${p.payer.clientId}` });
+    return receiveWire(p);
+  });
+
+  /**
+   * The client portal's "Pay now": a real wire from the client's own Nessie account for everything
+   * overdue, quoting the invoice numbers. Payment checking, hold release and the agents follow from it.
+   */
+  app.post('/demo/pay', async (req, reply) => {
+    const parsed = PaySchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
+    const { clientId } = parsed.data;
+    if (!ds.clients.some((c) => c.id === clientId)) return reply.code(400).send({ error: `unknown client ${clientId}` });
+    const today = simDate();
+    const due = [...db.invoice.clientId.filter(clientId)].filter((i) => i.dueOn < today && i.status !== 'disputed' && i.paidCents < i.amountCents);
+    if (!due.length) return reply.code(409).send({ error: 'nothing is overdue' });
+    const cents = due.reduce((s, i) => s + Number(i.amountCents - i.paidCents), 0);
+    return receiveWire({
+      payer: { clientId }, amount: cents / 100, remittance: `PAYMENT ${due.map((i) => i.id).join(' ')}`.slice(0, 140),
+      network: 'FEDWIRE', charges: 0, status: 'posted',
+    });
+  });
+
+  /** A wire lands in the platform's collections account at Nessie (and leaves the payer's, when we know them). */
+  async function receiveWire(p: z.infer<typeof InjectSchema>) {
     const startedAt = Date.now();
     const client = p.payer.clientId ? ds.clients.find((c) => c.id === p.payer.clientId) : undefined;
-    if (p.payer.clientId && !client) return reply.code(400).send({ error: `unknown client ${p.payer.clientId}` });
     const collections = bank.map.accounts.collections;
-    if (!collections) return reply.code(500).send({ error: 'collections account missing' });
+    if (!collections) throw new Error('collections account missing');
 
     const count = [...db.cashMovement.iter()].filter((m) => m.bankRef.startsWith('JD-')).length;
     const trn = `JD-${String(count + 1).padStart(4, '0')}`;
@@ -130,7 +156,7 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
     await sync.cash(client ? [client.id] : []);
     await awaitMovement(trn);
     return outcome(trn, startedAt);
-  });
+  }
 
   app.post('/demo/settle', async (req, reply) => {
     const bankRef = (req.body as { bankRef?: string } | undefined)?.bankRef ?? 'WI-5531';

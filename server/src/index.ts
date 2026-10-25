@@ -9,6 +9,7 @@ import { PlatformClient } from './platform/client';
 import { Sync } from './sync';
 import { demoRoutes } from './demo/routes';
 import { buildSeedPlan } from './integrations/nessie/seed-plan';
+import { startPriceFeed } from './integrations/prices';
 
 if (!env.SERVER_HOST) {
   console.error('This server runs sync and the gateway on the shared database, and only one may run (the hosted one).\n'
@@ -53,6 +54,7 @@ if (env.STDB_GATEWAY_TOKEN) {
   app.log.warn('STDB_GATEWAY_TOKEN not set: gateway disabled, commands will queue');
 }
 sync.start();
+startPriceFeed(syncConn, platform, log);
 
 // Reconnects are automatic. A connection down for two minutes means something is wrong
 // that a fresh process fixes (the platform replays from the database on boot): exit and

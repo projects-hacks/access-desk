@@ -17,6 +17,8 @@ export class PlatformSimulator {
   readonly holdings = new Map<string, HoldingRow>();
   readonly journals = new Map<string, Journal>();
   readonly notices: { messageId: string; clientId: string; channel: string; body: string }[] = [];
+  /** Cents per unit: the dataset's, until the live feed (integrations/prices.ts) moves them. */
+  readonly prices = new Map<string, { cents: number; asOf?: string }>(Object.entries(PRICES).map(([a, cents]) => [a, { cents }]));
   private readonly results = new Map<string, GatewayResult>();
 
   constructor(private readonly ds: Dataset) {
@@ -33,6 +35,27 @@ export class PlatformSimulator {
       for (const h of holdingsFor(c)) this.holdings.set(h.id, { ...h });
     }
     for (const j of baselineJournals(this.ds)) this.journals.set(j.journalId, j);
+    for (const asset of this.prices.keys()) this.revalue(asset);
+  }
+
+  /** A new market price: revalues every holding of that asset. Returns the holdings that changed. */
+  setPrice(asset: string, cents: number, asOf: string): HoldingRow[] {
+    this.prices.set(asset, { cents, asOf });
+    return this.revalue(asset);
+  }
+
+  private revalue(asset: string): HoldingRow[] {
+    const cents = this.prices.get(asset)?.cents;
+    if (cents === undefined) return [];
+    const changed: HoldingRow[] = [];
+    for (const h of this.holdings.values()) {
+      if (h.asset !== asset) continue;
+      const value = Math.round(h.quantity * cents);
+      if (value === h.valueCents) continue;
+      h.valueCents = value;
+      changed.push(h);
+    }
+    return changed;
   }
 
   /** Apply a command once. Repeating a command id returns the original result without changing anything. */
@@ -115,6 +138,27 @@ export class PlatformSimulator {
         const messageId = `MSG-${String(this.notices.length + 1).padStart(5, '0')}`;
         this.notices.push({ messageId, clientId: a.clientId, channel: a.channel, body: a.body });
         return { type: 'SEND_NOTICE', messageId };
+      }
+      case 'TRADE': {
+        const usd = this.holdings.get(`${a.clientId}:USD`);
+        if (!usd) throw new PlatformError(`${a.clientId} has no USD custody balance`);
+        const id = `${a.clientId}:${a.asset}`;
+        const coin = this.holdings.get(id) ?? { id, clientId: a.clientId, asset: a.asset, quantity: 0, valueCents: 0 };
+        if (a.side === 'buy') {
+          const held = [...this.holds.values()].filter((h) => h.clientId === a.clientId && h.status === 'active').reduce((s, h) => s + h.amountCents, 0);
+          if (usd.valueCents - held < a.amountCents) throw new PlatformError(`${a.clientId} has ${usd.valueCents - held} free, order is ${a.amountCents}`);
+          usd.valueCents -= a.amountCents;
+          coin.quantity += a.quantity;
+        } else {
+          if (coin.quantity + 1e-9 < a.quantity) throw new PlatformError(`${a.clientId} holds ${coin.quantity} ${a.asset}, order is ${a.quantity}`);
+          coin.quantity = Math.max(0, coin.quantity - a.quantity);
+          usd.valueCents += a.amountCents;
+        }
+        usd.quantity = usd.valueCents / PRICES.USD;
+        coin.valueCents = Math.round(coin.quantity * (this.prices.get(a.asset)?.cents ?? 0));
+        this.holdings.set(id, coin);
+        const state = (h: HoldingRow) => ({ id: h.id, quantity: h.quantity, valueCents: h.valueCents });
+        return { type: 'TRADE', holdings: [state(usd), state(coin)] };
       }
       case 'REFUND':
         // Money moves at the bank, not here; the gateway sends refunds to Nessie.

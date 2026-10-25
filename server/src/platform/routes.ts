@@ -13,6 +13,7 @@ export const ROUTES: Record<Exclude<ActionType, 'REFUND'>, string> = {
   CUSTODY_DEBIT: '/custody/debits',
   CUSTODY_WITHDRAWAL: '/custody/withdrawals',
   SEND_NOTICE: '/notices',
+  TRADE: '/trading/orders',
 };
 
 /**

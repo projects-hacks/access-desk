@@ -5,7 +5,7 @@ import type {
 } from '../../module_bindings/types';
 import type { Dataset } from '../../dataset';
 import {
-  PRICES, capabilities, clausesFor, clientStatus, contractFor, disputes, dunningNotices, owedToClient, positionsFor, renewalOn,
+  capabilities, clausesFor, clientStatus, contractFor, disputes, dunningNotices, owedToClient, positionsFor, renewalOn,
 } from '../../dataset/platform-data';
 import type { SeedMap } from '../../integrations/nessie/seed-map';
 import type { PlatformSimulator } from '../../platform/simulator';
@@ -90,8 +90,8 @@ export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap, 
   }
 
   const custody: SyncRecord<unknown>[] = [];
-  for (const [asset, cents] of Object.entries(PRICES)) {
-    const row: AssetPrice = { asset, priceCents: BigInt(cents), asOf: ds.simDate };
+  for (const [asset, { cents, asOf }] of sim.prices) {
+    const row: AssetPrice = { asset, priceCents: BigInt(cents), asOf: asOf ?? ds.simDate };
     custody.push(rec('asset_price', asset, row, (x) => r.upsertAssetPrice({ row: x })));
   }
   for (const h of sim.holdings.values()) {
