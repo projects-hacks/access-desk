@@ -204,7 +204,7 @@ const EVENT_WORDS: Record<string, string> = {
 function materialEventCase(v: ClientView, note: RmNoteRow, reading: RmReading, world: World): Move {
   const name = v.client.name;
   const event = reading.eventType ?? 'other';
-  const who = reading.counterparty && (event === 'acquisition' || event === 'merger') ? ` by ${reading.counterparty}` : '';
+  const who = !reading.counterparty ? '' : event === 'acquisition' ? ` by ${reading.counterparty}` : event === 'merger' ? ` with ${reading.counterparty}` : '';
   const when = reading.effectiveDate;
   const defaulted = defaultedInvoices(v, world.today);
   const open = openInvoices(v);
