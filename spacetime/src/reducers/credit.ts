@@ -3,6 +3,7 @@ import { route } from '../agents';
 import { audit, requireRole, simDate, type Ctx } from '../context';
 import { spacetimedb } from '../schema';
 import { activatePolicyDraft, activatingWorkItem, rejectPolicyDraft } from './policies';
+import { applyPolicyTerms } from '../policyTerms';
 
 /**
  * Seat 1 (credit analyst) writes its scores and exploit flags here. Neither
@@ -142,7 +143,10 @@ export function applyCreditReview(ctx: Ctx, workItemId: bigint) {
 
 /** Approved POLICY_DRAFT: activate the company's drafted version and record the precedent. */
 export function applyPolicyDraft(ctx: Ctx, workItemId: bigint) {
-  if (activatePolicyDraft(ctx, workItemId)) recordCreditPrecedent(ctx, workItemId, 'Approved', '');
+  if (!activatePolicyDraft(ctx, workItemId)) return;
+  recordCreditPrecedent(ctx, workItemId, 'Approved', '');
+  const key = (JSON.parse(ctx.db.workItem.id.find(workItemId)!.proposalJson) as { policy_key?: string }).policy_key;
+  if (key) applyPolicyTerms(ctx, key, workItemId);
 }
 
 /**

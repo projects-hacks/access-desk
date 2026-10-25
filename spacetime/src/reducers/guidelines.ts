@@ -3,6 +3,7 @@ import { actorOf, audit, requireRole, simDate, type Ctx } from '../context';
 import { createWorkItem } from '../payments/apply';
 import { spacetimedb } from '../schema';
 import { executeApproved } from './actions';
+import { moveToPrepay } from '../policyTerms';
 
 /**
  * The credit console's levers on the tier guidelines: tier cutoffs and rules, the
@@ -65,18 +66,7 @@ export function applyGuidelineEffects(ctx: Ctx, workItemId: bigint) {
   const p = JSON.parse(item.proposalJson) as { policy_key?: string; rule?: { fix?: string; client_ids?: string[]; pattern?: string } };
   if (!p.policy_key?.startsWith('exploit-fix-') || p.rule?.fix !== 'prepay') return;
   for (const id of p.rule.client_ids ?? []) {
-    const c = ctx.db.client.id.find(id);
-    if (!c || c.status === 'prepay') continue;
-    ctx.db.client.id.update({ ...c, status: 'prepay' });
-    const api = ctx.db.accessLever.id.find(`${id}:api`);
-    if (api && api.state === 'active') {
-      ctx.db.accessLever.id.update({ ...api, state: 'limited', detail: 'Prepay required', workItemId: item.id });
-    }
-    audit(ctx, {
-      action: 'LEVER_SET', subjectType: 'client', subjectId: id, clientId: id, workItemId: item.id,
-      fromState: c.status, toState: 'prepay', detail: `Exploit fix (${p.rule.pattern ?? 'pattern'}): new usage on prepay`,
-      policyRef: p.policy_key,
-    });
+    moveToPrepay(ctx, id, item.id, `Exploit fix (${p.rule.pattern ?? 'pattern'}): new usage on prepay`, p.policy_key);
   }
 }
 

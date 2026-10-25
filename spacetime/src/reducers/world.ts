@@ -12,6 +12,7 @@ import { requeueStuckCommands } from '../payments/gateway';
 import { requeueStuckTasks, route } from '../agents';
 import { recordWeeklyAutonomy } from '../autonomyTrend';
 import { expireStaleProposals } from '../staleness';
+import { catchUpPrepay, sendPolicyReminders } from '../policyTerms';
 
 /** Runs on first publish (and after a data reset). The publisher becomes ADMIN. */
 export const init = spacetimedb.init((ctx) => {
@@ -77,6 +78,9 @@ function moveClock(ctx: Ctx, days: number, trigger: string) {
     ctx.db.clock.id.update({ ...c, simDate: to, secondsPerDay: stop ? 0 : c.secondsPerDay, runUntil: stop ? undefined : c.runUntil, updatedAt: ctx.timestamp });
     evaluateDeadlines(ctx);
     sendDefaultNotices(ctx);
+    // Clients' own policies at work: reminders before due dates, prepay where a policy says so.
+    sendPolicyReminders(ctx, to);
+    catchUpPrepay(ctx);
     recordWeeklyAutonomy(ctx, to);
     expireStaleProposals(ctx, to);
     if (stop) break;
