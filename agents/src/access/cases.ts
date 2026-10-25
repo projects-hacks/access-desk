@@ -227,7 +227,7 @@ function materialEventCase(v: ClientView, note: RmNoteRow, reading: RmReading, w
       coc?.allowed ? `Change of control: ${sentence(coc.text)}` : 'No change-of-control clause.',
       setOff?.allowed ? 'Set-off is allowed.' : 'No set-off right.',
       debit?.allowed ? 'Custody debits are allowed.' : 'Debits need the client\'s written consent.',
-      cure && (cure.status === 'open' || cure.status === 'expired') ? `The cure period is ${cure.status}, until ${day(cure.dueOn)}.` : '',
+      cure?.status === 'open' ? `The cure period runs until ${day(cure.dueOn)}.` : cure?.status === 'expired' ? `The cure period ran out on ${day(cure.dueOn)}.` : '',
     ].filter(Boolean).join(' ')],
     ['exposure', `${usdShort(inDefault)} in default and ${usdShort(totalOpen)} open in total. Custody holds ${usdShort(cash)} in USD of ${usdShort(custody)} overall.`],
     ['custody_activity', `${withdrawn ? `${usdShort(withdrawn)} withdrawn from custody through the platform.` : 'No withdrawals through the platform.'}${flagged.length ? ` Open flags: ${flagged.map((f) => f.pattern.replace(/_/g, ' ')).join(', ')}.` : ''}`],
