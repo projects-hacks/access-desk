@@ -241,6 +241,8 @@ export class World {
       case 'ach_return': return this.achReturn(e, snap);
       case 'withdraw': return this.withdraw(e);
       case 'trade': return this.trade(e);
+      case 'dispute': return this.dispute(e, snap);
+      case 'resolve_dispute': return this.resolveDispute(e, snap);
     }
   }
 
@@ -343,6 +345,27 @@ export class World {
     const order = await this.waitFor(() => [...this.db.tradeOrder.clientId.filter(e.clientId)].find((o) => !before.has(o.id)));
     if (!order) return 'placed';
     return order.status === 'refused' ? `refused: ${order.reason}` : `${order.status} at ${formatUsd(Number(order.priceCents))}`;
+  }
+
+  /** The next live dispute id, above every one in the database and the platform. */
+  private nextDisputeId(): string {
+    const used = [...[...this.db.dispute.iter()].map((d) => d.id), ...this.deps.platform.disputes.keys()];
+    const max = used.reduce((m, id) => Math.max(m, Number(/^DSP-W(\d+)$/.exec(id)?.[1] ?? 0)), 0);
+    return `DSP-W${String(max + 1).padStart(4, '0')}`;
+  }
+
+  private async dispute(e: Extract<PlannedEvent, { kind: 'dispute' }>, snap: WorldSnapshot): Promise<string> {
+    const { ds, platform, sync } = this.deps;
+    const id = this.nextDisputeId();
+    const owner = ds.clients.find((c) => c.id === e.clientId)!.relationshipManager;
+    await sync.bookDispute(() => platform.openDispute({ id, invoiceId: e.invoiceId, amountCents: e.amountCents, reason: e.reason, openedOn: snap.simDate, owner }).id);
+    return `${id} under review, owner ${owner}`;
+  }
+
+  private async resolveDispute(e: Extract<PlannedEvent, { kind: 'resolve_dispute' }>, snap: WorldSnapshot): Promise<string> {
+    const { platform, sync } = this.deps;
+    await sync.bookDispute(() => platform.resolveDispute(e.disputeId, e.resolution, snap.simDate, e.creditCents).id);
+    return e.resolution === 'credited' ? `${e.disputeId} credited ${formatUsd(e.creditCents)}` : `${e.disputeId} upheld as billed`;
   }
 
   private async waitFor<T>(find: () => T | undefined, ms = 2_000): Promise<T | undefined> {

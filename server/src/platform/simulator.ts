@@ -1,6 +1,6 @@
 import type { Dataset, Invoice } from '../dataset';
 import { ACCOUNTS, REVENUE, baselineJournals, isBalanced, type Journal } from '../dataset/gl';
-import { PRICES, holdingsFor, leversFor, type HoldingRow, type LeverRow } from '../dataset/platform-data';
+import { PRICES, disputes, holdingsFor, leversFor, type DisputeRow, type HoldingRow, type LeverRow } from '../dataset/platform-data';
 import type { GatewayAction, GatewayResult, InvoiceState } from './commands';
 
 export class PlatformError extends Error {}
@@ -16,6 +16,8 @@ export class PlatformSimulator {
   readonly holds = new Map<string, { clientId: string; amountCents: number; clause: string; status: 'active' | 'released' }>();
   readonly holdings = new Map<string, HoldingRow>();
   readonly journals = new Map<string, Journal>();
+  /** Disputes under review at billing (the dataset's live ones and any opened since), and those ruled on since. */
+  readonly disputes = new Map<string, DisputeRow>();
   readonly notices: { messageId: string; clientId: string; channel: string; body: string }[] = [];
   /** Cents per unit: the dataset's, until the live feed (integrations/prices.ts) moves them. */
   readonly prices = new Map<string, { cents: number; asOf?: string }>(Object.entries(PRICES).map(([a, cents]) => [a, { cents }]));
@@ -27,7 +29,7 @@ export class PlatformSimulator {
 
   /** Back to the dataset baseline (used by the demo reset). */
   reset() {
-    for (const store of [this.invoices, this.levers, this.holds, this.holdings, this.journals, this.results]) store.clear();
+    for (const store of [this.invoices, this.levers, this.holds, this.holdings, this.journals, this.results, this.disputes]) store.clear();
     this.notices.length = 0;
     for (const i of this.ds.invoices) this.invoices.set(i.id, { ...i });
     for (const c of this.ds.clients) {
@@ -35,6 +37,7 @@ export class PlatformSimulator {
       for (const h of holdingsFor(c)) this.holdings.set(h.id, { ...h });
     }
     for (const j of baselineJournals(this.ds)) this.journals.set(j.journalId, j);
+    for (const d of disputes(this.ds)) if (d.status === 'under_review') this.disputes.set(d.id, { ...d });
     for (const asset of this.prices.keys()) this.revalue(asset);
   }
 
@@ -54,6 +57,63 @@ export class PlatformSimulator {
       added.push(i);
     }
     return added;
+  }
+
+  /** A client disputes an unpaid invoice: billing marks it disputed and records the dispute (owner, reason, date). */
+  openDispute(d: { id: string; invoiceId: string; amountCents: number; reason: string; openedOn: string; owner: string }): DisputeRow {
+    const inv = this.invoice(d.invoiceId);
+    if (inv.status === 'paid' || inv.paidCents >= inv.amountCents) throw new PlatformError(`${inv.id} is already paid`);
+    if ([...this.disputes.values()].some((x) => x.invoiceId === inv.id && x.status === 'under_review')) throw new PlatformError(`${inv.id} is already disputed`);
+    if (this.disputes.has(d.id)) throw new PlatformError(`dispute ${d.id} exists`);
+    const row: DisputeRow = { ...d, clientId: inv.clientId, status: 'under_review', resolvedOn: undefined, resolution: '' };
+    this.disputes.set(d.id, row);
+    inv.status = 'disputed';
+    return { ...row };
+  }
+
+  /**
+   * The ruling. `no_change` reopens the invoice as it was; `credited` issues a credit note for
+   * `creditCents` (the dispute then records the amount credited): the invoice shrinks and billing
+   * books Dr revenue / Cr receivables. Ruling twice returns the first ruling.
+   */
+  resolveDispute(id: string, resolution: 'no_change' | 'credited', on: string, creditCents = 0): DisputeRow {
+    const d = this.disputes.get(id);
+    if (!d) throw new PlatformError(`unknown dispute ${id}`);
+    if (d.status === 'resolved') return { ...d };
+    if (resolution === 'credited') {
+      if (creditCents <= 0 || creditCents > d.amountCents) throw new PlatformError(`${id}: credit ${creditCents} is not within the ${d.amountCents} disputed`);
+      d.amountCents = creditCents;
+    }
+    d.status = 'resolved';
+    d.resolvedOn = on;
+    d.resolution = resolution;
+    this.settle(d);
+    return { ...d };
+  }
+
+  /** Puts a dispute back as the database holds it (after a restart), with the credit it already issued. */
+  loadDispute(row: DisputeRow) {
+    this.disputes.set(row.id, { ...row });
+    if (this.invoices.has(row.invoiceId)) this.settle(this.disputes.get(row.id)!);
+  }
+
+  /** The invoice follows its dispute: disputed while under review, back to open or paid after, smaller if credited. */
+  private settle(d: DisputeRow) {
+    const inv = this.invoice(d.invoiceId);
+    if (d.status === 'under_review') {
+      inv.status = 'disputed';
+      return;
+    }
+    if (d.resolution === 'credited') {
+      if (inv.amountCents - d.amountCents < inv.paidCents) throw new PlatformError(`${inv.id}: a credit of ${d.amountCents} would leave it overpaid`);
+      inv.amountCents -= d.amountCents;
+      const id = `JE-CN-${d.id}`;
+      this.journals.set(id, {
+        journalId: id, postedOn: d.resolvedOn!, ref: inv.id, memo: `Credit note · ${d.reason}`, source: 'billing',
+        lines: [{ account: REVENUE[inv.product], debitCents: d.amountCents, creditCents: 0 }, { account: ACCOUNTS.RECEIVABLES, debitCents: 0, creditCents: d.amountCents }],
+      });
+    }
+    inv.status = inv.paidCents >= inv.amountCents ? 'paid' : 'open';
   }
 
   /** A new market price: revalues every holding of that asset. Returns the holdings that changed. */

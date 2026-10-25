@@ -1,7 +1,7 @@
 import type { Dataset, IsoDate } from '../dataset';
 import { addDays } from '../dataset/dates';
 import { tables, type DbConnection } from '../module_bindings';
-import type { ClientView, InvoiceView, RecentAch, RecentWire, WorldSnapshot } from './events';
+import type { ClientView, DisputeView, InvoiceView, RecentAch, RecentWire, WorldSnapshot } from './events';
 import type { CureView, Profile } from './personality';
 import { isWorldRef } from './refs';
 
@@ -10,7 +10,7 @@ type Db = DbConnection['db'];
 /** What the world reads from the shared database. */
 export const WORLD_TABLES = [
   tables.clock, tables.invoice, tables.cashMovement, tables.accessLever, tables.custodyHolding, tables.assetPrice,
-  tables.deadline, tables.hold, tables.payerIdentity, tables.tradeOrder, tables.accessRequest,
+  tables.deadline, tables.hold, tables.payerIdentity, tables.tradeOrder, tables.accessRequest, tables.dispute,
 ];
 
 export interface ClockView {
@@ -93,6 +93,12 @@ export function readSnapshot(db: Db, ds: Dataset, profiles: ReadonlyMap<string, 
   for (const m of mine) if (m.valueOn === today) count(accountOwner.get(m.origAccount));
   for (const o of db.tradeOrder.iter()) if (o.at.microsSinceUnixEpoch >= dayStart) count(o.clientId);
   for (const r of db.accessRequest.iter()) if (r.action === 'withdraw' && r.at.microsSinceUnixEpoch >= dayStart) count(r.clientId);
+  const underReview = new Map<string, DisputeView[]>();
+  for (const d of db.dispute.iter()) {
+    if (d.openedOn === today || d.resolvedOn === today) count(d.clientId);
+    if (d.status !== 'under_review') continue;
+    underReview.set(d.clientId, [...(underReview.get(d.clientId) ?? []), { id: d.id, invoiceId: d.invoiceId, openedOn: d.openedOn, amountCents: Number(d.amountCents) }]);
+  }
 
   const clients: ClientView[] = ds.clients.map((c) => {
     const profile = profiles.get(c.id)!;
@@ -118,6 +124,7 @@ export function readSnapshot(db: Db, ds: Dataset, profiles: ReadonlyMap<string, 
 
     return {
       profile,
+      disputes: underReview.get(c.id) ?? [],
       invoices: invoices.get(c.id) ?? [],
       cure: cures.get(c.id),
       usdFreeCents: Number(usd - (held.get(c.id) ?? 0n) > 0n ? usd - (held.get(c.id) ?? 0n) : 0n),

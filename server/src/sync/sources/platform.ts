@@ -5,7 +5,7 @@ import type {
 } from '../../module_bindings/types';
 import type { Dataset } from '../../dataset';
 import {
-  capabilities, clausesFor, clientStatus, contractFor, disputes, dunningNotices, owedToClient, positionsFor, renewalOn,
+  capabilities, clausesFor, clientStatus, contractFor, disputes, dunningNotices, owedToClient, positionsFor, renewalOn, type DisputeRow,
 } from '../../dataset/platform-data';
 import type { SeedMap } from '../../integrations/nessie/seed-map';
 import type { PlatformSimulator } from '../../platform/simulator';
@@ -24,6 +24,10 @@ export function invoiceRow(i: PlatformSimulator['invoices'] extends Map<string, 
     dueOn: i.dueOn, amountCents: BigInt(i.amountCents), sourcePaidCents: BigInt(i.paidCents), paidCents: BigInt(i.paidCents),
     paidOn: i.paidOn, status,
   };
+}
+
+export function disputeRow(d: DisputeRow): Dispute {
+  return { ...d, amountCents: BigInt(d.amountCents) };
 }
 
 export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap, sim: PlatformSimulator): Record<string, SyncRecord<unknown>[]> {
@@ -76,9 +80,9 @@ export function platformRecords(conn: DbConnection, ds: Dataset, bank: SeedMap, 
   for (const i of sim.invoices.values()) {
     billing.push(rec('invoice', i.id, invoiceRow(i), (row) => r.upsertInvoice({ row })));
   }
-  for (const d of disputes(ds)) {
-    const dispute: Dispute = { ...d, amountCents: BigInt(d.amountCents) };
-    billing.push(rec('dispute', d.id, dispute, (row) => r.upsertDispute({ row })));
+  // The platform's disputes (live ones, ruled on or not) win over the dataset's baseline copy of the same id.
+  for (const d of [...disputes(ds).filter((x) => !sim.disputes.has(x.id)), ...sim.disputes.values()]) {
+    billing.push(rec('dispute', d.id, disputeRow(d), (row) => r.upsertDispute({ row })));
   }
 
   const admin: SyncRecord<unknown>[] = [];

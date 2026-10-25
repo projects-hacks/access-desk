@@ -1,6 +1,6 @@
 import type { Dataset } from '../dataset';
 import { addDays } from '../dataset/dates';
-import { holdingsFor, contractFor } from '../dataset/platform-data';
+import { contractFor, disputes, holdingsFor } from '../dataset/platform-data';
 import { invoiceKey, invoicesToIssue } from './billing';
 import { applyEvent, chooseEvent, seeded, type ClientView, type InvoiceView, type WorldSnapshot } from './events';
 import { deriveProfiles } from './personality';
@@ -25,6 +25,9 @@ export function simulateBook(ds: Dataset, days: number, seed: number, opts: { ev
   const keys = new Set(ds.invoices.map((i) => invoiceKey(i.clientId, i.product, i.period)));
   const ids = ds.invoices.map((i) => i.id);
   const paid: Paid[] = [];
+  const live = new Map<string, { id: string; clientId: string; invoiceId: string; openedOn: string; amountCents: number }>();
+  const stats = { opened: 0, credited: 0, upheld: 0, maxOpenPerClient: 0, maxOpen: 0 };
+  for (const d of disputes(ds)) if (d.status === 'under_review') live.set(d.id, { id: d.id, clientId: d.clientId, invoiceId: d.invoiceId, openedOn: d.openedOn, amountCents: d.amountCents });
   const kinds: Record<string, number> = {};
   const wires = new Map<string, Array<ClientView['recentWires'][number] & { day: number }>>();
   let day = 0;
@@ -39,7 +42,7 @@ export function simulateBook(ds: Dataset, days: number, seed: number, opts: { ev
     const holdings = holdingsFor(c);
     const cash = (a: string) => holdings.find((h) => h.asset === a)?.valueCents ?? 0;
     return {
-      profile: profiles.get(clientId)!, invoices: mine.map(({ clientId: _c, issuedOn: _o, issuedInSim: _s, ...v }) => v),
+      profile: profiles.get(clientId)!, disputes: [...live.values()].filter((d) => d.clientId === clientId), invoices: mine.map(({ clientId: _c, issuedOn: _o, issuedInSim: _s, ...v }) => v),
       cure: cureEnds ? { state: cureEnds > date ? 'running' : 'expired', dueOn: cureEnds } : undefined,
       usdFreeCents: cash('USD'), cryptoCents: { BTC: cash('BTC'), ETH: cash('ETH') }, hasTrading: c.products.includes('TRADING'),
       trading: c.products.includes('TRADING') ? 'open' : 'none', withdrawals: 'open', recentWires: (wires.get(clientId) ?? []).filter((w) => day - w.day <= 3), recentAch: [], eventsToday: 0,
@@ -67,6 +70,22 @@ export function simulateBook(ds: Dataset, days: number, seed: number, opts: { ev
       const after = applyEvent(snap, event, day * 100 + n);
       const known = new Map((wires.get(event.clientId) ?? []).map((w) => [w.ref, w.day]));
       wires.set(event.clientId, after.clients.find((c) => c.profile.clientId === event.clientId)!.recentWires.map((w) => ({ ...w, day: known.get(w.ref) ?? day })));
+      if (event.kind === 'dispute') {
+        const id = `DSP-W${String(++stats.opened).padStart(4, '0')}`;
+        live.set(id, { id, clientId: event.clientId, invoiceId: event.invoiceId, openedOn: date, amountCents: event.amountCents });
+        open.get(event.invoiceId)!.disputed = true;
+        stats.maxOpen = Math.max(stats.maxOpen, live.size);
+        stats.maxOpenPerClient = Math.max(stats.maxOpenPerClient, [...live.values()].filter((d) => d.clientId === event.clientId).length);
+      }
+      if (event.kind === 'resolve_dispute') {
+        live.delete(event.disputeId);
+        const inv = open.get(event.invoiceId)!;
+        inv.disputed = false;
+        inv.amountCents -= event.creditCents;
+        if (event.resolution === 'credited') stats.credited++;
+        else stats.upheld++;
+        if (inv.paidCents >= inv.amountCents) open.delete(event.invoiceId);
+      }
       if (event.kind === 'pay') {
         const left = new Map(after.clients.find((c) => c.profile.clientId === event.clientId)!.invoices.map((i) => [i.id, i]));
         for (const id of event.invoiceIds) {
@@ -82,5 +101,5 @@ export function simulateBook(ds: Dataset, days: number, seed: number, opts: { ev
       }
     }
   }
-  return { paid, open: [...open.values()], kinds, date, profiles, maxPerClientDay };
+  return { paid, open: [...open.values()], kinds, date, profiles, maxPerClientDay, disputes: stats, stillUnderReview: [...live.values()] };
 }

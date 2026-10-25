@@ -11,7 +11,7 @@ import { glRows } from './sources/gl';
 import { historyRecords } from './sources/history';
 import type { PlatformSimulator } from '../platform/simulator';
 import { RemittanceInterpreter } from '../integrations/bank-text/interpret';
-import { invoiceRow, platformRecords } from './sources/platform';
+import { disputeRow, invoiceRow, platformRecords } from './sources/platform';
 import { SyncWriter, type SyncRecord } from './writer';
 
 const LABELS: Record<string, string> = {
@@ -66,6 +66,21 @@ export class Sync {
     await this.conn.reducers.bookInvoices({ invoices, entries });
   }
 
+  /**
+   * A dispute opened or ruled on at billing. `change` runs inside the sync queue (no pass sees half of
+   * it) and returns the dispute id. The dispute goes first; a credit note then follows with its
+   * receivable journal in one transaction, so a crash in between heals from the database on restart.
+   */
+  bookDispute(change: () => string): Promise<void> {
+    return this.serialize(async () => {
+      const d = this.platform.disputes.get(change())!;
+      await this.conn.reducers.upsertDispute({ row: disputeRow(d) });
+      if (d.resolution !== 'credited') return;
+      const inv = this.platform.invoices.get(d.invoiceId)!;
+      const entries = glRows(this.platform).filter((e) => e.journalId === `JE-CN-${d.id}`);
+      await this.conn.reducers.bookInvoices({ invoices: [invoiceRow(inv)], entries });
+    });
+  }
 
   /** Subscribes to the rows sync needs to read (the clock). Call once before passes. */
   ready(): Promise<void> {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadDataset } from '../dataset';
-import { holdingsFor, leversFor } from '../dataset/platform-data';
+import { disputes, holdingsFor, leversFor } from '../dataset/platform-data';
 import type { Bank } from '../integrations/nessie/bank';
 import { FakeNessie } from '../integrations/nessie/fake';
 import { buildSeedPlan } from '../integrations/nessie/seed-plan';
@@ -11,6 +11,8 @@ import { PlatformSimulator } from '../platform/simulator';
 import type { Sync } from '../sync';
 import { toCashMovement } from '../sync/sources/bank';
 import { World, type WorldConfig, type WorldDeps } from './engine';
+import { addDays } from '../dataset/dates';
+import { seeded } from './events';
 import { isWorldRef } from './refs';
 
 /**
@@ -49,6 +51,7 @@ async function fixture(simDate = '2026-04-02') {
       ...ds.affiliates.map((a) => ({ id: `aff:${a.key}:acct`, clientId: a.parentId, kind: 'bank_account', value: map.accounts[`aff:${a.key}`]!.number })),
     ],
     tradeOrder: [] as { id: bigint; clientId: string; status: string; reason: string; priceCents: bigint; at: ReturnType<typeof stamp> }[],
+    dispute: disputes(ds).map((d) => ({ ...d, amountCents: BigInt(d.amountCents) })).filter((d) => d.status === 'under_review') as { id: string; clientId: string; invoiceId: string; amountCents: bigint; status: string; openedOn: string; resolvedOn?: string; resolution: string }[],
     accessRequest: [] as { id: bigint; clientId: string; action: string; decision: string; allowedCents: bigint; heldCents: bigint; at: ReturnType<typeof stamp> }[],
   };
   const calls: string[] = [];
@@ -64,6 +67,7 @@ async function fixture(simDate = '2026-04-02') {
       payerIdentity: table(state.payerIdentity),
       tradeOrder: table(state.tradeOrder, { clientId: 'clientId' }),
       accessRequest: table(state.accessRequest, { clientId: 'clientId' }),
+      dispute: table(state.dispute, { id: 'id' }),
     },
     subscriptionBuilder: () => ({ onApplied: (cb: () => void) => ({ subscribe: () => cb() }) }),
     reducers: {
@@ -82,6 +86,22 @@ async function fixture(simDate = '2026-04-02') {
     },
   } as unknown as DbConnection;
 
+  /** Payment checking, roughly: the cash pays the quoted invoices (or the client's oldest), as far as it goes. */
+  const settle = (m: CashMovement) => {
+    const clientId = state.payerIdentity.find((p) => p.value === m.origAccount)?.clientId;
+    const quoted = m.refs.filter((r) => r.startsWith('INV-'));
+    const order = quoted.length ? quoted : state.invoice.filter((i) => i.clientId === clientId).map((i) => i.id);
+    let rest = m.amountCents + (m.chargesCents ?? 0n);
+    for (const id of order) {
+      const inv = state.invoice.find((i) => i.id === id);
+      if (!inv || inv.status === 'disputed' || rest <= 0n) continue;
+      const pay = inv.amountCents - inv.paidCents < rest ? inv.amountCents - inv.paidCents : rest;
+      inv.paidCents += pay;
+      rest -= pay;
+      const sim = platform.invoices.get(id);
+      if (sim) sim.paidCents = Number(inv.paidCents);
+    }
+  };
   const imported = new Set<string>();
   const sync = {
     cash: async () => {
@@ -93,6 +113,7 @@ async function fixture(simDate = '2026-04-02') {
           if (!isWorldRef(row.bankRef)) continue;
           imported.add(tx._id);
           state.cashMovement.push({ ...row, matchStatus: 'matched' });
+          if (kind === 'deposit') settle(row);
         }
       }
       return [];
@@ -107,6 +128,15 @@ async function fixture(simDate = '2026-04-02') {
     },
     // The real one books the run atomically; here the full sync below copies the invoices.
     bookInvoices: async () => undefined,
+    bookDispute: async (change: () => string) => {
+      const d = platform.disputes.get(change())!;
+      const row = { ...d, amountCents: BigInt(d.amountCents) };
+      const at = state.dispute.findIndex((x) => x.id === d.id);
+      if (at >= 0) state.dispute[at] = row;
+      else state.dispute.push(row);
+      const inv = state.invoice.find((i) => i.id === d.invoiceId);
+      if (inv && d.resolution === 'credited') inv.amountCents = BigInt(platform.invoices.get(d.invoiceId)!.amountCents);
+    },
     report: () => undefined,
   } as unknown as Sync;
 
@@ -182,4 +212,36 @@ test('two ticks that overlap do not both act', async () => {
   const world = await f.open();
   await Promise.all([world.tick(), world.tick(), world.tick()]);
   assert.equal(world.state().totals.events, 1);
+});
+
+test('disputes open and are ruled on through the platform; credit notes keep the golden copy and the platform in step', async () => {
+  const f = await fixture('2026-05-10');
+  const world = await f.open();
+  const random = Math.random;
+  Math.random = seeded(11);
+  try {
+    for (let i = 0; i < 900; i++) {
+      if (i % 6 === 0) f.state.clock[0]!.simDate = addDays(f.state.clock[0]!.simDate, 1);
+      await world.tick();
+    }
+  } finally {
+    Math.random = random;
+  }
+  const s = world.state();
+  assert.equal(s.totals.errors, 0, JSON.stringify(s.lastError));
+  assert.ok((s.byKind.dispute ?? 0) >= 2 && (s.byKind.resolve_dispute ?? 0) >= 2, JSON.stringify(s.byKind));
+  const live = f.state.dispute.filter((d) => d.id.startsWith('DSP-W'));
+  assert.equal(new Set(live.map((d) => d.id)).size, live.length);
+  assert.ok(live.length > 0 && live.every((d) => [...f.platform.disputes.keys()].includes(d.id)));
+  // At most one under review per client, and the golden copy agrees with the platform on every credited invoice.
+  const reviewing = f.state.dispute.filter((d) => d.status === 'under_review');
+  assert.equal(new Set(reviewing.map((d) => d.clientId)).size, reviewing.length);
+  const credited = f.state.dispute.filter((d) => d.resolution === 'credited');
+  assert.ok(credited.length > 0);
+  for (const d of credited) {
+    assert.equal(f.state.invoice.find((i) => i.id === d.invoiceId)!.amountCents, BigInt(f.platform.invoices.get(d.invoiceId)!.amountCents));
+    assert.ok(f.platform.journals.has(`JE-CN-${d.id}`));
+  }
+  assert.ok(f.logs.some((l) => l.includes(' dispute · ') && l.includes('under review')));
+  assert.ok(f.logs.some((l) => l.includes(' resolve_dispute · ')));
 });

@@ -1,6 +1,6 @@
 import type { IsoDate } from '../dataset';
-import { daysBetween } from '../dataset/dates';
-import { readyOn, type CureView, type Profile } from './personality';
+import { addDays, daysBetween } from '../dataset/dates';
+import { readyOn, rulingOn, type CureView, type Profile } from './personality';
 
 /**
  * What happens next on the platform, as a pure function of what the database shows and a random
@@ -55,8 +55,18 @@ export interface RecentAch {
   returned: boolean;
 }
 
+/** A dispute under review at billing. */
+export interface DisputeView {
+  id: string;
+  invoiceId: string;
+  openedOn: IsoDate;
+  amountCents: number;
+}
+
 export interface ClientView {
   profile: Profile;
+  /** Everything under review, the dataset's own included: they all count against the cap. */
+  disputes: DisputeView[];
   invoices: InvoiceView[];
   cure?: CureView;
   /** Custody cash not under a hold. */
@@ -85,7 +95,9 @@ export type PlannedEvent =
   | { kind: 'duplicate'; clientId: string; ref: string; why: string }
   | { kind: 'ach_return'; clientId: string; ref: string; why: string }
   | { kind: 'withdraw'; clientId: string; amountCents: number; why: string }
-  | { kind: 'trade'; clientId: string; side: 'buy' | 'sell'; asset: Asset; amountCents: number; why: string };
+  | { kind: 'trade'; clientId: string; side: 'buy' | 'sell'; asset: Asset; amountCents: number; why: string }
+  | { kind: 'dispute'; clientId: string; invoiceId: string; amountCents: number; reason: string; why: string }
+  | { kind: 'resolve_dispute'; clientId: string; disputeId: string; invoiceId: string; resolution: 'no_change' | 'credited'; creditCents: number; why: string };
 
 export interface ChooseConfig {
   /** At most this many events per client per sim day. */
@@ -98,7 +110,23 @@ interface Candidate {
 }
 
 /** Relative odds. Payments dominate while something is due; the rest is background life. */
-const WEIGHT = { pay: 20, trade: 1.2, withdraw: 0.35, duplicate: 0.08, duplicateHabit: 1, achReturn: 0.5, delinquent: 0.25 };
+const WEIGHT = {
+  pay: 20, trade: 1.2, withdraw: 0.35, duplicate: 0.08, duplicateHabit: 1, achReturn: 0.5, delinquent: 0.25,
+  disputer: 1.2, gamerNearCure: 1.5, anyoneElse: 0.08, ruling: 12,
+};
+
+/** Disputes stay a minority: one under review per client, a handful across the platform. */
+export const DISPUTES_PER_CLIENT = 1;
+export const DISPUTES_IN_TOTAL = 5;
+/** A gamer disputes in the last days of its cure period (a dispute filed in time stops the clock). */
+const GAMER_WINDOW_DAYS = 6;
+
+const REASONS: Record<string, string[]> = {
+  CUSTODY: ['Custody fee charged on assets moved out mid-month', 'Custody fee billed twice for the same period'],
+  TRADING: ['Volume tier discount not applied', 'Trading fees include an order that was cancelled'],
+  API: ['API calls billed during the vendor outage', 'API overage double-counted'],
+  FINANCING: ['Interest accrued after the repayment date', 'Rate does not match the term sheet'],
+};
 
 const SMALLEST_TRADE_CENTS = 100_000;
 const LARGEST_BUY_CENTS = 25_000_000;
@@ -203,9 +231,65 @@ function withdrawCandidate(c: ClientView): Candidate | undefined {
   };
 }
 
+function disputeCandidate(c: ClientView, today: IsoDate): Candidate | undefined {
+  const p = c.profile;
+  if (c.disputes.length >= DISPUTES_PER_CLIENT) return undefined;
+  const gamerNear = p.personality === 'gamer' && c.cure?.state === 'running' && daysBetween(today, c.cure.dueOn) <= GAMER_WINDOW_DAYS;
+  const weight = p.personality === 'disputer' ? WEIGHT.disputer : gamerNear ? WEIGHT.gamerNearCure
+    : p.personality === 'gamer' || p.personality === 'delinquent' ? 0 : WEIGHT.anyoneElse;
+  if (!weight) return undefined;
+  // Something unpaid and overdue that it would not pay right now: it disputes it instead.
+  const eligible = c.invoices
+    .filter((i) => !i.disputed && !i.inFlight && i.paidCents === 0 && i.dueOn < today)
+    .filter((i) => {
+      const on = readyOn(p, i, c.cure);
+      return on === undefined || on > today;
+    })
+    .sort((a, b) => a.dueOn.localeCompare(b.dueOn) || a.id.localeCompare(b.id));
+  const inv = eligible[0];
+  if (!inv) return undefined;
+  return {
+    weight,
+    make: (rng) => {
+      const wholeInvoice = p.personality === 'disputer' || p.personality === 'gamer';
+      const reasons = REASONS[inv.product] ?? REASONS.CUSTODY!;
+      return {
+        kind: 'dispute', clientId: p.clientId, invoiceId: inv.id, reason: reasons[Math.floor(rng() * reasons.length)]!,
+        amountCents: wholeInvoice ? inv.amountCents : Math.min(inv.amountCents, Math.max(10_000, roundTo(inv.amountCents * between(rng, 0.25, 1), 1000))),
+        why: gamerNear ? `cure period ends ${c.cure!.dueOn}: a dispute now stops the clock` : `${p.personality}: ${inv.id} is ${daysBetween(inv.dueOn, today)} days past due`,
+      };
+    },
+  };
+}
+
+function rulingCandidates(c: ClientView, today: IsoDate): Candidate[] {
+  const p = c.profile;
+  return c.disputes.flatMap((d) => {
+    const inv = c.invoices.find((i) => i.id === d.invoiceId);
+    const due = inv ? rulingOn(p, inv, d.openedOn) : addDays(d.openedOn, 15);
+    if (due > today) return [];
+    return [{
+      weight: WEIGHT.ruling,
+      make: (rng) => {
+        // Serial disputers and gamers are almost always turned down; anyone else is upheld half the time.
+        const stands = p.personality === 'disputer' || p.personality === 'gamer' ? 0.1 : 0.5;
+        const credited = rng() < stands;
+        // A credit note covers 15-60% of what was disputed, to the $10.
+        const creditCents = credited ? Math.min(d.amountCents, Math.max(10_000, roundTo(d.amountCents * between(rng, 0.15, 0.6), 1000))) : 0;
+        return {
+          kind: 'resolve_dispute' as const, clientId: p.clientId, disputeId: d.id, invoiceId: d.invoiceId,
+          resolution: credited ? 'credited' as const : 'no_change' as const, creditCents,
+          why: `${p.personality}: opened ${d.openedOn}, ruling due ${due}`,
+        };
+      },
+    }];
+  });
+}
+
 /** One event, or undefined when nothing is plausible right now. */
 export function chooseEvent(s: WorldSnapshot, rng: Rng, cfg: ChooseConfig): PlannedEvent | undefined {
   const candidates: Candidate[] = [];
+  const open = s.clients.reduce((n, c) => n + c.disputes.length, 0);
   for (const c of s.clients) {
     if (c.eventsToday >= cfg.clientDayCap) continue;
     const id = c.profile.clientId;
@@ -224,6 +308,9 @@ export function chooseEvent(s: WorldSnapshot, rng: Rng, cfg: ChooseConfig): Plan
       candidates.push({ weight: WEIGHT.achReturn, make: () => ({ kind: 'ach_return', clientId: id, ref: a.ref, why: `${a.ref} comes back R01, insufficient funds` }) });
     }
     for (const make of [withdrawCandidate(c), tradeCandidate(c)]) if (make) candidates.push(make);
+    candidates.push(...rulingCandidates(c, s.simDate));
+    const dispute = open < DISPUTES_IN_TOTAL ? disputeCandidate(c, s.simDate) : undefined;
+    if (dispute) candidates.push(dispute);
   }
   const total = candidates.reduce((sum, c) => sum + c.weight, 0);
   if (!(total > 0)) return undefined;
@@ -248,6 +335,10 @@ export function describeEvent(e: PlannedEvent, name: string): string {
     case 'ach_return': return `${name}'s bank returns ACH ${e.ref} (R01)`;
     case 'withdraw': return `${name} withdraws ${formatUsd(e.amountCents)} from custody`;
     case 'trade': return `${name} ${e.side === 'buy' ? 'buys' : 'sells'} ${formatUsd(e.amountCents)} of ${e.asset}`;
+    case 'dispute': return `${name} disputes ${e.invoiceId} (${formatUsd(e.amountCents)}): ${e.reason}`;
+    case 'resolve_dispute': return e.resolution === 'credited'
+      ? `billing rules for ${name} on ${e.disputeId} (${e.invoiceId}): credit note of ${formatUsd(e.creditCents)}`
+      : `billing rules against ${name} on ${e.disputeId} (${e.invoiceId}): no change`;
   }
 }
 
@@ -277,6 +368,20 @@ export function applyEvent(s: WorldSnapshot, e: PlannedEvent, n: number): WorldS
     case 'duplicate': c.recentWires.filter((w) => w.ref === e.ref).forEach((w) => (w.duplicated = true)); break;
     case 'ach_return': c.recentAch.filter((a) => a.ref === e.ref).forEach((a) => (a.returned = true)); break;
     case 'withdraw': c.usdFreeCents -= e.amountCents; break;
+    case 'dispute': {
+      c.invoices.filter((i) => i.id === e.invoiceId).forEach((i) => (i.disputed = true));
+      c.disputes.push({ id: `DSP-plan${n}`, invoiceId: e.invoiceId, openedOn: s.simDate, amountCents: e.amountCents });
+      break;
+    }
+    case 'resolve_dispute': {
+      c.disputes = c.disputes.filter((d) => d.id !== e.disputeId);
+      for (const i of c.invoices.filter((x) => x.id === e.invoiceId)) {
+        i.disputed = false;
+        i.amountCents -= e.creditCents;
+      }
+      c.invoices = c.invoices.filter((i) => balance(i) > 0);
+      break;
+    }
     case 'trade':
       c.usdFreeCents += e.side === 'buy' ? -e.amountCents : e.amountCents;
       c.cryptoCents[e.asset] += e.side === 'buy' ? e.amountCents : -e.amountCents;

@@ -13,7 +13,7 @@ const invoice = (n: number, dueOn: string, over: Partial<InvoiceView> = {}): Inv
   id: `INV-${1200 + n}`, product: 'CUSTODY', dueOn, amountCents: 1_000_000, paidCents: 0, disputed: false, inFlight: false, ...over,
 });
 const client = (over: Partial<ClientView> = {}): ClientView => ({
-  profile: profile(), invoices: [], usdFreeCents: 0, cryptoCents: { BTC: 0, ETH: 0 }, hasTrading: false, trading: 'none', withdrawals: 'open',
+  profile: profile(), disputes: [], invoices: [], usdFreeCents: 0, cryptoCents: { BTC: 0, ETH: 0 }, hasTrading: false, trading: 'none', withdrawals: 'open',
   recentWires: [], recentAch: [], eventsToday: 0, ...over,
 });
 const world = (c: ClientView, simDate = '2026-04-20'): WorldSnapshot => ({ simDate, clients: [c] });
@@ -80,8 +80,9 @@ test('a gamer pays only once the cure period is about to end', () => {
   const gamer = profile({ personality: 'gamer', medianLate: 20 });
   const invoices = [invoice(1, '2026-04-01')];
   assert.equal(many(world(client({ profile: gamer, invoices }))).length, 0);
-  assert.equal(many(world(client({ profile: gamer, invoices, cure: { state: 'running', dueOn: '2026-05-05' } }), '2026-05-02')).length, 0);
-  assert.ok(many(world(client({ profile: gamer, invoices, cure: { state: 'running', dueOn: '2026-05-05' } }), '2026-05-04')).length > 0);
+  const running = client({ profile: gamer, invoices, cure: { state: 'running', dueOn: '2026-05-05' } });
+  assert.equal(pays(many(world(running, '2026-05-02'))).length, 0);
+  assert.ok(pays(many(world(running, '2026-05-04'))).length > 0);
   assert.ok(many(world(client({ profile: gamer, invoices, cure: { state: 'expired', dueOn: '2026-05-05' } }), '2026-05-10')).length > 0);
 });
 
@@ -139,4 +140,90 @@ test('applying an event moves the snapshot on', () => {
   assert.equal(s.clients[0]!.invoices.length, 2); // the input is untouched
   const buy = applyEvent(s, { kind: 'trade', clientId: 'ORG-X', side: 'buy', asset: 'BTC', amountCents: 1_000_000, why: '' }, 2);
   assert.deepEqual([buy.clients[0]!.usdFreeCents, buy.clients[0]!.cryptoCents.BTC], [4_000_000, 10_000_000]);
+});
+
+const dispute = (id = 'DSP-W0001', invoiceId = 'INV-1201', openedOn = '2026-04-05', amountCents = 1_000_000) => ({ id, invoiceId, openedOn, amountCents });
+type Dispute = Extract<PlannedEvent, { kind: 'dispute' }>;
+type Ruling = Extract<PlannedEvent, { kind: 'resolve_dispute' }>;
+const disputes = (events: PlannedEvent[]) => events.filter((e): e is Dispute => e.kind === 'dispute');
+const rulings = (events: PlannedEvent[]) => events.filter((e): e is Ruling => e.kind === 'resolve_dispute');
+
+test('a serial disputer disputes an overdue invoice it would not yet pay, for the whole invoice and with a reason for the product', () => {
+  const c = client({ profile: profile({ personality: 'disputer', medianLate: 32 }), invoices: [invoice(2, '2026-04-12'), invoice(1, '2026-04-10', { product: 'API' })] });
+  const events = disputes(many(world(c)));
+  assert.ok(events.length > 300);
+  for (const e of events) {
+    assert.equal(e.invoiceId, 'INV-1201'); // the oldest
+    assert.equal(e.amountCents, 1_000_000);
+    assert.ok(['API calls billed during the vendor outage', 'API overage double-counted'].includes(e.reason), e.reason);
+  }
+  // Not before it is overdue, and never what it is about to pay anyway.
+  assert.equal(disputes(many(world(c, '2026-04-10'))).length, 0);
+  assert.equal(disputes(many(world(c, '2026-06-30'))).length, 0); // ready to pay: it pays instead
+  assert.equal(disputes(many(world(client({ ...c, invoices: [invoice(1, '2026-04-10', { paidCents: 1 })] })))).length, 0);
+  assert.equal(disputes(many(world(client({ ...c, invoices: [invoice(1, '2026-04-10', { disputed: true })] })))).length, 0);
+});
+
+test('disputes stay a minority and never pile up: one per client, five in all', () => {
+  const c = client({ profile: profile({ personality: 'disputer', medianLate: 32 }), invoices: [invoice(1, '2026-04-10')] });
+  assert.equal(disputes(many(world({ ...c, disputes: [dispute()] }))).length, 0);
+  const crowd = (open: number): WorldSnapshot => ({
+    simDate: '2026-04-20',
+    clients: [c, ...Array.from({ length: open }, (_, i) => client({ profile: profile({ clientId: `ORG-${i}` }), disputes: [dispute(`DSP-W${i}`, `INV-9${i}`)], invoices: [invoice(50 + i, '2026-04-10', { disputed: true })] }))],
+  });
+  assert.equal(disputes(many(crowd(5))).length, 0);
+  assert.ok(disputes(many(crowd(4))).length > 0);
+  // Among everything a busy platform does, they are rare.
+  const busy = client({ hasTrading: true, trading: 'open', usdFreeCents: 5_000_000, cryptoCents: { BTC: 9_000_000, ETH: 4_000_000 } });
+  const mix = many(world(busy), 400);
+  assert.equal(disputes(mix).length, 0);
+  const withDisputer = many({ simDate: '2026-04-20', clients: [{ ...busy, profile: profile({ personality: 'disputer', medianLate: 32 }), invoices: [invoice(1, '2026-04-10')] }] }, 1000);
+  assert.ok(disputes(withDisputer).length > 0);
+  const share = disputes(many({ simDate: '2026-04-20', clients: [{ ...busy, profile: profile({ personality: 'slow', medianLate: 10 }), invoices: [invoice(1, '2026-04-18')] }] }, 1000)).length;
+  assert.ok(share < 100, `${share}`); // the occasional dispute from anyone else
+});
+
+test('a gamer disputes only in the last days of its cure period; a delinquent never; anyone else rarely and for part of the invoice', () => {
+  const gamer = profile({ personality: 'gamer', medianLate: 20 });
+  const invoices = [invoice(1, '2026-04-01')];
+  const near = client({ profile: gamer, invoices, cure: { state: 'running', dueOn: '2026-05-05' } });
+  assert.equal(disputes(many(world(near, '2026-04-25'))).length, 0);
+  const inWindow = disputes(many(world(near, '2026-05-01')));
+  assert.ok(inWindow.length > 100 && inWindow.every((e) => e.amountCents === 1_000_000));
+  assert.equal(disputes(many(world(client({ ...near, cure: { state: 'expired', dueOn: '2026-05-05' } }), '2026-05-10'))).length, 0);
+  assert.equal(disputes(many(world(client({ profile: profile({ personality: 'delinquent', medianLate: 25 }), invoices: [invoice(1, '2026-01-10')] })))).length, 0);
+  const other = disputes(many(world(client({ profile: profile({ personality: 'slow', medianLate: 10 }), invoices: [invoice(1, '2026-04-18')] })), 2000));
+  assert.ok(other.length > 0 && other.every((e) => e.amountCents >= 250_000 && e.amountCents <= 1_000_000 && e.amountCents % 1000 === 0));
+});
+
+test('a ruling comes when it is due: a disputer\'s just before it would have paid, and it is mostly turned down', () => {
+  const p = profile({ personality: 'disputer', medianLate: 32 });
+  const c = client({ profile: p, disputes: [dispute()], invoices: [invoice(1, '2026-04-01', { disputed: true })] });
+  assert.equal(rulings(many(world(c, '2026-04-20'))).length, 0);
+  const ruled = rulings(many(world(c, '2026-05-30')));
+  assert.ok(ruled.length > 300 && ruled.every((e) => e.disputeId === 'DSP-W0001'));
+  const credited = ruled.filter((e) => e.resolution === 'credited');
+  assert.ok(credited.length > 0 && credited.length < ruled.length * 0.2, `${credited.length} of ${ruled.length}`);
+  assert.ok(credited.every((e) => e.creditCents >= 150_000 && e.creditCents <= 600_000 && e.creditCents % 1000 === 0));
+  assert.ok(ruled.filter((e) => e.resolution === 'no_change').every((e) => e.creditCents === 0));
+});
+
+test('anyone else is upheld about half the time, with a credit within what was disputed', () => {
+  const c = client({ profile: profile({ personality: 'slow', medianLate: 10 }), disputes: [dispute('DSP-W0002', 'INV-1201', '2026-04-05', 300_000)], invoices: [invoice(1, '2026-04-01', { disputed: true, amountCents: 300_000 })] });
+  const ruled = rulings(many(world(c, '2026-06-01')));
+  const credited = ruled.filter((e) => e.resolution === 'credited');
+  assert.ok(credited.length > ruled.length * 0.35 && credited.length < ruled.length * 0.65, `${credited.length} of ${ruled.length}`);
+  assert.ok(credited.every((e) => e.creditCents >= 45_000 && e.creditCents <= 180_000));
+});
+
+test('applying a dispute marks the invoice; a credited ruling shrinks it, an upheld one reopens it', () => {
+  const c = client({ profile: profile({ personality: 'disputer', medianLate: 32 }), invoices: [invoice(1, '2026-04-10')] });
+  const s = world(c);
+  const opened = applyEvent(s, { kind: 'dispute', clientId: 'ORG-X', invoiceId: 'INV-1201', amountCents: 1_000_000, reason: 'r', why: '' }, 1);
+  assert.deepEqual([opened.clients[0]!.invoices[0]!.disputed, opened.clients[0]!.disputes.length], [true, 1]);
+  const id = opened.clients[0]!.disputes[0]!.id;
+  const upheld = applyEvent(opened, { kind: 'resolve_dispute', clientId: 'ORG-X', disputeId: id, invoiceId: 'INV-1201', resolution: 'no_change', creditCents: 0, why: '' }, 2);
+  assert.deepEqual([upheld.clients[0]!.invoices[0]!.disputed, upheld.clients[0]!.invoices[0]!.amountCents, upheld.clients[0]!.disputes.length], [false, 1_000_000, 0]);
+  const credit = applyEvent(opened, { kind: 'resolve_dispute', clientId: 'ORG-X', disputeId: id, invoiceId: 'INV-1201', resolution: 'credited', creditCents: 400_000, why: '' }, 2);
+  assert.equal(credit.clients[0]!.invoices[0]!.amountCents, 600_000);
 });

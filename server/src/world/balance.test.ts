@@ -42,3 +42,17 @@ test('events are not flooded and not one-note', () => {
   assert.ok(share('trade') > 0.1 && share('withdraw') > 0.03, `trade ${share('trade')} withdraw ${share('withdraw')}`);
   assert.ok(share('duplicate') < 0.05, `duplicate ${share('duplicate')}`);
 });
+
+test('disputes are a minority, never pile up, and every one is eventually ruled on', () => {
+  for (const seed of [1, 2, 3]) {
+    const r = simulateBook(ds, DAYS, seed);
+    const total = Object.values(r.kinds).reduce((a, b) => a + b, 0);
+    const disputeEvents = (r.kinds.dispute ?? 0) + (r.kinds.resolve_dispute ?? 0);
+    assert.ok(r.disputes.opened >= 3, `seed ${seed}: ${r.disputes.opened} opened`);
+    assert.ok(disputeEvents / total < 0.05, `seed ${seed}: ${disputeEvents} of ${total}`);
+    assert.ok(r.disputes.maxOpenPerClient <= 1 && r.disputes.maxOpen <= 5);
+    assert.ok(r.disputes.upheld > r.disputes.credited, `${r.disputes.upheld} upheld, ${r.disputes.credited} credited`);
+    // Whatever is still under review was opened recently.
+    for (const d of r.stillUnderReview) assert.ok(daysBetween(d.openedOn, r.date) < 40, `${d.id} open since ${d.openedOn}`);
+  }
+});

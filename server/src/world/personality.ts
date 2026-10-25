@@ -128,3 +128,18 @@ export function readyOn(p: Profile, inv: { id: string; dueOn: IsoDate; paidCents
       return cure.state === 'expired' ? inv.dueOn : addDays(cure.dueOn, -1);
   }
 }
+
+/**
+ * The day a dispute opened on `inv` on `openedOn` gets its ruling. A serial disputer's lands two
+ * days before it would have paid (it then pays right after, as its history shows); a gamer's takes
+ * two to three weeks; anyone else's one to two.
+ */
+export function rulingOn(p: Profile, inv: { id: string; dueOn: IsoDate; paidCents: number }, openedOn: IsoDate): IsoDate {
+  const u = unit(`${p.clientId}:${inv.id}:ruling`);
+  if (p.personality === 'disputer') {
+    const ready = readyOn(p, inv);
+    const target = ready ? addDays(ready, -2) : openedOn;
+    return target > addDays(openedOn, 12) ? target : addDays(openedOn, 12);
+  }
+  return addDays(openedOn, (p.personality === 'gamer' ? 15 : 10) + Math.floor(u * 10));
+}
