@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useReducer, useTable } from 'spacetimedb/react';
 import { Avatar } from '../components/Avatar';
 import { Badge, StateBadge } from '../components/Badge';
@@ -6,7 +6,7 @@ import { KindIcon } from '../components/KindIcon';
 import { SlidingPill } from '../components/SlidingPill';
 import { CollapseButton, useSlideClose } from '../components/useSlideClose';
 import { LeverChips, stateAfter, useLevers } from '../components/LeverChips';
-import { label, money, parseJson, percent } from '../lib/format';
+import { label, money, parseJson, percent, plainDates, plainText } from '../lib/format';
 import { REASONS, reasonFor, waitingReason } from '../lib/autonomy';
 import { useSession } from '../lib/session';
 import { reducers, tables } from '../module_bindings';
@@ -35,8 +35,11 @@ type FilterKey = keyof typeof FILTERS;
  * The agent acts on its own; this is the short list it asks a person about:
  * restricting a top client, offboarding, and exploit fixes to the tier guidelines.
  */
-export function WorkQueue() {
-  const [items] = useTable(tables.workItem);
+/** Where the agents panel's "Open in approvals" points: a client, and its request when the episode has one. */
+export type Focus = { clientId: string; workItemId?: bigint; nonce: number };
+
+export function WorkQueue({ focus }: { focus?: Focus }) {
+  const [items, itemsReady] = useTable(tables.workItem);
   const [clients] = useTable(tables.client);
   const levers = useLevers();
   // Subscribed here, not in the drawer, so the drawer opens with its data already loaded.
@@ -49,6 +52,7 @@ export function WorkQueue() {
   const [openId, setOpenId] = useState<bigint>();
 
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
+  const names = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
   // Only items a person was asked about; everything the agent did alone is in the Audit log.
   const asked = useMemo(
     () =>
@@ -69,6 +73,19 @@ export function WorkQueue() {
     const text = [w.title, c?.name, c?.id, c?.segment].join(' ').toLowerCase();
     return words.every((x) => text.includes(x));
   });
+  // Open the request the panel pointed at (once per click), on the tab that lists it.
+  const focused = useRef<number>(undefined);
+  useEffect(() => {
+    if (!focus || !itemsReady || focused.current === focus.nonce) return;
+    focused.current = focus.nonce;
+    const mine = items.filter((w) => w.clientId === focus.clientId).sort((a, b) => (a.id < b.id ? 1 : -1));
+    const target =
+      items.find((w) => w.id === focus.workItemId) ?? mine.find((w) => OPEN.includes(w.state)) ?? mine[0];
+    setQuery(target ? '' : (clientById.get(focus.clientId)?.name ?? ''));
+    if (!target) return;
+    setFilter(OPEN.includes(target.state) ? 'waiting' : 'decided');
+    setOpenId(target.id);
+  }, [focus, itemsReady, items, clientById]);
   const open = items.find((w) => w.id === openId);
   const openClient = open ? clientById.get(open.clientId) : undefined;
 
@@ -164,7 +181,7 @@ export function WorkQueue() {
                     </td>
                     <td className="muted">{c ? `T${c.tier}` : '—'}</td>
                     <td className="ask">
-                      {w.title}
+                      {plainText(w.title, names)}
                       <div className="eyebrow kind-line">
                         <KindIcon kind={w.kind} />
                         Agent {Math.round(w.confidence * 100)}% sure · {label(w.kind)}
@@ -209,6 +226,7 @@ export function WorkQueue() {
         <Drawer
           item={open}
           clientName={openClient?.name}
+          names={names}
           waiting={waitingReason(open, openClient)}
           levers={levers}
           data={{ policies, clauses, decisions, audit }}
@@ -248,6 +266,7 @@ type Proposal = {
 function Drawer({
   item,
   clientName,
+  names,
   waiting,
   levers,
   data: { policies, clauses, decisions, audit },
@@ -255,6 +274,7 @@ function Drawer({
 }: {
   item: WorkItem;
   clientName?: string;
+  names: Map<string, string>;
   waiting?: string;
   levers: ReturnType<typeof useLevers>;
   data: {
@@ -266,6 +286,7 @@ function Drawer({
   onClose: () => void;
 }) {
   const { leaving, close } = useSlideClose(onClose);
+  const plain = (text: string) => plainText(text, names);
   const session = useSession();
   const transition = useReducer(reducers.transitionWorkItem);
   const [note, setNote] = useState('');
@@ -316,7 +337,7 @@ function Drawer({
             #{String(item.id)} · {label(item.kind)} ·{' '}
             {clientName ?? (item.clientId || noClient(item.kind))}
           </div>
-          <h3>{item.title}</h3>
+          <h3>{plain(item.title)}</h3>
           <div className="row">
             <StateBadge state={item.state} />
             {item.autoApplied && <Badge tone="info">auto-applied under policy</Badge>}
@@ -329,9 +350,9 @@ function Drawer({
       <div className="drawer-body">
         {waiting && <p className="notice info waiting">{waiting}</p>}
         <h4>Why</h4>
-        <p>{item.reasoning || <span className="muted">No reasoning given.</span>}</p>
+        <p>{item.reasoning ? plain(item.reasoning) : <span className="muted">No reasoning given.</span>}</p>
         {proposal.plan?.basis && proposal.plan.basis !== item.reasoning && (
-          <p className="muted">{proposal.plan.basis}</p>
+          <p className="muted">{plain(proposal.plan.basis)}</p>
         )}
 
         {after && (
@@ -374,7 +395,7 @@ function Drawer({
         <ul className="list">
           <li>
             <span>
-              <strong>{item.policyRef || '—'}</strong> {policy?.title}
+              {policy ? <strong>{plain(policy.title)}</strong> : <strong>{item.policyRef ? plain(item.policyRef) : '—'}</strong>}
             </span>
             {policy && (
               <Badge tone={policy.status === 'active' ? 'good' : 'neutral'}>{policy.status}</Badge>
@@ -426,7 +447,7 @@ function Drawer({
                 Reject
               </button>
             </div>
-            {denied && <p className="notice bad">Refused: {denied.detail}</p>}
+            {denied && <p className="notice bad">Refused: {plain(denied.detail)}</p>}
           </>
         )}
 
@@ -451,14 +472,14 @@ function Drawer({
           {history.map((e) => (
             <li key={String(e.id)} className={e.allowed ? '' : 'denied'}>
               <span className="eyebrow">
-                {e.simDate} · {e.actorName || e.actorRole.toLowerCase()}
+                {plainDates(e.simDate)} · {e.actorName || e.actorRole.toLowerCase()}
               </span>
               <span>
                 {label(e.action)}
                 {e.fromState && e.toState ? ` ${label(e.fromState)} → ${label(e.toState)}` : ''}
                 {!e.allowed && ' · refused'}
               </span>
-              {e.detail && <span className="muted">{e.detail}</span>}
+              {e.detail && <span className="muted">{plain(e.detail)}</span>}
             </li>
           ))}
         </ol>

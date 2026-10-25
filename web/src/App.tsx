@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Eye, Gauge, Inbox, Landmark, ScrollText, Users } from 'lucide-react';
 import { useTable } from 'spacetimedb/react';
+import { AgentsPanel } from './components/AgentsPanel';
 import { AlertBar } from './components/AlertBar';
 import { SlidingPill } from './components/SlidingPill';
 import { Splash } from './components/Splash';
@@ -12,7 +13,7 @@ import { BankBooks } from './screens/BankBooks';
 import { ClientPortal } from './screens/ClientPortal';
 import { Clients } from './screens/Clients';
 import { CreditAnalyst } from './screens/credit/CreditAnalyst';
-import { WorkQueue } from './screens/WorkQueue';
+import { WorkQueue, type Focus } from './screens/WorkQueue';
 
 const SCREENS = {
   clients: { label: 'Clients', component: Clients, icon: Users },
@@ -35,6 +36,10 @@ export function App() {
   const [clients, clientsReady] = useTable(tables.client);
   // The page waits under the loader; its reveal animations start when the loader leaves.
   const [booting, setBooting] = useState(true);
+  // "Open in approvals" from the agents panel: which client's request to open once the screen is up.
+  const [focus, setFocus] = useState<Focus>();
+  // Docked beside the page on a wide screen; on a phone it starts as a pill so the page stays in view.
+  const [agentsOpen, setAgentsOpen] = useState(() => window.matchMedia('(min-width: 900px)').matches);
   // Same count as the Approvals tab: open items the agent asked a person about.
   const waiting = items.filter(
     (w) =>
@@ -46,7 +51,7 @@ export function App() {
   ).length;
   const Screen = SCREENS[screen].component;
   return (
-    <div className={`app ${booting ? 'booting' : ''}`}>
+    <div className={`app ${booting ? 'booting' : ''} ${agentsOpen ? 'agents-open' : ''}`}>
       <Splash ready={itemsReady && clientsReady} onLeave={() => setBooting(false)} />
       <header className="appbar reveal" style={{ '--d': '0ms' } as CSSProperties}>
         <div className="brand">Access Desk</div>
@@ -75,8 +80,18 @@ export function App() {
       <AlertBar onOpen={() => setScreen('bank')} />
       {/* Keyed so each screen staggers in again when you switch to it. */}
       <main key={screen} className="reveal-stack">
-        <Screen />
+        {screen === 'approvals' ? <WorkQueue focus={focus} /> : <Screen />}
       </main>
+      <AgentsPanel
+        open={agentsOpen}
+        onToggle={() => setAgentsOpen(!agentsOpen)}
+        onOpenApprovals={(need) => {
+          setFocus({ clientId: need.clientId, workItemId: need.workItemId, nonce: Date.now() });
+          setScreen('approvals');
+          // On a phone the sheet covers the screen it just opened.
+          if (!window.matchMedia('(min-width: 900px)').matches) setAgentsOpen(false);
+        }}
+      />
     </div>
   );
 }

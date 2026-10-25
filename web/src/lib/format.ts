@@ -43,3 +43,37 @@ export function parseJson<T>(json: string, fallback: T): T {
     return fallback;
   }
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Dates inside a sentence: '2026-03-14' becomes 'Mar 14'. */
+export function plainDates(text: string): string {
+  return text.replace(/\b\d{4}-(\d{2})-(\d{2})\b/g, (_all, m: string, d: string) => `${MONTHS[+m - 1] ?? m} ${+d}`);
+}
+
+/**
+ * Display safety net for text the module or an agent wrote: dates become "Mar 14", client ids become
+ * names, snake_case becomes words, a client's own policy key reads "this client's own policy", and
+ * policy, work item, score and section references are dropped. "Acme Corp: Acme: ..." keeps one prefix.
+ */
+export function plainText(text: string, names: Map<string, string> = new Map()): string {
+  const out = plainDates(text)
+    .replace(/\bpol-\d+:ORG-\d+\b/gi, "this client's own policy")
+    .replace(/\bORG-\d+\b/g, (id) => names.get(id) ?? 'the client')
+    .replace(/\bpol-\d+\b/gi, 'policy')
+    .replace(/\bWI-\d+\b/g, 'this request')
+    .replace(/\s*·?\s*\bscores? \d+(\.\d+)?/gi, '')
+    .replace(/\s*\(?§\s*[\d.]+\)?/g, '')
+    .replace(/\b[A-Z]+(?:_[A-Z]+)+\b/g, (w) => w.toLowerCase().replace(/_/g, ' '))
+    .replace(/\b[a-z]+(?:_[a-z]+)+\b/g, (w) => w.replace(/_/g, ' '))
+    .replace(/\(([A-Z]{3,}(?:, [A-Z]{3,})*)\)/g, (_all, w: string) => `(${w.toLowerCase()})`)
+    .replace(/\bapi\b/gi, 'API')
+    .replace(/^([^:]{2,60}): ([^:]{2,60}): /, (all, a: string, b: string) => {
+      const x = a.toLowerCase();
+      const y = b.toLowerCase();
+      return x.startsWith(y) || y.startsWith(x) ? `${a.length >= b.length ? a : b}: ` : all;
+    })
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}

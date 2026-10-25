@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTable } from 'spacetimedb/react';
 import { tables } from '../module_bindings';
 import type { AuditEvent, CashMovement, PaymentApplication, TieOutRun } from '../module_bindings/types';
-import { label, parseJson } from './format';
+import { label, parseJson, plainDates } from './format';
 
 /** Live bank movements (the Nessie window), newest first. History stays out of the subscription. */
 export function useBankFeed(): [CashMovement[], boolean] {
@@ -139,6 +139,11 @@ const VERB: Record<string, string> = {
 
 /** One audit event as a sentence: "approved · Move Halcyon from tier 1 to tier 2". */
 export function narrate(e: AuditEvent, title?: string): { verb: string; what: string } {
+  const n = narrateRaw(e, title);
+  return { verb: n.verb, what: plainDates(n.what) };
+}
+
+function narrateRaw(e: AuditEvent, title?: string): { verb: string; what: string } {
   switch (e.action) {
     case 'TRANSITION':
       if (!e.allowed) return { verb: 'was stopped', what: `${e.detail}${title ? ` · ${title}` : ''}` };

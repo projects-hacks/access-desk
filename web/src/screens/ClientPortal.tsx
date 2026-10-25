@@ -14,9 +14,10 @@ import {
 import { demo } from '../lib/demo';
 import { money } from '../lib/format';
 import { PERMISSION_GROUPS, permissionOn } from '../lib/permissions';
-import { bindTo, usePortal, type PortalSnapshot } from '../lib/portal';
+import { bindTo, placeOrder, usePortal, type PortalSnapshot } from '../lib/portal';
 import { useClock, usePlatform } from '../lib/session';
 import { tables } from '../module_bindings';
+import type { AssetPrice, BankAccount, TradeOrder } from '../module_bindings/types';
 
 /** How the client hears about each paused permission: plain words, no internal codes. */
 const PAUSED_COPY: Record<string, string> = {
@@ -31,6 +32,23 @@ const PAUSED_COPY: Record<string, string> = {
   api: 'API trading',
   borrowing: 'New borrowing',
 };
+
+/** An agent step on a whole product (no fine permissions): how the client names it. */
+const LEVER_COPY: Record<string, string> = {
+  withdrawals: 'Withdrawals',
+  trading: 'Trading',
+  api: 'API access',
+  financing: 'New borrowing',
+};
+
+/** "Withdrawals and buying are paused": the paused items as one plain sentence. */
+function pausedSentence(paused: Paused[]): string {
+  const words = [...new Set(paused.map((p) => p.label))].map((w, i) =>
+    i === 0 || /^[A-Z]{2,}/.test(w) ? w : w.charAt(0).toLowerCase() + w.slice(1),
+  );
+  const list = words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : (words[0] ?? '');
+  return `${list} ${words.length > 1 || /s$/.test(list) ? 'are' : 'is'} paused`;
+}
 
 const PAGES = { home: 'Home', assets: 'My assets', pay: 'Pay balance' } as const;
 type Page = keyof typeof PAGES;
@@ -72,7 +90,7 @@ function pausedFor(row: Row, permissions: Parameters<typeof permissionOn>[1]): P
       else out.push({ key: 'buy', label: 'Buying', detail: lever.detail });
     } else {
       // Other agent steps (a hold, read-only API...): one line for the product.
-      out.push({ key: g.lever, label: g.name, detail: lever.detail });
+      out.push({ key: g.lever, label: LEVER_COPY[g.lever] ?? g.name, detail: lever.detail });
     }
   }
   return out;
@@ -251,10 +269,8 @@ export function ClientPortal() {
                   <strong>Some actions on your account are paused</strong>
                   <p>
                     {row.overdueCents > 0n
-                      ? `${money(row.overdueCents)} is ${row.daysPastDue} days overdue. ${paused
-                          .map((p) => p.label)
-                          .join(', ')} paused until it's paid; access comes back automatically.`
-                      : `${paused.map((p) => p.label).join(', ')} paused. Contact your relationship manager.`}
+                      ? `${money(row.overdueCents)} is ${row.daysPastDue} days overdue. ${pausedSentence(paused)} until it's paid; access comes back automatically.`
+                      : `${pausedSentence(paused)}. Contact your relationship manager.`}
                   </p>
                   {row.overdueCents > 0n && page !== 'pay' && (
                     <button className="cx-link" onClick={() => setPage('pay')}>
@@ -288,13 +304,27 @@ export function ClientPortal() {
               </>
             )}
             {page === 'assets' && <Assets holdings={own} />}
-            {page === 'pay' && <Pay row={row} wire={platform?.wireInstructions ?? ''} />}
+            {page === 'pay' && (
+              <Pay
+                row={row}
+                wire={platform?.wireInstructions ?? ''}
+                accounts={portal.bankAccounts}
+                accessBack={paused.length === 0}
+              />
+            )}
           </div>
         </div>
 
         <aside className="cx-panel">
           {panel === 'trade' ? (
-            <TradePanel row={row} paused={paused} onWithdraw={() => setPanel('withdraw')} />
+            <TradePanel
+              row={row}
+              paused={paused}
+              prices={portal.prices}
+              orders={portal.orders}
+              onWithdraw={() => setPanel('withdraw')}
+              onDeposit={() => setPage('pay')}
+            />
           ) : (
             <WithdrawPanel row={row} paused={paused} usd={usd} onBack={() => setPanel('trade')} />
           )}
@@ -353,26 +383,78 @@ function Access({ row, paused }: { row: Row; paused: Paused[] }) {
   );
 }
 
-const SIDES = { buy: 'Buy', sell: 'Sell', convert: 'Convert' } as const;
+const SIDES = { buy: 'Buy', sell: 'Sell' } as const;
 type Side = keyof typeof SIDES;
+const TRADED = ['BTC', 'ETH'] as const;
 
-/** Right panel: buy / sell / convert, and the money actions underneath. */
+const qty = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 4 });
+const hhmm = (o: TradeOrder) =>
+  new Date(Number(o.at.microsSinceUnixEpoch / 1000n)).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+/** One order in words: what happened, not what the database stores. */
+function orderWords(o: TradeOrder): string {
+  const buy = o.side === 'buy';
+  const coin = COIN[o.asset]?.name ?? o.asset;
+  if (o.status === 'refused') return `${buy ? 'Buy' : 'Sell'} refused · ${coin}`;
+  if (o.status === 'filled') return `${buy ? 'Bought' : 'Sold'} ${qty(o.quantity)} ${o.asset}`;
+  return `${buy ? 'Buying' : 'Selling'} ${coin}…`;
+}
+
+/** Right panel: buy / sell Bitcoin or Ethereum at the live price, and the money actions underneath. */
 function TradePanel({
   row,
   paused,
+  prices,
+  orders,
   onWithdraw,
+  onDeposit,
 }: {
   row: Row;
   paused: Paused[];
+  prices: AssetPrice[];
+  orders: TradeOrder[];
   onWithdraw: () => void;
+  onDeposit: () => void;
 }) {
   const [side, setSide] = useState<Side>('buy');
-  const [note, setNote] = useState(false);
+  const [asset, setAsset] = useState<(typeof TRADED)[number]>('BTC');
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  // Newest order id when "Buy" was pressed: the answer is the first order after it.
+  const [after, setAfter] = useState<bigint>();
   const trading = usesLever(row, 'trading');
-  const blocked = !trading || (side !== 'convert' && !can(paused, side));
+  const hint = !trading || !can(paused, side);
   const withdrawals = usesLever(row, 'withdrawals');
   const cashBlocked = !can(paused, 'fiat_withdrawals');
   const cryptoBlocked = !can(paused, 'crypto_withdrawals');
+
+  const price = prices.find((p) => p.asset === asset)?.priceCents;
+  const dollars = Number(amount);
+  const estimate = price && dollars > 0 ? (dollars * 100) / Number(price) : 0;
+  const mine = useMemo(() => [...orders].sort((a, b) => (a.id < b.id ? 1 : -1)), [orders]);
+  const answer = after === undefined ? undefined : [...mine].reverse().find((o) => o.id > after);
+  const earlier = mine.filter((o) => o !== answer);
+  const name = COIN[asset]?.name ?? asset;
+
+  async function submit() {
+    setBusy(true);
+    setError(undefined);
+    setAfter(mine[0]?.id ?? 0n);
+    try {
+      // The button is never disabled by what the screen thinks is paused: the database decides.
+      await placeOrder(row.client.id, side, asset, BigInt(Math.round(dollars * 100)));
+    } catch (e) {
+      setAfter(undefined);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const actions = [
     // Custody isn't on every account: those actions say so instead of "Paused".
@@ -399,6 +481,7 @@ function TradePanel({
       why: withdrawals ? 'Paused' : 'Not on your account',
     },
   ];
+  const onAction: Record<string, () => void> = { withdraw: onWithdraw, deposit: onDeposit };
 
   return (
     <>
@@ -412,34 +495,87 @@ function TradePanel({
             aria-selected={side === s}
             onClick={() => {
               setSide(s);
-              setNote(false);
+              setAfter(undefined);
             }}
           >
             {SIDES[s]}
           </button>
         ))}
       </div>
-      <span className="cx-chip">One-time order ▾</span>
-      <div className="cx-big">
-        0 USD <span className="cx-chip">Max</span>
+      <div className="cx-assetpick" role="group" aria-label="Asset">
+        {TRADED.map((a) => (
+          <button
+            key={a}
+            className={asset === a ? 'active' : ''}
+            aria-pressed={asset === a}
+            onClick={() => {
+              setAsset(a);
+              setAfter(undefined);
+            }}
+          >
+            {COIN[a]?.name ?? a}
+          </button>
+        ))}
       </div>
-      <div className="cx-conv">↕ 0 BTC</div>
-      <button className="btn primary cx-cta" disabled={blocked} onClick={() => setNote(true)}>
-        {!trading
-          ? 'Trading not on your account'
-          : blocked
-            ? `${SIDES[side]}ing is paused`
-            : `Review ${SIDES[side].toLowerCase()}`}
+      <div className="cx-big cx-input">
+        <input
+          inputMode="decimal"
+          placeholder="0"
+          value={amount}
+          style={{ width: `${Math.max(1, amount.length) + 0.3}ch` }}
+          onChange={(e) => {
+            setAmount(e.target.value.replace(/[^0-9.]/g, ''));
+            setAfter(undefined);
+          }}
+          aria-label="Amount in US dollars"
+        />
+        USD
+      </div>
+      <div className="cx-conv">
+        {price
+          ? estimate > 0
+            ? `≈ ${qty(estimate)} ${asset} at ${money(price)}`
+            : `${name} is ${money(price)}`
+          : 'Fetching the price…'}
+      </div>
+      <button
+        className="btn primary cx-cta"
+        disabled={busy || !(dollars > 0) || !price}
+        onClick={submit}
+      >
+        {busy ? 'Placing order…' : `${SIDES[side]} ${name}`}
       </button>
-      {trading && blocked && (
+      {hint && !answer && (
         <p className="cx-why">
-          {SIDES[side]}ing is paused until your overdue balance is paid.
-          {side === 'buy' && can(paused, 'sell')
+          {trading
+            ? `${SIDES[side] === 'Buy' ? 'Buying' : 'Selling'} is paused until your overdue balance is paid.`
+            : 'Trading is not on your account.'}
+          {trading && side === 'buy' && can(paused, 'sell')
             ? ' You can still sell and close positions, so your hedges stay intact.'
             : ''}
         </p>
       )}
-      {note && <p className="cx-foot">Order entry isn't part of this demo.</p>}
+      {error && <p className="notice bad">{error}</p>}
+      {!error && after !== undefined && (answer ? <OrderAnswer o={answer} /> : <p className="cx-foot">Placing your order…</p>)}
+
+      {earlier.length > 0 && (
+        <>
+          <h4 className="cx-section">Recent orders</h4>
+          <ul className="cx-orders">
+            {earlier.slice(0, 4).map((o) => (
+              <li key={String(o.id)} className={o.status}>
+                <span>
+                  <strong>{orderWords(o)}</strong>
+                  <span className="muted">
+                    {o.status === 'refused' ? o.reason : `${money(o.amountCents)} · ${hhmm(o)}`}
+                  </span>
+                </span>
+                {o.status === 'refused' && <span className="cx-tag">Refused</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <hr className="cx-rule" />
       <div className="cx-actions">
@@ -447,8 +583,8 @@ function TradePanel({
           <button
             key={a.key}
             className={a.off ? 'off' : ''}
-            onClick={a.key === 'withdraw' ? onWithdraw : undefined}
-            disabled={a.key !== 'withdraw' && a.off}
+            onClick={onAction[a.key]}
+            disabled={!onAction[a.key] && a.off}
           >
             <span className="cx-action-icon">{a.icon}</span>
             {a.label}
@@ -458,6 +594,27 @@ function TradePanel({
       </div>
     </>
   );
+}
+
+/** The database's answer to the order just placed: filled, or refused with its reason. */
+function OrderAnswer({ o }: { o: TradeOrder }) {
+  if (o.status === 'refused')
+    return (
+      <div className="cx-outcome warn" role="status">
+        <strong>{o.side === 'buy' ? 'Buy' : 'Sell'} refused</strong>
+        <p>{o.reason}</p>
+      </div>
+    );
+  if (o.status === 'filled')
+    return (
+      <div className="cx-outcome good" role="status">
+        <strong>{orderWords(o)}</strong>
+        <p>
+          {money(o.amountCents)} at {money(o.priceCents)}
+        </p>
+      </div>
+    );
+  return <p className="cx-foot">Placing your order…</p>;
 }
 
 type WithdrawResult = {
@@ -572,26 +729,101 @@ function WithdrawOutcome({ r }: { r: WithdrawResult }) {
   );
 }
 
-function Pay({ row, wire }: { row: Row; wire: string }) {
+type PayResult = { ms: number; cents: bigint };
+
+/** The account on file to pay from: the main one, in the words the client knows it by. */
+function accountOnFile(accounts: BankAccount[], clientId: string) {
+  const a = accounts.find((x) => x.id === clientId) ?? accounts.find((x) => !x.id.includes(':')) ?? accounts[0];
+  if (!a) return undefined;
+  const kind = a.nickname.split('·')[1]?.trim();
+  return { name: kind ? `${kind} account` : 'your account', last4: a.accountNumber.slice(-4) };
+}
+
+function Pay({
+  row,
+  wire,
+  accounts,
+  accessBack,
+}: {
+  row: Row;
+  wire: string;
+  accounts: BankAccount[];
+  accessBack: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [paid, setPaid] = useState<PayResult>();
+  const [error, setError] = useState<string>();
   const open = row.invoices.filter(
     (i) => i.status !== 'void' && i.paidCents < i.amountCents && i.status !== 'disputed',
   );
+  const account = accountOnFile(accounts, row.client.id);
+  const due = row.overdueCents;
+
+  async function pay() {
+    if (
+      !confirm(
+        `Send a real demo wire of ${money(due)} from the bank sandbox account? It changes the shared demo data.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError(undefined);
+    setPaid(undefined);
+    try {
+      const r = await demo<{ ms: number }>('pay', { clientId: row.client.id });
+      setPaid({ ms: r.ms, cents: due });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Whether access is back comes from the live data, not from the response.
+  const receipt = paid && (
+    <div className="cx-outcome good" role="status">
+      <strong>
+        Paid {money(paid.cents)}
+        {due === 0n && accessBack ? ' · access restored' : ''}
+      </strong>
+      <p>
+        {due === 0n
+          ? accessBack
+            ? `Everything on your account is available again. Done in ${(paid.ms / 1000).toFixed(1)}s.`
+            : `Payment received in ${(paid.ms / 1000).toFixed(1)}s. Restoring your access…`
+          : `Payment sent in ${(paid.ms / 1000).toFixed(1)}s. Matching it to your invoices…`}
+      </p>
+    </div>
+  );
+
   if (!open.length)
     return (
-      <div className="cx-card">
-        <div className="cx-balance">You're all paid up</div>
-        <p className="muted">Nothing is owed. Any paused access comes back automatically.</p>
-      </div>
+      <>
+        {receipt}
+        <div className="cx-card">
+          <div className="cx-balance">You're all paid up</div>
+          <p className="muted">Nothing is owed. Any paused access comes back automatically.</p>
+        </div>
+        <h4 className="cx-section">Deposit by wire</h4>
+        <WireCard row={row} wire={wire} />
+      </>
     );
   return (
     <>
+      {receipt}
       <div className="cx-card">
         <div className="cx-card-title">Amount due</div>
         <div className="cx-balance">
           <span className="cx-cur">$</span>
           {money(row.unpaidCents).replace('$', '')}
         </div>
-        {row.overdueCents > 0n && <p className="cx-why">{money(row.overdueCents)} is past due.</p>}
+        {due > 0n && <p className="cx-why">{money(due)} is past due.</p>}
+        {due > 0n && account && (
+          <button className="btn primary cx-cta cx-pay" disabled={busy} onClick={pay}>
+            {busy ? 'Sending payment…' : `Pay ${money(due)} now from ${account.name} ••${account.last4}`}
+          </button>
+        )}
+        {error && <p className="notice bad">{error}</p>}
       </div>
       <div className="cx-card cx-rows">
         {open.map((i) => (
@@ -606,14 +838,20 @@ function Pay({ row, wire }: { row: Row; wire: string }) {
           </div>
         ))}
       </div>
-      <h4 className="cx-section">Pay by wire</h4>
-      <div className="cx-card">
-        <p className="cx-wire">{wire || '—'}</p>
-        <p className="cx-foot">
-          Use <strong className="mono">{row.client.id}</strong> and the invoice numbers as the
-          reference. Access comes back as soon as the payment arrives.
-        </p>
-      </div>
+      <h4 className="cx-section">Or pay by wire</h4>
+      <WireCard row={row} wire={wire} />
     </>
+  );
+}
+
+function WireCard({ row, wire }: { row: Row; wire: string }) {
+  return (
+    <div className="cx-card">
+      <p className="cx-wire">{wire || '—'}</p>
+      <p className="cx-foot">
+        Use <strong className="mono">{row.client.id}</strong> and the invoice numbers as the
+        reference. Access comes back as soon as the payment arrives.
+      </p>
+    </div>
   );
 }

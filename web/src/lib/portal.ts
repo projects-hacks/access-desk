@@ -3,6 +3,7 @@ import { DbConnection, tables } from '../module_bindings';
 import type {
   AccessLever,
   AccessRequest,
+  AssetPrice,
   BankAccount,
   Client,
   CustodyHolding,
@@ -10,6 +11,7 @@ import type {
   Invoice,
   Notice,
   Permission,
+  TradeOrder,
 } from '../module_bindings/types';
 import { config } from './config';
 import { demo } from './demo';
@@ -40,6 +42,9 @@ export type PortalSnapshot = {
   accessRequests: AccessRequest[];
   bankAccounts: BankAccount[];
   notices: Notice[];
+  orders: TradeOrder[];
+  /** Live prices from the public asset_price table. */
+  prices: AssetPrice[];
   error?: string;
 };
 
@@ -77,6 +82,8 @@ function read(): PortalSnapshot {
     accessRequests: db ? [...db.myAccessRequests.iter()] : [],
     bankAccounts: db ? [...db.myBankAccounts.iter()] : [],
     notices: db ? [...db.myNotices.iter()] : [],
+    orders: db ? [...db.myOrders.iter()] : [],
+    prices: db ? [...db.assetPrice.iter()] : [],
     error,
   };
 }
@@ -123,6 +130,8 @@ function connect(): DbConnection {
           tables.myAccessRequests,
           tables.myBankAccounts,
           tables.myNotices,
+          tables.myOrders,
+          tables.assetPrice,
         ]);
       changed();
     })
@@ -144,11 +153,15 @@ function connect(): DbConnection {
     conn.db.myAccessRequests,
     conn.db.myBankAccounts,
     conn.db.myNotices,
+    conn.db.myOrders,
+    conn.db.assetPrice,
   ];
   for (const v of views) {
     v.onInsert(changed);
     v.onDelete(changed);
   }
+  // Prices move in place; an order's status change (queued to filled) arrives as delete + insert.
+  conn.db.assetPrice.onUpdate(changed);
   // Dev only: `portalConn.db` in the console shows what this connection actually holds.
   if (import.meta.env.DEV) (window as unknown as { portalConn: DbConnection }).portalConn = conn;
   return conn;
@@ -170,4 +183,12 @@ export async function bindTo(clientId: string): Promise<void> {
   const identity = connect().identity?.toHexString();
   if (!identity) throw new Error('Portal connection is not ready yet.');
   await demo('portal-as', { clientId, identity });
+}
+
+/**
+ * Place an order on the client's own account, as the bound client. The database decides: a refused
+ * order still commits (as a trade_order row with the reason), so the answer arrives through my_orders.
+ */
+export async function placeOrder(clientId: string, side: 'buy' | 'sell', asset: string, amountCents: bigint): Promise<void> {
+  await connect().reducers.placeOrder({ clientId, side, asset, amountCents });
 }
