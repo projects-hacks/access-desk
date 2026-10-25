@@ -1,8 +1,17 @@
 # Credit analyst (seat 1)
 
-Scores every client, reads the exploit flags, and proposes tier changes on the platform's 1–5 scale (1 best) and company-specific policies. Claude makes the per-company decision; the deterministic rules are its evidence, its guardrails and its fallback (see [Claude decisions](#claude-decisions-guardrails-and-company-policies)). It never restricts a lever, holds cash, debits custody, approves its own work, activates a policy, changes a strategic client's tier or edits contract terms. Plan: [seat1-build-plan.pdf](seat1-build-plan.pdf).
+Scores every client, reads the exploit flags, and proposes tier changes on the platform's 1–5 scale (1 best) and company-specific policies. Droid (Claude as backup, see [llm.md](llm.md)) makes the per-company decision; the deterministic rules are its evidence, its guardrails and its fallback (see [Claude decisions](#claude-decisions-guardrails-and-company-policies)). It never restricts a lever, holds cash, debits custody, approves its own work, activates a policy, changes a strategic client's tier or edits contract terms. Plan: [seat1-build-plan.pdf](seat1-build-plan.pdf).
 
-Code: `agents/src/desk_agents/credit/` (pure: `scoring.py`, `detectors.py`, `tiers.py`, `guardrails.py`, `company.py`; `decide.py` asks Claude; `load.py` reads the database; `reasoning.py` is the rules' paragraph) and `agents/credit_analyst.py` (the 15 s loop). Today is always `clock.sim_date`; `load.py` cuts every book to it, so nothing dated later is read and a replay at an earlier date is honest.
+Two TypeScript agents in `agents/` (`@access-desk/agents`), one task per client, read from the live cache of the whole database:
+
+| Agent | File | Does | Woken by (`agent_task` routes, `spacetime/src/agents.ts`) |
+|---|---|---|---|
+| Learning | `agents/src/agents/learning.ts` | computes the credit profile (reliability, value, coverage, expected settle) and writes it with `upsert_credit_profile` only when it differs from the stored row; records the verdict of each active company policy (`record_policy_outcome`). Rules only, no model. One panel line when reliability moves 5+ points | `new_client`, `cash_in`, `payment_returned`, `dispute`, `override`, `daily` |
+| Scoring | `agents/src/agents/scoring.ts` | baseline tier + flags + guardrails + Droid's decision; files `CREDIT_REVIEW` / `POLICY_DRAFT`; withdraws a superseded review; records a kept tier | `scored` (a whole score moved; `upsert_credit_profile` queues it), `policy_failing` (a company policy's verdict turned failing) |
+
+Pure logic in `agents/src/credit/`: `scoring.ts`, `detectors.ts`, `tiers.ts`, `guardrails.ts`, `company.ts` (policy evaluator); `decide.ts` builds the prompt and asks the model; `plan.ts` (`assess`: baseline, held / withdraw, policy context); `proposals.ts` (flags from the table, review and draft proposals, kept tier); `load.ts` builds a client's book from the cache; `reasoning.ts` is the rules' paragraph. Today is always `clock.sim_date`; `load.ts` cuts every book to it, so nothing dated later is read. Every write goes through `ctx.attempt`, so dry runs print instead of writing and refusals land on the panel.
+
+Not ported from the Python agents: the backtest and the provider gate (`eval-provider`), the book-dump CLI and the fixture-rebuild script. There is no 15 s loop and no per-client decision cache: scoring runs only when learning moved a score.
 
 ## Scores (`credit_profile`)
 
@@ -41,7 +50,7 @@ Base from reliability: ≥ 85 → 2, ≥ 70 → 3, ≥ 55 → 4, else 5. Value �
 1. Strategic: never a tier change; a worse formula tier becomes a `review` (pol-022).
 2. Upgrade: one step, only if reliability clears its band line by 3+ and `recent_late` didn't fire (pol-021).
 3. Downgrade: up to two steps (pol-020).
-4. No duplicates. Each item records the rules' view of the client (`view`: the baseline's subject, or `stay:<client>`). While a client has an open item (PROPOSED / NEEDS_INFO / APPROVED / POSTED) recorded under the current view, or one rejected under it less than 30 sim days ago, nothing new is proposed and Claude isn't asked. A new view withdraws the client's open review (PROPOSED / NEEDS_INFO) and the client is decided again.
+4. No duplicates. Each item records the rules' view of the client (`view`: the baseline's subject, or `stay:<client>`). While a client has an item waiting on a person (PROPOSED / NEEDS_INFO), or a decided `review:` item, recorded under the current view, or one rejected under it less than 30 sim days ago (live precedent `decided_on`), nothing new is proposed and Claude isn't asked. An applied tier change doesn't block: the tier moved, so the view moved with it. A new view withdraws the client's open review (PROPOSED / NEEDS_INFO) and the client is decided again.
 
 Confidence 0.7 within 5 points of a band line (55, 70, 85), else 0.9.
 
@@ -49,13 +58,13 @@ Confidence 0.7 within 5 points of a band line (55, 70, 85), else 0.9.
 
 ## Claude decisions, guardrails and company policies
 
-Scores, flags and history stay deterministic: they are the evidence. Claude (`settings.anthropic_model`, effort low, 45 s timeout, no SDK retries) picks the decision for each company; `guardrails.py` decides whether it may reach a controller; a controller still approves every tier change and every policy.
+Scores, flags and history stay deterministic: they are the evidence. The model (`LLM_MODEL`, Droid first, Claude as backup; see [llm.md](llm.md)) picks the decision for each company; `guardrails.ts` decides whether it may reach a controller; a controller still approves every tier change and every policy.
 
-**Who is asked.** Only companies where something is happening: the baseline proposes a change or review, a flag fired, or one of the company's active policies is failing its success criteria. On the fixture that is 13 of 30 (10 baseline proposals + Kestrel, Juniper, Monarch). Calls run 6 at a time; a decision is remembered per client until its facts change (a new sim day, a payment), so the 15 s loop doesn't re-ask. Outages aren't remembered.
+**Who is asked.** Only companies where something is happening: the baseline proposes a change or review, a flag fired, or one of the company's active policies is failing its success criteria. On the fixture that is 13 of 30 (10 baseline proposals + Kestrel, Juniper, Monarch). Scoring handles one client per task and runs 4 tasks at once; there is no decision cache, since a task exists only because a score moved.
 
-**What Claude gets** (`decide.py` `facts`, inside `<facts>` and labelled data): today; client (tier, strategic, renewal); contract and clauses; scores with breakdown, coverage, exposure, settle date; fired flags with measured strings and evidence invoice ids; payment history (summary: mean days late and share within grace for the last 6 months vs before, median lag per product, restriction day; every invoice with due, paid, days late, number of payments; disputes); the baseline (action, to_tier, formula tier, policy, reasons); the credit policies pol-020..022; this company's own policy versions and their evaluations; this company's live precedents with outcomes; the guardrail list and the client-specific limits in words.
+**What Claude gets** (`decide.ts` `facts`, inside `<facts>` and labelled data): today; client (tier, strategic, renewal); contract and clauses; scores with breakdown, coverage, exposure, settle date; fired flags with measured strings and evidence invoice ids; payment history (summary: mean days late and share within grace for the last 6 months vs before, median lag per product, restriction day; every invoice with due, paid, days late, number of payments; disputes); the baseline (action, to_tier, formula tier, policy, reasons); the credit policies pol-020..022; this company's own policy versions and their evaluations; this company's live precedents with outcomes; the guardrail list and the client-specific limits in words.
 
-**What Claude returns** (structured output, `output_config.format` with the JSON schema of `guardrails.Decision`; parsed with pydantic):
+**What Claude returns** (structured output with the strict JSON schema `DECISION_SCHEMA` in `guardrails.ts`; `parseDecision` checks the shape):
 
 ```
 { action: "stay" | "tier_change" | "review",
@@ -68,7 +77,7 @@ Scores, flags and history stay deterministic: they are the evidence. Claude (`se
   reasons: [string], cited_invoice_ids: [string], confidence: number }
 ```
 
-**Guardrails** (`guardrails.GUARDRAILS`, sent in the prompt; `violations()` checks them):
+**Guardrails** (`GUARDRAILS` in `guardrails.ts`, sent in the prompt; `violations()` checks them):
 
 | id | Limit |
 |---|---|
@@ -87,7 +96,7 @@ Scores, flags and history stay deterministic: they are the evidence. Claude (`se
 
 The 3-point upgrade margin is no longer a limit: it shows in the baseline's reasons, and Claude may weigh it.
 
-**Retry and fallback.** A reply that isn't valid JSON for the schema, or breaks a guardrail, gets one retry with the problems listed (the earlier reply stays in the conversation). A second failure, any API error, refusal or truncation, or no `ANTHROPIC_API_KEY` → the baseline, `decided_by: "rules"`. With no key the analyst reproduces the answer key exactly.
+**Retry and fallback.** A reply that isn't valid JSON for the schema, or breaks a guardrail, gets one retry with the problems listed (the `validate` callback's rejection note is appended to the prompt). A second rejection, any provider error, refusal or truncation, or no model set up (no `droid` on PATH, no `ANTHROPIC_API_KEY`) → the baseline, `decided_by: "rules"`. With no model the analyst reproduces the answer key exactly. A tier the model kept against the rules' change is recorded once with `record_wait` (`claude_kept_tier:<action>:<tier>`, shown under Scoring on the panel and on the Credit screen).
 
 **Company policies.** A `company_draft` becomes a `policy` row `pol-020:ORG-90677@<version>`, status `draft`, via `upsert_policy` (`rule_json` {client_id, base, terms, success_criteria, proposed_on}; `learned_from` = Claude's reasons and the cited invoices), and a `POLICY_DRAFT` work item (subject `policy:<key>`, required role CONTROLLER, `proposal_json` {policy_key, policy_id, version, title, rule, decided_by, baseline, choice, guardrails, ...}). Versions count up; an unapproved draft is overwritten. Agents may only save `draft` rows and never over a version past draft (`upsert_policy` refuses).
 
@@ -97,7 +106,7 @@ The 3-point upgrade margin is no longer a limit: it shows in the baseline's reas
 | POLICY_DRAFT rejected | draft → `rejected`, audit `POLICY_REJECTED`; precedent Rejected with the note |
 | `record_policy_outcome(policyKey, outcome)` (AGENT, ADMIN) | stores the evaluator's verdict on the activating precedent's `outcome`; audit `POLICY_OUTCOME` when the verdict (passing / failing) changes |
 
-**The learning loop.** Each run, `company.evaluate` (pure) checks every active company policy against the book: invoices due from `effective_on` through `window_months`, counted once their grace has passed; fewer than 2 → `pending`. `share_paid_within_grace` passes at ≥ target, `mean_days_late` / `max_days_late` at ≤ target, `pattern_not_firing` when that detector doesn't fire on those invoices. A verdict goes to `record_policy_outcome` ("failing on 2026-03-03: 0 of 8 paid within 5 days (0.00 vs >= 0.8)"). A failing policy makes the company eligible for a Claude call even if nothing else is happening, and the failing results are in its facts, so Claude can propose a better version of the same policy (which supersedes it on approval) or a tier change. Precedents with their outcomes are in the facts too.
+**The learning loop.** On each learning task, `company.evaluate` (pure) checks every active company policy of the client against its book: invoices due from `effective_on` through `window_months`, counted once their grace has passed; fewer than 2 → `pending`. `share_paid_within_grace` passes at ≥ target, `mean_days_late` / `max_days_late` at ≤ target, `pattern_not_firing` when that detector doesn't fire on those invoices. A verdict goes to `record_policy_outcome` ("failing on 2026-03-03: 0 of 8 paid within 5 days (0.00 vs >= 0.8)"), skipped when it only differs by date. The reducer routes `policy_failing` to scoring when the verdict turns failing. A failing policy makes the company eligible for a Claude call even if nothing else is happening, and the failing results are in its facts, so Claude can propose a better version of the same policy (which supersedes it on approval) or a tier change. Precedents with their outcomes are in the facts too.
 
 The Credit screen shows on every review and draft: decided by Claude or the rules, Claude's choice next to the baseline, why it was asked, terms and success criteria, the guardrails that applied and any rejected attempts; the client panel lists its company policy versions with status, effective date and outcome.
 
@@ -137,9 +146,10 @@ The limits are named constants at the top of `autonomy.ts`. The guardrails and t
 ## Check it
 
 ```
-cd agents && uv run pytest                  # answer key on tests/fixtures/book.json
-pnpm credit:fixture                         # rebuild the fixture from the dataset
-pnpm demo:reset && pnpm sync && pnpm agents # one cycle, then:
-pnpm credit:verify                          # 30 profiles, 6 flags (+ Fieldstone; written by ExploitWatch now), 10 open reviews (+ Saltmarsh)
-cd agents && uv run python -m desk_agents.credit dump /tmp/books.json   # live books in fixture shape
+pnpm --filter @access-desk/agents test           # answer key on agents/src/credit/fixtures/book.json, guardrails, retries, held / withdraw / rejection memory
+pnpm agents:try learning <clientId>              # dry run on the shared database: prints what it would write, writes nothing
+pnpm agents:try scoring <clientId>               # same; asks Droid / Claude if one is set up
+pnpm -s stdb:sql "SELECT id, name, tier FROM client"   # client ids
+pnpm agents                                      # the hosted process only (AGENTS_HOST=true); never run it beside the hosted one
+pnpm credit:verify                               # 30 profiles, 6 flags (+ Fieldstone; written by ExploitWatch now), 10 open reviews (+ Saltmarsh)
 ```

@@ -14,7 +14,7 @@ Only one process writes bank data: sync, run by the owner. Everyone else just co
 |---|---|
 | Web (React) | Generated bindings in `web/src/module_bindings`, Maincloud defaults in `web/src/lib/config.ts` |
 | Server (TS) | `connectStdb()` in `server/src/lib/stdb.ts`. Check it with `pnpm --filter @access-desk/server stdb:check` |
-| Agents (Python) | `SpacetimeClient` in `agents/src/desk_agents/stdb.py`, over HTTP: `sql(...)` returns typed rows (options → `None`, timestamps → `datetime`, identities → hex); `call(...)` raises `ReducerError` when a reducer refuses; `propose(Proposal)` creates a work item |
+| Agents (TS) | `connect()` in `agents/src/db.ts`: one connection, the whole database subscribed; agents read the live cache and write through `ctx.attempt(...)` (a refused reducer is recorded on the agents panel). See [agents.md](agents.md) |
 | Terminal | `pnpm stdb:sql "SELECT * FROM work_item"`, `pnpm stdb:logs` (needs the `spacetime` CLI) |
 
 Defaults in `.env.example` already point to the shared database. Copy it to `.env` and you're connected.

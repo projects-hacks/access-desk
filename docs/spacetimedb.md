@@ -7,8 +7,8 @@ The database is the application. Business rules live in reducers inside the data
 ```
 Nessie bank ──┐
               ├─► sync ─► reducers (SpacetimeDB module) ─► subscribers ─► gateway ─► platform / Nessie
-simulated     │            tables, roles, audit, tick_clock   web UI (2 controller seats)
-platform ─────┘                                              3 agents on Azure
+simulated     │            tables, roles, audit, tick_clock   web UI (2 controller seats, agents panel)
+platform ─────┘            agent_task (who runs next)         4 agents on Azure (woken by agent_task)
                                                              gateway (claims commands)
 ```
 
@@ -16,7 +16,8 @@ platform ─────┘                                              3 agent
 |---|---|---|
 | Reducers | All business logic: payment checking, work-item state machine, deadlines, tie-out | `spacetime/src/reducers/`, `spacetime/src/payments/`, `spacetime/src/books/` |
 | Subscriptions | Push every commit to the web UI, the gateway and the server | `web/src/lib/bank.ts`, `server/src/gateway/executor.ts` |
-| Scheduled reducer | `tick_clock` every second: moves the sim clock, requeues stuck commands | `spacetime/src/reducers/world.ts`, `spacetime/src/tables/world.ts` |
+| Agent dispatch | Reducers queue `agent_task` rows in the same transaction as the change; the agents get them pushed ([agents.md](agents.md)) | `spacetime/src/agents.ts`, `agents/src/dispatcher.ts` |
+| Scheduled reducer | `tick_clock` every second: moves the sim clock, requeues stuck commands and stuck agent tasks | `spacetime/src/reducers/world.ts`, `spacetime/src/tables/world.ts` |
 
 ## One transaction, end to end
 
@@ -55,7 +56,8 @@ With Postgres this is a database, an API server, a message bus, a cron service a
 - The gateway is a transactional outbox built from table rows: `gateway_command` rows are claimed (only `queued` can be claimed, so no double execution), completed or failed with retry (5 attempts) in `spacetime/src/reducers/gateway.ts`; abandoned commands (60 s in `executing`) go back to the queue by the scheduled tick.
 - Separation of duties in `spacetime/src/reducers/work.ts`: legal transitions only, approvers are ACCOUNTANT or CONTROLLER, controller-only items, `no self-approval`, only the gateway posts. A denied attempt returns instead of throwing, so its audit row commits.
 - Contract time is data: cure periods are `deadline` rows resolved when the sim date moves (`spacetime/src/payments/deadlines.ts`).
-- Agents act through the same reducers as people, so their proposals face the same checks (`docs/actions.md`).
+- Agents act through the same reducers as people, so their proposals face the same checks (`docs/actions.md`). Clients too: `place_order` checks trading permission and cash in the transaction, and a refusal commits with its reason.
+- No orchestrator: the reducer that changes a row queues the agent that cares about it (`ROUTES`), so routing is deterministic, durable and visible as rows.
 
 ## SpacetimeDB features we use
 
@@ -78,5 +80,5 @@ The Client view opens its own connection as a separate identity (`web/src/lib/po
 ## Honest limits
 
 - Staff tables are public on the module (`{ public: true }` in `spacetime/src/tables/`) because the console, sync, gateway and agents read them directly; role checks guard writes. The client portal reads only through the per-identity views; a client opening its own raw connection could still query base tables. Closing that needs private tables with staff-side views, or row-level filters (deprecated in 2.13).
-- The Python agents have no SpacetimeDB SDK. They poll a fingerprint (audit row count and sim date) over HTTP SQL every second (`watch_seconds`) and propose through reducers (`agents/src/desk_agents/__main__.py`, `stdb.py`). Reaction time is up to a second, not a push.
+- An agent's own work dominates its reaction time: dispatch is about 0.15–0.2 s (push plus claim), a Droid decision about 11 s. A routing gap would leave an agent asleep; the daily wake covers clients with anything overdue.
 - The shared database runs on the Maincloud free tier.

@@ -37,9 +37,13 @@ A withdrawal during a running cure period is honored (§9.1), but if it leaves c
 
 Reads need no token: subscribe to the tables. Approvals call `transition_work_item` as the window's controller seat: Controller A (`VITE_STDB_CONTROLLER_TOKEN`) or Controller B (`VITE_STDB_CONTROLLER_B_TOKEN`), picked with `?as=a` / `?as=b`. Agents propose and either seat approves; what a seat proposes itself (console tier and permission changes on top clients, or an offboarding) needs the other seat. The portal's withdraw button is `POST /demo/withdraw {clientId, amount}` (dollars): it returns the decision, released and held amounts, and the Nessie wire once it's back through the feed.
 
-## Python
+## Agents
 
-`agents/src/desk_agents/stdb.py`: `propose_custody_debit`, `propose_restriction`, `propose_restore`, `propose_notice`, `request_withdrawal`, `decide`, plus `open_work()` and `client_snapshot(client_id)` (every table for one client). Refusals raise `ReducerError` with the reason.
+`agents/src/agents/access.ts` (the Agent) and `agents/src/access/*.ts` (pure rules: `plan.ts`, `cases.ts`, `comparison.ts`, `precedents.ts`, `notice.ts`, `pushback.ts`; `load.ts` reads one client from the live cache). One task = one client. The agent reads the cache, decides at most one move, and calls the reducers above only through `ctx.attempt`; a refusal is recorded on the panel as a guardrail step. `ctx.say` puts a conclusion on the panel before an action; a decision to wait is `record_wait`. RM notes and notice wording go through `ctx.ask`; without a model, keywords and the template are used.
+
+Wakes `access` (`spacetime/src/agents.ts`): `cash_in`, `payment_returned`, `deadline`, `rm_note`, `tier_changed`, `exploit_flag`, `daily` (clients with something overdue), `posted` (a restriction or restore reached POSTED: tell the client), `decided` (a person approved or rejected a restriction, debit or exception).
+
+Try one client without writing: `cd agents && pnpm try access <clientId>`. Tests: `pnpm --filter @access-desk/agents test`.
 
 ## Check it
 

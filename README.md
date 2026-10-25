@@ -5,21 +5,21 @@ Autonomous credit and access desk for a multi-product financial platform. It rea
 ```
 spacetime/   SpacetimeDB module: tables, payment checking, state machine, roles, gateway outbox, tie-out, audit
 server/      sync, gateway, simulated platform (billing, GL, admin, custody), Nessie bank, demo endpoints
-agents/      Python agents (read via SQL, propose via reducers)
+agents/      four agents (Learning, Scoring, ExploitWatch, Access), woken by tasks the database queues
 web/         React + Vite
 ```
 
 ## Run
 
-Node 22+, pnpm, Python 3.11+ with uv, `spacetime` CLI (schema changes only).
+Node 22+, pnpm, `spacetime` CLI (schema changes only).
 
 ```bash
-pnpm install && (cd agents && uv sync)
+pnpm install
 cp .env.example .env     # shared Maincloud database + hosted API (ask for the values)
 pnpm dev                 # web :5173, talking to the hosted API
 ```
 
-The API server (sync, gateway, simulated platform, demo endpoints) and the agents (credit analyst, ExploitWatch, access controller, deciding through Factory's Droid) each run once, on Azure Container Apps, because it is the only writer to the shared database. Every push to `main` is checked (typecheck, tests) and, if green, built and deployed there by CI. Don't run a second server against the shared database: `pnpm dev` starts only the web app, the server refuses to start unless `SERVER_HOST=true` (`pnpm dev:server`), and the agent loop unless `AGENTS_HOST=true` (`desk-agents --dry-run` shows what they would do).
+The API server (sync, gateway, simulated platform, live prices, demo endpoints) and the agents (Learning, Scoring, ExploitWatch, Access, deciding through Factory's Droid; [how they are woken](docs/agents.md)) each run once, on Azure Container Apps, because it is the only writer to the shared database. Every push to `main` is checked (typecheck, tests) and, if green, built and deployed there by CI. Don't run a second server against the shared database: `pnpm dev` starts only the web app, the server refuses to start unless `SERVER_HOST=true` (`pnpm dev:server`), and the agents unless `AGENTS_HOST=true` (`pnpm agents:try <agent> <client>` shows what one would do, without writing).
 
 ## Commands
 
@@ -37,7 +37,7 @@ The API server (sync, gateway, simulated platform, demo endpoints) and the agent
 | `pnpm credit:verify` · `credit:fixture` | Seat 1 output against the answer key · rebuild its test fixture |
 | `pnpm typecheck` · `pnpm test` | Checks |
 
-The hosted server exposes `POST /demo/inject`, `/demo/settle`, `/demo/advance`, `/demo/clock`, `/demo/withdraw`, `/demo/reset` (header `x-demo-key`) and `GET /demo/state`.
+The hosted server exposes `POST /demo/inject`, `/demo/settle`, `/demo/pay`, `/demo/advance`, `/demo/clock`, `/demo/withdraw`, `/demo/reset` (header `x-demo-key`) and `GET /demo/state`.
 
 ## Docs
 
