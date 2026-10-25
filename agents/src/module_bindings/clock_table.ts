@@ -16,4 +16,5 @@ export default __t.row({
   secondsPerDay: __t.u32().name("seconds_per_day"),
   runUntil: __t.option(__t.string()).name("run_until"),
   updatedAt: __t.timestamp().name("updated_at"),
+  settling: __t.bool(),
 });

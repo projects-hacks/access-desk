@@ -22,7 +22,7 @@ export const init = spacetimedb.init((ctx) => {
     wireInstructions: '',
     autoApplyLimitCents: 5_000_000n,
   });
-  ctx.db.clock.insert({ id: 1, simDate: '2026-03-03', secondsPerDay: 0, runUntil: undefined, updatedAt: ctx.timestamp });
+  ctx.db.clock.insert({ id: 1, simDate: '2026-03-03', secondsPerDay: 0, runUntil: undefined, updatedAt: ctx.timestamp, settling: false });
   ensureTicker(ctx);
   ctx.db.actor.insert({ identity: ctx.sender, name: 'owner', role: 'ADMIN', clientId: undefined });
   seedBaselinePolicies(ctx);
@@ -125,7 +125,7 @@ export const tickClock = spacetimedb.reducer({ onSchedule: clockTick }, { tick: 
 /** Demo reset: back to the morning of the demo. */
 export const setClock = spacetimedb.reducer({ simDate: t.string() }, (ctx, args) => {
   requireRole(ctx, CAN_RESET);
-  ctx.db.clock.id.update({ id: 1, simDate: args.simDate, secondsPerDay: 0, runUntil: undefined, updatedAt: ctx.timestamp });
+  ctx.db.clock.id.update({ id: 1, simDate: args.simDate, secondsPerDay: 0, runUntil: undefined, updatedAt: ctx.timestamp, settling: false });
   audit(ctx, { action: 'SET_CLOCK', subjectType: 'clock', subjectId: '1', toState: args.simDate });
 });
 
@@ -185,7 +185,15 @@ export const resetWorld = spacetimedb.reducer({ simDate: t.string() }, (ctx, { s
   wipe(db.episodeStep.iter(), (r: { id: bigint }) => r.id, (k) => db.episodeStep.id.delete(k));
   for (const p of [...db.policy.iter()]) if (p.learnedFrom !== 'baseline' && db.policy.key.delete(p.key)) rows++;
   seedBaselinePolicies(ctx);
-  ctx.db.clock.id.update({ id: 1, simDate, secondsPerDay: 0, runUntil: undefined, updatedAt: ctx.timestamp });
+  // Sync reloads clients before their invoices and payments; an agent reading in between would judge an empty book.
+  ctx.db.clock.id.update({ id: 1, simDate, secondsPerDay: 0, runUntil: undefined, updatedAt: ctx.timestamp, settling: true });
   ensureTicker(ctx);
   audit(ctx, { action: 'RESET_WORLD', subjectType: 'world', subjectId: '1', toState: simDate, detail: `${rows} rows removed` });
+});
+
+/** The reset's sync is done: the world is whole again and agents may claim the tasks it queued. */
+export const worldSettled = spacetimedb.reducer({}, (ctx) => {
+  requireRole(ctx, CAN_RESET);
+  const c = ctx.db.clock.id.find(1);
+  if (c?.settling) ctx.db.clock.id.update({ ...c, settling: false, updatedAt: ctx.timestamp });
 });

@@ -106,6 +106,7 @@ import UpsertPolicyReducer from "./upsert_policy_reducer";
 import UpsertPositionReducer from "./upsert_position_reducer";
 import UpsertPrecedentReducer from "./upsert_precedent_reducer";
 import UpsertRawRecordReducer from "./upsert_raw_record_reducer";
+import WorldSettledReducer from "./world_settled_reducer";
 
 // Import all procedure arg schemas
 
@@ -964,6 +965,7 @@ const reducersSchema = __reducers(
   __reducerSchema("upsert_position", UpsertPositionReducer),
   __reducerSchema("upsert_precedent", UpsertPrecedentReducer),
   __reducerSchema("upsert_raw_record", UpsertRawRecordReducer),
+  __reducerSchema("world_settled", WorldSettledReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

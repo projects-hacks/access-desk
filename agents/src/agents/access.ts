@@ -156,7 +156,7 @@ export async function execute(ctx: TaskContext, view: ClientView, move: Move): P
 /** The model words the notice; the template goes out unless its wording passes the number check. */
 async function sendNotice(ctx: TaskContext, view: ClientView, move: NoticeMove): Promise<string | undefined> {
   const { text, by } = await wordNotice(ctx.ask, move.channel, move.body, `Client: ${view.client.name}`);
-  const reasoning = by ? `${move.reasoning}\n- Worded by ${providerName(by)}. Every number checked against the facts.` : move.reasoning;
+  const reasoning = by ? `${move.reasoning}\n- Wording by ${providerName(by)}, every number checked against the client's facts.` : move.reasoning;
   return ctx.attempt(move.summary, () => ctx.conn.reducers.proposeNotice({
     clientId: view.client.id, channel: move.channel, body: text, reasoning, policyRef: move.policyRef, confidence: move.confidence,
   }));

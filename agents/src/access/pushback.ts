@@ -19,7 +19,7 @@ export interface RmReading {
   readBy: string;
 }
 
-const LABELS: Record<string, string> = { anthropic: 'Claude', factory: 'Factory (Droid)', keywords: 'keyword rules' };
+const LABELS: Record<string, string> = { anthropic: 'Claude', factory: 'Droid', keywords: 'keyword rules' };
 export const providerName = (provider: string) => LABELS[provider] ?? provider;
 export const readerName = (reading: RmReading | undefined) => providerName(reading?.readBy ?? '');
 

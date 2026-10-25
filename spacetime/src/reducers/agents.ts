@@ -23,6 +23,7 @@ export const claimAgentTask = spacetimedb.reducer({ id: t.u64() }, (ctx, { id })
   const task = ctx.db.agentTask.id.find(id);
   if (!task) throw new SenderError(`task ${id} not found`);
   if (task.status !== 'queued') throw new SenderError(`task ${id} is ${task.status}`);
+  if (ctx.db.clock.id.find(1)?.settling) throw new SenderError('a reset is still reloading the world');
   // One agent works on one client at a time, however many agent processes are running.
   const busy = [...ctx.db.agentTask.clientId.filter(task.clientId)].some((t) => t.agent === task.agent && t.status === 'running');
   if (busy) throw new SenderError(`${task.agent} is already working on ${task.clientId}`);

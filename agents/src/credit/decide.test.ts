@@ -178,7 +178,7 @@ test('a tier the model kept against the rules is described once, with its reason
   const o = await decideCompany(r, ask);
   const kept = keptTier(r.book, o)!;
   assert.equal(kept.code, 'claude_kept_tier:tier_change:1');
-  assert.ok(kept.reason.startsWith('Claude kept tier 2; the rules proposed tier 2 -> 1.'));
+  assert.ok(kept.reason.startsWith('Kept tier 2; the rules proposed a move to tier 1.'));
   assert.ok(kept.reason.includes('Too early to move it up.'));
   // Agreeing with the rules, or falling back to them, keeps nothing.
   assert.equal(keptTier(r.book, await decideCompany(r, askWith([]))), undefined);

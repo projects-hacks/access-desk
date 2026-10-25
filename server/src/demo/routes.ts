@@ -231,6 +231,7 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
     sync.resetCaches();
     const results = await sync.full();
     await deps.gateway()?.drain();
+    await conn.reducers.worldSettled({});
     return {
       simDate: simDate(),
       bank: bankResult,

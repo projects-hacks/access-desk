@@ -196,6 +196,7 @@ export const Clock = __t.object("Clock", {
   secondsPerDay: __t.u32(),
   runUntil: __t.option(__t.string()),
   updatedAt: __t.timestamp(),
+  settling: __t.bool(),
 });
 export type Clock = __Infer<typeof Clock>;
 

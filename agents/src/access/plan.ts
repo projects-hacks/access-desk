@@ -118,10 +118,10 @@ function openWork(v: ClientView, world: World): Wait | undefined {
       if (error !== undefined) {
         return {
           code: 'gateway_failed',
-          reason: bullets([`WI-${w.id} was approved but the gateway could not execute it.`, sentence(w.title), error && `The gateway said: ${sentence(error)}`, 'A person needs to retry or cancel it.']),
+          reason: bullets(['An approved action could not be carried out at the bank or the platform.', sentence(w.title), error && `The gateway said: ${sentence(error)}`, 'A person needs to retry or cancel it.']),
         };
       }
-      return { code: 'pending_decision', reason: bullets([`WI-${w.id} is approved and executing through the gateway.`, sentence(w.title)]) };
+      return { code: 'pending_decision', reason: bullets(['An approved action is on its way to the bank or the platform.', sentence(w.title)]) };
     }
   }
   return undefined;
@@ -353,7 +353,7 @@ function noticeOwed(v: ClientView, world: World): NoticeMove | undefined {
     if (item.kind === 'RESTRICTION' && (!stillRestricted || !overdueInvoices(v, world.today).length)) continue;
     return {
       kind: 'notice', channel: 'email', body: noticeBody(v, item, world, ref), policyRef: 'pol-007', confidence: 0.95,
-      reasoning: bullets([`A ${item.kind === 'RESTORE' ? 'restore' : 'restriction'} (WI-${item.id}) is live and the client has not been told.`, 'The notice says what changed, why and how to restore access.']), summary: `notice to ${v.client.name} about WI-${item.id}`,
+      reasoning: bullets([`A ${item.kind === 'RESTORE' ? 'restore' : 'restriction'} is live and the client has not been told.`, 'The notice says what changed, why and how to restore access.']), summary: `notice to ${v.client.name} about WI-${item.id}`,
     };
   }
   return undefined;

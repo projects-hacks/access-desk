@@ -78,6 +78,7 @@ import UpsertPolicyReducer from "../upsert_policy_reducer";
 import UpsertPositionReducer from "../upsert_position_reducer";
 import UpsertPrecedentReducer from "../upsert_precedent_reducer";
 import UpsertRawRecordReducer from "../upsert_raw_record_reducer";
+import WorldSettledReducer from "../world_settled_reducer";
 
 export type AddRmNoteParams = __Infer<typeof AddRmNoteReducer>;
 export type AdjustReturnJournalsParams = __Infer<typeof AdjustReturnJournalsReducer>;
@@ -151,4 +152,5 @@ export type UpsertPolicyParams = __Infer<typeof UpsertPolicyReducer>;
 export type UpsertPositionParams = __Infer<typeof UpsertPositionReducer>;
 export type UpsertPrecedentParams = __Infer<typeof UpsertPrecedentReducer>;
 export type UpsertRawRecordParams = __Infer<typeof UpsertRawRecordReducer>;
+export type WorldSettledParams = __Infer<typeof WorldSettledReducer>;
 

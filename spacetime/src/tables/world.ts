@@ -23,6 +23,8 @@ export const clock = table(
     /** A running clock stops on this date. */
     runUntil: t.string().optional(),
     updatedAt: t.timestamp(),
+    /** A reset is reloading the world: agents claim no tasks until it is whole again. */
+    settling: t.bool().default(false),
   },
 );
 

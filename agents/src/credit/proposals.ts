@@ -76,11 +76,11 @@ export function flagsFromRows(book: ClientBook, rows: FlagRow[]): Flag[] {
 export function keptTier(book: ClientBook, o: Outcome): { code: string; reason: string } | undefined {
   if (o.decidedBy !== 'claude' || o.baseline.action === 'stay' || o.final.action !== 'stay') return undefined;
   const base = o.baseline;
-  const wanted = base.action === 'tier_change' ? `tier ${base.current} -> ${base.toTier}` : 'a review';
+  const wanted = base.action === 'tier_change' ? `a move to tier ${base.toTier}` : 'a review';
   const why = o.choice?.reasons[0] ?? 'no reason given';
   return {
     code: `claude_kept_tier:${base.action}:${base.toTier}`,
-    reason: `Claude kept tier ${base.current}; the rules proposed ${wanted}. ${why}`.slice(0, 480),
+    reason: `Kept tier ${base.current}; the rules proposed ${wanted}. ${why}`.slice(0, 480),
   };
 }
 
