@@ -201,15 +201,16 @@ export function useCreditBook(
 ) {
   const today = useClock()?.simDate ?? '';
   const rows = useClientRows();
-  const [invoices] = useTable(tables.invoice);
+  const [invoices, invoicesReady] = useTable(tables.invoice);
   const [disputes] = useTable(tables.dispute);
-  const [applications] = useTable(tables.paymentApplication);
+  const [applications, applicationsReady] = useTable(tables.paymentApplication);
   const [payers] = useTable(tables.payerIdentity);
   const [profiles] = useTable(tables.creditProfile);
   const [flags] = useTable(tables.exploitFlag);
 
   return useMemo(() => {
-    if (!today || !rows.length) return [] as ScoredClient[];
+    // Scoring before the history has loaded would show every client as clean.
+    if (!today || !rows.length || !invoicesReady || !applicationsReady) return [] as ScoredClient[];
     const window = monthsBack(today, MONTHS);
     const start = `${window[0]}-01`;
     const by = <T extends { clientId: string }>(xs: readonly T[]) => {
@@ -361,7 +362,7 @@ export function useCreditBook(
       tierRules,
     );
     return scored.map((s) => ({ ...s, suggestedTier: s.client.strategic ? 1 : tierOf(s.score) }));
-  }, [today, rows, invoices, disputes, applications, payers, profiles, flags, weights, tierRules]);
+  }, [today, rows, invoices, invoicesReady, disputes, applications, applicationsReady, payers, profiles, flags, weights, tierRules]);
 }
 
 export function tierName(tier: number, rules: TierRule[] = VERTICAL_TIERS): string {
