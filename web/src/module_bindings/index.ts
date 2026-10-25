@@ -34,9 +34,6 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
-import SetStrategicReducer from "./set_strategic_reducer";
-import RecordConsolePrecedentReducer from "./record_console_precedent_reducer";
-import ProposeGuidelineChangeReducer from "./propose_guideline_change_reducer";
 import AddRmNoteReducer from "./add_rm_note_reducer";
 import AdvanceClockReducer from "./advance_clock_reducer";
 import AssignRoleReducer from "./assign_role_reducer";
@@ -45,6 +42,7 @@ import CompleteGatewayCommandReducer from "./complete_gateway_command_reducer";
 import FailGatewayCommandReducer from "./fail_gateway_command_reducer";
 import PlaceHoldReducer from "./place_hold_reducer";
 import ProposeCustodyDebitReducer from "./propose_custody_debit_reducer";
+import ProposeGuidelineChangeReducer from "./propose_guideline_change_reducer";
 import ProposeNoticeReducer from "./propose_notice_reducer";
 import ProposePaymentMatchReducer from "./propose_payment_match_reducer";
 import ProposePermissionChangeReducer from "./propose_permission_change_reducer";
@@ -54,6 +52,7 @@ import ProposeRestrictionWithBoundariesReducer from "./propose_restriction_with_
 import ProposeTierChangeReducer from "./propose_tier_change_reducer";
 import ProposeWorkItemReducer from "./propose_work_item_reducer";
 import RecordAgentRunReducer from "./record_agent_run_reducer";
+import RecordConsolePrecedentReducer from "./record_console_precedent_reducer";
 import RecordInvestigationReducer from "./record_investigation_reducer";
 import RecordPolicyOutcomeReducer from "./record_policy_outcome_reducer";
 import RecordSyncErrorReducer from "./record_sync_error_reducer";
@@ -65,6 +64,7 @@ import SetClockReducer from "./set_clock_reducer";
 import SetClockSpeedReducer from "./set_clock_speed_reducer";
 import SetDeadlineReducer from "./set_deadline_reducer";
 import SetPlatformReducer from "./set_platform_reducer";
+import SetStrategicReducer from "./set_strategic_reducer";
 import SetSyncStatusReducer from "./set_sync_status_reducer";
 import TieOutReducer from "./tie_out_reducer";
 import TransitionWorkItemReducer from "./transition_work_item_reducer";
@@ -725,9 +725,6 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
-  __reducerSchema("set_strategic", SetStrategicReducer),
-  __reducerSchema("record_console_precedent", RecordConsolePrecedentReducer),
-  __reducerSchema("propose_guideline_change", ProposeGuidelineChangeReducer),
   __reducerSchema("add_rm_note", AddRmNoteReducer),
   __reducerSchema("advance_clock", AdvanceClockReducer),
   __reducerSchema("assign_role", AssignRoleReducer),
@@ -736,6 +733,7 @@ const reducersSchema = __reducers(
   __reducerSchema("fail_gateway_command", FailGatewayCommandReducer),
   __reducerSchema("place_hold", PlaceHoldReducer),
   __reducerSchema("propose_custody_debit", ProposeCustodyDebitReducer),
+  __reducerSchema("propose_guideline_change", ProposeGuidelineChangeReducer),
   __reducerSchema("propose_notice", ProposeNoticeReducer),
   __reducerSchema("propose_payment_match", ProposePaymentMatchReducer),
   __reducerSchema("propose_permission_change", ProposePermissionChangeReducer),
@@ -745,6 +743,7 @@ const reducersSchema = __reducers(
   __reducerSchema("propose_tier_change", ProposeTierChangeReducer),
   __reducerSchema("propose_work_item", ProposeWorkItemReducer),
   __reducerSchema("record_agent_run", RecordAgentRunReducer),
+  __reducerSchema("record_console_precedent", RecordConsolePrecedentReducer),
   __reducerSchema("record_investigation", RecordInvestigationReducer),
   __reducerSchema("record_policy_outcome", RecordPolicyOutcomeReducer),
   __reducerSchema("record_sync_error", RecordSyncErrorReducer),
@@ -756,6 +755,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_clock_speed", SetClockSpeedReducer),
   __reducerSchema("set_deadline", SetDeadlineReducer),
   __reducerSchema("set_platform", SetPlatformReducer),
+  __reducerSchema("set_strategic", SetStrategicReducer),
   __reducerSchema("set_sync_status", SetSyncStatusReducer),
   __reducerSchema("tie_out", TieOutReducer),
   __reducerSchema("transition_work_item", TransitionWorkItemReducer),

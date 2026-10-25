@@ -6,9 +6,6 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
-import SetStrategicReducer from "../set_strategic_reducer";
-import RecordConsolePrecedentReducer from "../record_console_precedent_reducer";
-import ProposeGuidelineChangeReducer from "../propose_guideline_change_reducer";
 import AddRmNoteReducer from "../add_rm_note_reducer";
 import AdvanceClockReducer from "../advance_clock_reducer";
 import AssignRoleReducer from "../assign_role_reducer";
@@ -17,6 +14,7 @@ import CompleteGatewayCommandReducer from "../complete_gateway_command_reducer";
 import FailGatewayCommandReducer from "../fail_gateway_command_reducer";
 import PlaceHoldReducer from "../place_hold_reducer";
 import ProposeCustodyDebitReducer from "../propose_custody_debit_reducer";
+import ProposeGuidelineChangeReducer from "../propose_guideline_change_reducer";
 import ProposeNoticeReducer from "../propose_notice_reducer";
 import ProposePaymentMatchReducer from "../propose_payment_match_reducer";
 import ProposePermissionChangeReducer from "../propose_permission_change_reducer";
@@ -26,6 +24,7 @@ import ProposeRestrictionWithBoundariesReducer from "../propose_restriction_with
 import ProposeTierChangeReducer from "../propose_tier_change_reducer";
 import ProposeWorkItemReducer from "../propose_work_item_reducer";
 import RecordAgentRunReducer from "../record_agent_run_reducer";
+import RecordConsolePrecedentReducer from "../record_console_precedent_reducer";
 import RecordInvestigationReducer from "../record_investigation_reducer";
 import RecordPolicyOutcomeReducer from "../record_policy_outcome_reducer";
 import RecordSyncErrorReducer from "../record_sync_error_reducer";
@@ -37,6 +36,7 @@ import SetClockReducer from "../set_clock_reducer";
 import SetClockSpeedReducer from "../set_clock_speed_reducer";
 import SetDeadlineReducer from "../set_deadline_reducer";
 import SetPlatformReducer from "../set_platform_reducer";
+import SetStrategicReducer from "../set_strategic_reducer";
 import SetSyncStatusReducer from "../set_sync_status_reducer";
 import TieOutReducer from "../tie_out_reducer";
 import TransitionWorkItemReducer from "../transition_work_item_reducer";
@@ -64,9 +64,6 @@ import UpsertPositionReducer from "../upsert_position_reducer";
 import UpsertPrecedentReducer from "../upsert_precedent_reducer";
 import UpsertRawRecordReducer from "../upsert_raw_record_reducer";
 
-export type SetStrategicParams = __Infer<typeof SetStrategicReducer>;
-export type RecordConsolePrecedentParams = __Infer<typeof RecordConsolePrecedentReducer>;
-export type ProposeGuidelineChangeParams = __Infer<typeof ProposeGuidelineChangeReducer>;
 export type AddRmNoteParams = __Infer<typeof AddRmNoteReducer>;
 export type AdvanceClockParams = __Infer<typeof AdvanceClockReducer>;
 export type AssignRoleParams = __Infer<typeof AssignRoleReducer>;
@@ -75,6 +72,7 @@ export type CompleteGatewayCommandParams = __Infer<typeof CompleteGatewayCommand
 export type FailGatewayCommandParams = __Infer<typeof FailGatewayCommandReducer>;
 export type PlaceHoldParams = __Infer<typeof PlaceHoldReducer>;
 export type ProposeCustodyDebitParams = __Infer<typeof ProposeCustodyDebitReducer>;
+export type ProposeGuidelineChangeParams = __Infer<typeof ProposeGuidelineChangeReducer>;
 export type ProposeNoticeParams = __Infer<typeof ProposeNoticeReducer>;
 export type ProposePaymentMatchParams = __Infer<typeof ProposePaymentMatchReducer>;
 export type ProposePermissionChangeParams = __Infer<typeof ProposePermissionChangeReducer>;
@@ -84,6 +82,7 @@ export type ProposeRestrictionWithBoundariesParams = __Infer<typeof ProposeRestr
 export type ProposeTierChangeParams = __Infer<typeof ProposeTierChangeReducer>;
 export type ProposeWorkItemParams = __Infer<typeof ProposeWorkItemReducer>;
 export type RecordAgentRunParams = __Infer<typeof RecordAgentRunReducer>;
+export type RecordConsolePrecedentParams = __Infer<typeof RecordConsolePrecedentReducer>;
 export type RecordInvestigationParams = __Infer<typeof RecordInvestigationReducer>;
 export type RecordPolicyOutcomeParams = __Infer<typeof RecordPolicyOutcomeReducer>;
 export type RecordSyncErrorParams = __Infer<typeof RecordSyncErrorReducer>;
@@ -95,6 +94,7 @@ export type SetClockParams = __Infer<typeof SetClockReducer>;
 export type SetClockSpeedParams = __Infer<typeof SetClockSpeedReducer>;
 export type SetDeadlineParams = __Infer<typeof SetDeadlineReducer>;
 export type SetPlatformParams = __Infer<typeof SetPlatformReducer>;
+export type SetStrategicParams = __Infer<typeof SetStrategicReducer>;
 export type SetSyncStatusParams = __Infer<typeof SetSyncStatusReducer>;
 export type TieOutParams = __Infer<typeof TieOutReducer>;
 export type TransitionWorkItemParams = __Infer<typeof TransitionWorkItemReducer>;
