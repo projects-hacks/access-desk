@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Eye, Gauge, Inbox, Landmark, ScrollText, Users } from 'lucide-react';
 import { useTable } from 'spacetimedb/react';
 import { AgentsPanel } from './components/AgentsPanel';
@@ -38,6 +38,16 @@ export function App() {
   const [booting, setBooting] = useState(true);
   // "Open in approvals" from the agents panel: which client's request to open once the screen is up.
   const [focus, setFocus] = useState<Focus>();
+  // "Review" anywhere else (e.g. a client's side panel) asks for the same thing.
+  useEffect(() => {
+    const open = (e: Event) => {
+      const { clientId, workItemId } = (e as CustomEvent<{ clientId: string; workItemId?: bigint }>).detail;
+      setFocus({ clientId, workItemId, nonce: Date.now() });
+      setScreen('approvals');
+    };
+    window.addEventListener('neo:open-approval', open);
+    return () => window.removeEventListener('neo:open-approval', open);
+  }, []);
   // Docked beside the page on a wide screen; on a phone it starts as a pill so the page stays in view.
   const [agentsOpen, setAgentsOpen] = useState(() => window.matchMedia('(min-width: 900px)').matches);
   // Same count as the Approvals tab: open items the agent asked a person about.

@@ -7,6 +7,7 @@ import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
 import AddRmNoteReducer from "../add_rm_note_reducer";
+import AdjustReturnJournalsReducer from "../adjust_return_journals_reducer";
 import AdvanceClockReducer from "../advance_clock_reducer";
 import AssignRoleReducer from "../assign_role_reducer";
 import BindPortalReducer from "../bind_portal_reducer";
@@ -75,6 +76,7 @@ import UpsertPrecedentReducer from "../upsert_precedent_reducer";
 import UpsertRawRecordReducer from "../upsert_raw_record_reducer";
 
 export type AddRmNoteParams = __Infer<typeof AddRmNoteReducer>;
+export type AdjustReturnJournalsParams = __Infer<typeof AdjustReturnJournalsReducer>;
 export type AdvanceClockParams = __Infer<typeof AdvanceClockReducer>;
 export type AssignRoleParams = __Infer<typeof AssignRoleReducer>;
 export type BindPortalParams = __Infer<typeof BindPortalReducer>;

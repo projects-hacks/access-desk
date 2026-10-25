@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { FileText, SlidersHorizontal, StickyNote, Wallet, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, FileText, SlidersHorizontal, StickyNote, Wallet, type LucideIcon } from 'lucide-react';
 import { useReducer, useTable } from 'spacetimedb/react';
 import { shortDate, type ClientRow, type Lever } from '../lib/clients';
-import { label, money } from '../lib/format';
+import { label, money, openApproval, plainText, points } from '../lib/format';
 import { useSession } from '../lib/session';
 import { reducers, tables } from '../module_bindings';
 import { Avatar } from './Avatar';
@@ -112,10 +112,18 @@ function Overview({ row }: { row: ClientRow }) {
           <h4>Waiting on a person</h4>
           <ul className="list">
             {row.waiting.map((w) => (
-              <li key={String(w.id)} className="stack">
-                <strong>{w.title}</strong>
-                <span className="muted">{w.reasoning}</span>
-                <span className="eyebrow">Review it in Approvals</span>
+              <li key={String(w.id)} className="waiting-item">
+                <div className="stack">
+                  <strong>{plainText(w.title)}</strong>
+                  {w.reasoning && (
+                    <ul className="why-list compact">
+                      {points(w.reasoning).slice(0, 3).map((p, i) => <li key={i}>{plainText(p)}</li>)}
+                    </ul>
+                  )}
+                </div>
+                <button className="btn" onClick={() => openApproval(row.client.id, w.id)}>
+                  Review <ArrowUpRight size={13} aria-hidden />
+                </button>
               </li>
             ))}
           </ul>

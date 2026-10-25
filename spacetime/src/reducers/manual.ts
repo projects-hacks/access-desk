@@ -7,9 +7,9 @@ import { spacetimedb } from '../schema';
 import { executeApproved } from './actions';
 
 /**
- * A controller moves a client to another tier from the console. Same CREDIT_REVIEW
- * path as the credit agent: it applies at once, except for top clients (Tier 1 or
- * strategic), which wait for a second controller (no self-approval).
+ * A controller moves a client to another tier from the console. Same CREDIT_REVIEW path as the
+ * credit agent, but the controller is the person in the loop, so it applies at once; what would
+ * have made an agent's change wait (a top client) is noted in the audit row.
  */
 export const proposeTierChange = spacetimedb.reducer(
   { clientId: t.string(), toTier: t.u8(), reasoning: t.string() },
@@ -23,7 +23,7 @@ export const proposeTierChange = spacetimedb.reducer(
 
     const proposal = { action: 'tier_change', from_tier: c.tier, to_tier: toTier, decided_by: 'controller' };
     const reason = needsHuman({ kind: 'CREDIT_REVIEW', tier: c.tier, strategic: c.strategic, confidence: 1, proposal });
-    const auto = reason === undefined;
+    const auto = true;
     const title = `Move ${c.name} from tier ${c.tier} to tier ${toTier}`;
     const item = ctx.db.workItem.insert({
       id: 0n, kind: 'CREDIT_REVIEW', clientId, subjectId: clientId, state: auto ? 'APPROVED' : 'PROPOSED', title,
@@ -33,7 +33,7 @@ export const proposeTierChange = spacetimedb.reducer(
     });
     audit(ctx, {
       action: auto ? 'AUTO_APPLIED' : 'PROPOSE', subjectType: 'work_item', subjectId: String(item.id), clientId, workItemId: item.id,
-      fromState: 'NEW', toState: item.state, detail: `${title} · ${auto ? 'applied' : `needs a second controller: ${reason}`}`,
+      fromState: 'NEW', toState: item.state, detail: `${title} · applied by the controller${reason ? ` (${reason})` : ''}`,
       policyRef: 'manual',
     });
     if (auto) executeApproved(ctx, item.id);
@@ -44,8 +44,8 @@ const PermissionChange = t.object('PermissionChange', { key: t.string(), enabled
 
 /**
  * A controller switches fine-grained permissions (buy, sell, crypto withdrawals...) from the
- * console. It applies at once, except for top clients (Tier 1 or strategic) and offboarding
- * (every permission off), which wait for a second controller.
+ * console. The controller is the person in the loop, so it applies at once; what would have made
+ * an agent's change wait (a top client, offboarding) is noted in the audit row.
  */
 export const proposePermissionChange = spacetimedb.reducer(
   { clientId: t.string(), changes: t.array(PermissionChange), reasoning: t.string() },
@@ -72,7 +72,7 @@ export const proposePermissionChange = spacetimedb.reducer(
     };
     const offboards = PERMISSIONS.filter((p) => levers.has(p.lever)).every((p) => !after(p.key));
     const reason = permissionNeedsHuman({ topClient: isTopClient(c.tier, c.strategic), offboards, changes });
-    const auto = reason === undefined;
+    const auto = true;
     const name = (k: string) => PERMISSIONS.find((p) => p.key === k)!.name;
     const title = `${c.name}: ${changes.map((ch) => `${name(ch.key)} ${ch.enabled ? 'on' : 'off'}`).join(', ')}`;
     const item = ctx.db.workItem.insert({
@@ -83,7 +83,7 @@ export const proposePermissionChange = spacetimedb.reducer(
     });
     audit(ctx, {
       action: auto ? 'AUTO_APPLIED' : 'PROPOSE', subjectType: 'work_item', subjectId: String(item.id), clientId, workItemId: item.id,
-      fromState: 'NEW', toState: item.state, detail: `${title} · ${auto ? 'applied' : `needs a second controller: ${reason}`}`,
+      fromState: 'NEW', toState: item.state, detail: `${title} · applied by the controller${reason ? ` (${reason})` : ''}`,
       policyRef: 'manual',
     });
     if (auto) executeApproved(ctx, item.id);

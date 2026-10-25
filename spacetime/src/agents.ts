@@ -200,6 +200,8 @@ const capitalize = (s: string) => (s ? `${s[0]!.toUpperCase()}${s.slice(1)}` : s
 export function humanize(ctx: Ctx, s: string, sentence = true): string {
   const out = s
     .replace(/^\s*pol-\d{3}(?::ORG-\d+)?(?:@\d+)?:\s*/, '')
+    // In a sentence, "(pol-007 sends it)" is an aside for the auditor, not the reader.
+    .replace(sentence ? /\s*\([^()]*\bpol-\d{3}[^()]*\)/g : /$^/g, '')
     .replace(/\bpol-\d{3}(?::ORG-\d+)?(?:@\d+)?/g, policyLabel)
     .replace(/\bORG-\d+\b/g, (id) => ctx.db.client.id.find(id)?.name ?? 'the client')
     .replace(/\b(\d{4}-\d{2}-\d{2})\b/g, dateLabel)

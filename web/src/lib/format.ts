@@ -104,3 +104,8 @@ export function points(text: string): string[] {
     .filter(Boolean)
     .map((p) => `${p.charAt(0).toUpperCase()}${p.slice(1)}.`);
 }
+
+/** Asks the console to open one request in Approvals (the app listens; any screen can ask). */
+export function openApproval(clientId: string, workItemId?: bigint) {
+  window.dispatchEvent(new CustomEvent('neo:open-approval', { detail: { clientId, workItemId } }));
+}

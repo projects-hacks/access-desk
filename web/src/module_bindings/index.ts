@@ -35,6 +35,7 @@ import {
 
 // Import all reducer arg schemas
 import AddRmNoteReducer from "./add_rm_note_reducer";
+import AdjustReturnJournalsReducer from "./adjust_return_journals_reducer";
 import AdvanceClockReducer from "./advance_clock_reducer";
 import AssignRoleReducer from "./assign_role_reducer";
 import BindPortalReducer from "./bind_portal_reducer";
@@ -888,6 +889,7 @@ const tablesSchema = __schema({
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
   __reducerSchema("add_rm_note", AddRmNoteReducer),
+  __reducerSchema("adjust_return_journals", AdjustReturnJournalsReducer),
   __reducerSchema("advance_clock", AdvanceClockReducer),
   __reducerSchema("assign_role", AssignRoleReducer),
   __reducerSchema("bind_portal", BindPortalReducer),

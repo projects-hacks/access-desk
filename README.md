@@ -1,44 +1,151 @@
-# Access Desk
+# Neo
 
-Autonomous credit and access desk for a multi-product financial platform. It reads the platform's systems of record, matches cash, decides what needs a person, and writes back only through one gateway, with every step logged.
+Neo runs the credit and access desk of a crypto platform. When a client pays, pays late, pays in part or stops paying, Neo works out what is owed, collects it, restricts access only as far as the contract allows, and gives access back the moment the client is current. Four agents do the work. The database enforces the rules. A person decides only what should not be left to software.
 
+Built for Cal Hacks 13.0 on a fictional platform, Northstar Prime, with 30 institutional clients and real money movements through Capital One's Nessie sandbox bank.
+
+## What it does
+
+- **Matches every payment.** Wires, ACH, USDC and partial payments are matched to invoices, including payments sent by an affiliate, short international wires, duplicates and returns.
+- **Collects what is overdue.** It debits custody where the contract allows, sends notices, and runs cure periods by the contract's dates.
+- **Restricts carefully.** One access setting, one step at a time, never more than is owed, never before the cure period ends, and never close-only on a hedged book.
+- **Restores automatically.** When the client pays, holds are released and access returns in the same transaction.
+- **Spots clients gaming the terms.** For example, paying only the day before a restriction, or using small partial payments to reset the clock.
+- **Learns.** Every decision a person makes becomes a precedent the agents read. Every policy the agents propose carries its own success test, checked against real payments.
+- **Asks a person only when it should.** Restricting a top client, offboarding, changing policy, or when the agent is not confident.
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph world["Real world"]
+        bank["Nessie bank<br/>(Capital One)"]
+        platform["Northstar Prime<br/>billing, custody, trading"]
+        prices["Live prices<br/>(Coinbase)"]
+        clients["Clients"]
+    end
+
+    subgraph azure["Microsoft Azure"]
+        server["Sync and gateway"]
+        subgraph agents["Agents (Factory Droid)"]
+            iris["Iris<br/>Learning"]
+            quinn["Quinn<br/>Scoring"]
+            rowan["Rowan<br/>ExploitWatch"]
+            sage["Sage<br/>Access"]
+        end
+    end
+
+    subgraph stdb["SpacetimeDB"]
+        rules["Rules in every transaction"]
+        queue["Agent task queue"]
+        push["Live updates"]
+    end
+
+    subgraph people["People"]
+        console["Controller console"]
+        portal["Client view"]
+    end
+
+    bank -->|payments| server
+    platform --> server
+    prices --> server
+    clients --> portal
+    server -->|records| rules
+    rules --> queue
+    queue -->|wakes| agents
+    agents -->|propose| rules
+    rules -->|approved actions| server
+    server -->|writes| bank
+    server -->|writes| platform
+    push --> console
+    push --> portal
+    console -.->|approve or reject| rules
+
+    classDef worldStyle fill:#fff4e5,stroke:#e0b36a,color:#5c3b00
+    classDef stdbStyle fill:#eef3ff,stroke:#7da2ff,color:#0b2a6b
+    classDef agentStyle fill:#f3efff,stroke:#a690f0,color:#2e1f6b
+    classDef serverStyle fill:#e9f6ff,stroke:#62a8e0,color:#0b3a5c
+    classDef peopleStyle fill:#e9f8ef,stroke:#6cc293,color:#0d4a2a
+    class bank,platform,prices,clients worldStyle
+    class rules,queue,push stdbStyle
+    class iris,quinn,rowan,sage agentStyle
+    class server serverStyle
+    class console,portal peopleStyle
 ```
-spacetime/   SpacetimeDB module: tables, payment checking, state machine, roles, gateway outbox, tie-out, audit
-server/      sync, gateway, simulated platform (billing, GL, admin, custody), Nessie bank, demo endpoints
-agents/      four agents (Learning, Scoring, ExploitWatch, Access), woken by tasks the database queues
-web/         React + Vite
-```
 
-## Run
+1. A payment lands at the bank. Sync records it in SpacetimeDB.
+2. In one transaction the database matches it, applies it, releases holds if the client is now current, writes the audit row, and queues a task for each agent that should look.
+3. The task is pushed to the agents. No polling, no orchestrator.
+4. The agent decides and proposes through a reducer. The reducer checks the contract and policy: the action goes through, is refused and logged, or waits for a person.
+5. The gateway carries approved actions to the bank and the platform. It is the only writer to systems of record.
+6. Every screen updates live.
 
-Node 22+, pnpm, `spacetime` CLI (schema changes only).
+## The agents
+
+| Agent | Job | Woken by |
+|---|---|---|
+| Iris, Learning | Keeps each client's credit profile current and checks the client's own policies against new payments | New client, payment, dispute, a person's rejection, each business day |
+| Quinn, Scoring | Turns the profile into a tier and proposes tier changes or client policies | Iris moving a profile, a client policy failing |
+| Rowan, ExploitWatch | Finds clients gaming the payment terms | Payment, return, dispute, deadline, withdrawal |
+| Sage, Access | Collects, holds, restricts and restores, one step at a time | Payment, return, deadline, RM note, tier change, exploit flag, each business day |
+
+Each agent handles one client per task, several clients in parallel. Decisions that need judgment go to Factory's Droid. Routine cases run on rules in milliseconds.
+
+## Guardrails live in the database
+
+Agents act through the same reducers as people, so their proposals face the same checks inside the transaction: contract clauses, the platform's capabilities, policy, the amount owed, cure periods, hedged positions, and who may approve what. A refused action is recorded and shown with what the agent did instead. Nobody approves their own proposal, and only the gateway writes to the bank and the platform.
+
+## The platform runs on its own
+
+The hosted server keeps Northstar Prime alive. A business day passes every 15 minutes. Billing issues invoices each month. Clients behave like themselves: most pay on time, some pay late or in part, one games the terms, a few are chronically late, and now and then a wire is short, duplicated or returned. Clients also withdraw and trade at live prices. Everything goes through the real paths, so you can step in at any moment, approve, reject, pay or trade, and the desk carries on from there. See [world](docs/world.md).
+
+## Built with
+
+| | Used for |
+|---|---|
+| [SpacetimeDB](https://spacetimedb.com) | The shared state: reducers hold the rules, the task queue wakes the agents, subscriptions push every change, a scheduled reducer runs the business clock. [Why SpacetimeDB](docs/spacetimedb.md) |
+| [Factory Droid](https://factory.ai) | The agents' reasoning |
+| [Capital One Nessie](http://api.nessieisreal.com) | Bank accounts, wires, ACH, refunds and withdrawals |
+| [Microsoft Azure](https://azure.microsoft.com/products/container-apps) | Container Apps for the API server and the agents, deployed by GitHub Actions |
+| React and Vite | The controller console and the client view, on Vercel |
+
+## Run it
+
+Node 22+, pnpm, and the `spacetime` CLI for schema changes.
 
 ```bash
 pnpm install
-cp .env.example .env     # shared Maincloud database + hosted API (ask for the values)
-pnpm dev                 # web :5173, talking to the hosted API
+cp .env.example .env     # the shared database and hosted API (ask the team for values)
+pnpm dev                 # the console on :5173, talking to the hosted API and database
 ```
 
-The API server (sync, gateway, simulated platform, live prices, demo endpoints) and the agents (Learning, Scoring, ExploitWatch, Access, deciding through Factory's Droid; [how they are woken](docs/agents.md)) each run once, on Azure Container Apps, because it is the only writer to the shared database. Every push to `main` is checked (typecheck, tests) and, if green, built and deployed there by CI. Don't run a second server against the shared database: `pnpm dev` starts only the web app, the server refuses to start unless `SERVER_HOST=true` (`pnpm dev:server`), and the agents unless `AGENTS_HOST=true` (`pnpm agents:try <agent> <client>` shows what one would do, without writing).
+The API server and the agents run once, on Azure, because they write to the shared database. The server refuses to start locally unless `SERVER_HOST=true`, and the agents unless `AGENTS_HOST=true`. To see what one agent would do for one client, without writing anything:
 
-## Commands
+```bash
+pnpm agents:try access ORG-90355
+```
+
+Every push to `main` is typechecked and tested, then built and deployed by CI.
 
 | Command | |
 |---|---|
-| `pnpm demo:reset` | Bank, database and the hosted server back to Tue 2026-03-03 |
-| `pnpm demo:rebuild` | After a schema change: republish with a data reset, roles, restart the hosted server |
-| `pnpm host:restart` | Restart the hosted server (needs `az` access) |
-| `pnpm actions:verify` | Every agent action end to end, executed by the hosted gateway |
-| `pnpm sync` | One local sync pass with its own gateway: only when no hosted server uses the database |
-| `pnpm sync:verify` · `payments:verify` · `ledger:verify` · `tieout:verify` | Check the database against sources and the answer key |
-| `pnpm bank show [ORG-xxxxx]` · `bank settle WI-5531` · `bank reset` | Nessie |
-| `pnpm seed:nessie [--apply]` | Seed the bank (dry run by default) |
-| `pnpm stdb:publish` · `stdb:generate` · `stdb:roles` | Module and bindings |
-| `pnpm credit:verify` · `credit:fixture` | Seat 1 output against the answer key · rebuild its test fixture |
 | `pnpm typecheck` · `pnpm test` | Checks |
+| `pnpm stdb:publish` · `pnpm stdb:generate` | Publish the module, regenerate bindings |
+| `pnpm demo:reset` | Bank, database and hosted server back to the first morning |
+| `pnpm agents:try <agent> <client>` | One agent on one client, no writes |
+| `pnpm --filter @access-desk/server world:plan` | The next events the platform would produce, no writes |
+| `pnpm sync:verify` · `payments:verify` · `ledger:verify` · `tieout:verify` | Check the database against its sources |
 
-The hosted server exposes `POST /demo/inject`, `/demo/settle`, `/demo/pay`, `/demo/advance`, `/demo/clock`, `/demo/withdraw`, `/demo/reset` (header `x-demo-key`) and `GET /demo/state`.
+## Repository
+
+```
+spacetime/   SpacetimeDB module: tables, reducers, guardrails, task queue, audit
+server/      sync, gateway, simulated platform, Nessie bank, the living platform
+agents/      the four agents and their dispatcher
+web/         controller console and client view
+docs/        how each part works
+```
 
 ## Docs
 
-[database](docs/database.md) · [schema](docs/schema.md) · [sync](docs/sync.md) · [payment checking](docs/payments.md) · [agent actions](docs/actions.md) · [gateway, ledger, tie-out](docs/books.md) · [history](docs/history.md) · [bank (Nessie)](docs/bank.md) · [credit analyst](docs/credit.md) · [exploit watch](docs/exploits.md) · [choosing the LLM](docs/llm.md) · [why SpacetimeDB](docs/spacetimedb.md)
+[agents](docs/agents.md) · [why SpacetimeDB](docs/spacetimedb.md) · [the living platform](docs/world.md) · [payment checking](docs/payments.md) · [agent actions](docs/actions.md) · [credit](docs/credit.md) · [exploits](docs/exploits.md) · [gateway, ledger, tie-out](docs/books.md) · [bank](docs/bank.md) · [sync](docs/sync.md) · [schema](docs/schema.md) · [database](docs/database.md) · [model choice](docs/llm.md)

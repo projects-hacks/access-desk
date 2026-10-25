@@ -174,7 +174,11 @@ export function useAgents(): AgentsView {
     );
     const lastArrival = (list: EpisodeStep[]) => Math.max(0, ...list.map((s) => arrivals.get(s.id) ?? 0));
 
+    // The panel is about the agents: an episode shows once an agent has a step in it, or while an
+    // agent is working on it. Everything else (a withdrawal the platform paid out, say) is in the Audit log.
+    const withAgent = (id: bigint) => busy.has(id) || (stepsBy.get(id) ?? []).some((s) => isAgent(s.actor));
     const views = [...episodes]
+      .filter((e) => withAgent(e.id))
       .sort((a, b) => (a.id < b.id ? 1 : -1))
       .map((raw): EpisodeView & { settling: boolean } => {
         const episode = { ...raw, trigger: tidy(raw.trigger, names), outcome: raw.outcome ? tidy(raw.outcome, names) : '' };

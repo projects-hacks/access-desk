@@ -7,7 +7,7 @@ export * from './reducers/world';
 export * from './reducers/sync';
 export * from './reducers/work';
 export { proposeCustodyDebit, proposeRestriction, proposeRestrictionWithBoundaries, proposeRestore, proposeNotice, requestCustodyWithdrawal, setDeadline } from './reducers/actions';
-export { placeHold } from './reducers/payments';
+export { adjustReturnJournals, placeHold } from './reducers/payments';
 export * from './reducers/gateway';
 export * from './reducers/books';
 export { upsertPolicy } from './reducers/policies';

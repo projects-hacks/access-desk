@@ -275,6 +275,34 @@ function ourAppliedCash(ctx: Ctx, movementId: string): bigint {
     .reduce((s, a) => s + a.amountCents, 0n);
 }
 
+/**
+ * Adjusting entries for returns booked before the return fix: each return of cash we had applied
+ * ourselves debited receivables a second time, leaving the same amount stranded in unapplied cash.
+ * Owner only; idempotent by journal id, so running it again books nothing.
+ */
+export const adjustReturnJournals = spacetimedb.reducer({}, (ctx) => {
+  requireRole(ctx, ['ADMIN']);
+  for (const m of [...ctx.db.cashMovement.iter()]) {
+    if (m.direction !== 'out' || !m.reverses || m.isHistory) continue;
+    const original = [...ctx.db.cashMovement.bankRef.filter(m.reverses)][0];
+    if (!original) continue;
+    const ours = [...ctx.db.paymentApplication.movementId.filter(original.id)]
+      .filter((a) => a.reversed && a.method !== 'prior' && a.method !== 'write_off')
+      .reduce((s, a) => s + a.amountCents, 0n);
+    const doubled = [...ctx.db.ledgerEntry.journalId.filter(`JE-R-${m.bankRef}`)]
+      .filter((l) => l.accountCode === GL.RECEIVABLES)
+      .reduce((s, l) => s + l.debitCents, 0n);
+    const amount = ours < doubled ? ours : doubled;
+    if (amount <= 0n) continue;
+    queueJournal(ctx, `JE-ADJ-${m.bankRef}`, simDate(ctx), m.bankRef, `Adjusting entry: return of ${original.bankRef} was booked to receivables twice`,
+      [dr(GL.UNAPPLIED_CASH, amount), cr(GL.RECEIVABLES, amount)]);
+    audit(ctx, {
+      action: 'ADJUSTING_ENTRY', subjectType: 'journal', subjectId: `JE-ADJ-${m.bankRef}`,
+      detail: `${formatUsd(amount)} moved from receivables out of unapplied cash: ${original.bankRef} return was counted twice`,
+    });
+  }
+});
+
 /** The approved withdrawal a wire out pays, if its CW reference, amount and client agree. */
 function withdrawalFor(ctx: Ctx, m: Movement) {
   const ref = m.refs.find((r) => r.startsWith('CW-'));
