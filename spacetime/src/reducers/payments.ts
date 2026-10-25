@@ -107,13 +107,15 @@ function onIncoming(ctx: Ctx, m: Movement, previous: Movement | undefined) {
   if (result.kind === 'duplicate') {
     setMatchStatus(ctx, m.id, 'exception');
     ctx.db.clientCredit.insert({ id: 0n, clientId: payer.clientId, kind: 'unapplied_cash', amountCents: m.amountCents, movementId: m.id });
-    createWorkItem(ctx, {
-      kind: 'DUPLICATE_PAYMENT', clientId: payer.clientId, subjectId: m.id, amountCents: m.amountCents,
-      title: `Duplicate ${formatUsd(m.amountCents)} for ${result.invoiceIds.join(', ')} kept as credit`,
-      proposal: { movementId: m.id, invoices: result.invoiceIds },
-      reasoning: 'Every quoted invoice was already paid by an earlier wire with the same amount. The cash is kept as credit on the account and applies to the next invoices; the client can ask for it back.',
+    // Sent straight back through the bank: the refund wire clears the credit when it comes back through the feed.
+    const refund = createWorkItem(ctx, {
+      kind: 'REFUND', clientId: payer.clientId, subjectId: m.id, amountCents: m.amountCents,
+      title: `Duplicate ${formatUsd(m.amountCents)} for ${result.invoiceIds.join(', ')} refunded`,
+      proposal: { movementId: m.id, invoices: result.invoiceIds, refundCents: m.amountCents },
+      reasoning: 'Every quoted invoice was already paid by an earlier wire with the same amount, so the second wire is sent back to the account it came from.',
       policyRef: 'pol-013', confidence: 0.9, requiredRole: 'CONTROLLER', autoApplied: true,
     });
+    onPaymentApproved(ctx, refund.id);
     return;
   }
   if (result.kind === 'none') {
@@ -239,7 +241,7 @@ function onOutgoing(ctx: Ctx, m: Movement) {
   } else {
     setMatchStatus(ctx, m.id, 'exception');
     createWorkItem(ctx, {
-      kind: 'UNIDENTIFIED_CASH', clientId: '', subjectId: m.id, amountCents: m.amountCents,
+      kind: 'UNEXPLAINED_OUTFLOW', clientId: '', subjectId: m.id, amountCents: m.amountCents,
       title: `Unexplained ${formatUsd(m.amountCents)} leaving ${m.platformAccount}`,
       proposal: { movementId: m.id }, reasoning: 'Money left a platform account with no matching instruction. Logged for the books.',
       policyRef: '', confidence: 0, requiredRole: 'CONTROLLER', autoApplied: true,

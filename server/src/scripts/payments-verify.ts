@@ -66,8 +66,11 @@ check(quillon?.status === 'open' && quillon.paidCents === 0n, 'Quillon: ACH auto
 check(items('ORG-90689', 'PAYMENT_REVERSAL').length === 1, 'Quillon: reversal recorded as a work item');
 const dupRefs = ds.movements.filter((m) => m.caseId === 'duplicate-wire').map((m) => m.id).sort();
 const dup = cash(dupRefs[1]!);
-check(allPaid(invoices('ORG-90391', '2026-01')) && items('ORG-90391', 'DUPLICATE_PAYMENT').some((w) => w.autoApplied), 'Granite Bay: second wire flagged as a duplicate and kept as credit, no approval');
-check(dup?.matchStatus === 'exception' && credits('ORG-90391', 'unapplied_cash') === 5_800_000n, 'Granite Bay: duplicate held as unapplied cash');
+check(allPaid(invoices('ORG-90391', '2026-01')) && items('ORG-90391', 'REFUND').some((w) => w.autoApplied), 'Granite Bay: second wire caught as a duplicate and refunded, no approval');
+// Once the gateway has wired the refund and the bank feed shows it, the credit is gone and the original reads refunded.
+const refunded = dup?.matchStatus === 'refunded' && credits('ORG-90391', 'unapplied_cash') === 0n;
+const pending = dup?.matchStatus === 'exception' && credits('ORG-90391', 'unapplied_cash') === 5_800_000n;
+check(refunded || pending, `Granite Bay: duplicate ${refunded ? 'refunded through Nessie' : 'held until the refund wire posts'}`);
 check(cash(ref('in-transit'))?.matchStatus === 'in_transit' && invoices('ORG-90463', '2026-01').every((i) => i.status === 'open'),
   'Ivory Lane: wire in transit, invoices untouched');
 const harbor = items('ORG-90378', 'PAYMENT_MATCH')[0];

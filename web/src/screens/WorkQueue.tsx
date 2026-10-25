@@ -1,6 +1,8 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { useReducer, useTable } from 'spacetimedb/react';
+import { Avatar } from '../components/Avatar';
 import { Badge, StateBadge } from '../components/Badge';
+import { KindIcon } from '../components/KindIcon';
 import { SlidingPill } from '../components/SlidingPill';
 import { CollapseButton, useSlideClose } from '../components/useSlideClose';
 import { LeverChips, stateAfter, useLevers } from '../components/LeverChips';
@@ -142,23 +144,29 @@ export function WorkQueue() {
                     onClick={() => setOpenId(w.id)}
                   >
                     <td>
-                      <div className="title">{c?.name ?? noClient(w.kind)}</div>
-                      <div className="eyebrow">
-                        {c ? (
-                          <>
-                            {c.segment} · <span className="mono">{c.id}</span>
-                          </>
-                        ) : w.kind === 'POLICY_DRAFT' ? (
-                          'Guideline change'
-                        ) : (
-                          label(w.kind)
-                        )}
+                      <div className="client-cell">
+                        {c && <Avatar id={c.id} name={c.name} />}
+                        <div>
+                          <div className="title">{c?.name ?? noClient(w.kind)}</div>
+                          <div className="eyebrow">
+                            {c ? (
+                              <>
+                                {c.segment} · <span className="mono">{c.id}</span>
+                              </>
+                            ) : w.kind === 'POLICY_DRAFT' ? (
+                              'Guideline change'
+                            ) : (
+                              label(w.kind)
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="muted">{c ? `T${c.tier}` : '—'}</td>
                     <td className="ask">
                       {w.title}
-                      <div className="eyebrow">
+                      <div className="eyebrow kind-line">
+                        <KindIcon kind={w.kind} />
                         Agent {Math.round(w.confidence * 100)}% sure · {label(w.kind)}
                       </div>
                     </td>
