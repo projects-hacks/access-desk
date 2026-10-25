@@ -7,6 +7,7 @@ import { AGENTS, clock, EARLIER_LIMIT, isAgent, offset, sameNews, useAgents, wit
 import type { EpisodeStep } from '../module_bindings/types';
 import { Hint } from './Hint';
 import { simDay } from '../lib/format';
+import { useSession } from '../lib/session';
 
 type Actor = { name: string; role?: string; about: string; icon: LucideIcon; hue: number; low?: boolean; ink?: boolean };
 
@@ -245,6 +246,7 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
   open: boolean; onToggle: () => void; onOpenApprovals: (need: Need) => void; onOpenAudit: () => void;
 }) {
   const { roster, needs, now, today, earlier, total, before, beforeDay, working, isFresh } = useAgents();
+  const { connected } = useSession();
   const [expanded, setExpanded] = useState<Set<bigint>>(new Set());
   const toggle = (id: bigint) =>
     setExpanded((s) => {
@@ -255,10 +257,15 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
 
   if (!open) {
     return (
-      <button className="ap-pill" onClick={onToggle} aria-label="Open agents panel">
-        <span className="ap-pulse" />
-        <span>{roster.length} agents · {working ? 'working' : 'live'}</span>
-        {needs.length > 0 && <span className="ap-count">{needs.length}</span>}
+      <button
+        className="ap-pill"
+        onClick={onToggle}
+        aria-label={`Open agents at work: ${connected ? (working ? 'working' : 'connected') : 'disconnected'}${needs.length ? `, ${needs.length} need a person` : ''}`}
+        title={`Agents at work · ${connected ? (working ? 'working now' : 'connected') : 'disconnected'}`}
+      >
+        <Sparkles size={22} aria-hidden />
+        <span className={`ap-status ${!connected ? 'off' : working ? 'busy' : 'on'}`} />
+        {needs.length > 0 && <span className="ap-badge-count">{needs.length > 9 ? '9+' : needs.length}</span>}
       </button>
     );
   }
