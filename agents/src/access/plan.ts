@@ -1,8 +1,8 @@
 import { agreedLevers, notePending, rmReply, unappliedCash } from './cases';
 import { cutoffComparison } from './comparison';
-import { addDays, capitalize, listed, usd, usdShort } from './format';
+import { addDays, bullets, capitalize, day, firstPoint, listed, plural, sentence, usd, usdShort } from './format';
 import {
-  EXECUTED_KINDS, LEVER_PRODUCT, LEVER_WORDS, OPEN, OUR_KINDS, PROPOSAL_WORDS, STEP_SHORT, STEP_WORDS, allowed, cite, clause, defaultedInvoices, graceDays, hedged, ids,
+  EXECUTED_KINDS, LEVER_PRODUCT, LEVER_WORDS, OPEN, OUR_KINDS, PRODUCT_WORDS, PROPOSAL_WORDS, STEP_ING, STEP_SHORT, STEP_WORDS, allowed, cite, clause, defaultedInvoices, graceDays, hedged, ids,
   latestDeadline, overdueInvoices, owed, proposalOf, rejectedSince, usdCash,
 } from './helpers';
 import type { CapabilityRow, ClientView, InvoiceRow, LeverRow, Move, NoticeMove, Plan, Wait, World } from './model';
@@ -62,7 +62,11 @@ export function nextMove(v: ClientView, world: World, ladder: Record<string, str
     const grace = graceDays(v);
     return {
       code: 'grace_period',
-      reason: `${usd(owed(overdue))} overdue on ${ids(overdue)} but inside the ${grace}-day grace period (in default from ${addDays(overdue[0]!.dueOn, grace + 1)}). ${noDebit(v, holdOff, debitRejected)}`,
+      reason: bullets([
+        `${usdShort(owed(overdue))} overdue on ${plural(overdue.length, 'invoice')}, still inside the ${grace}-day grace period.`,
+        `Default starts ${day(addDays(overdue[0]!.dueOn, grace + 1))}.`,
+        noDebit(v, holdOff, debitRejected),
+      ]),
     };
   }
   if (holdOff) return holdOff;
@@ -71,14 +75,30 @@ export function nextMove(v: ClientView, world: World, ladder: Record<string, str
   const cure = latestDeadline(v, 'cure_period');
   if (cureBlocks(v)) {
     if (cure?.status === 'open') {
-      return { code: 'cure_period', reason: `${usd(owed(defaulted))} in default, but the cure period${cite(v, 'cure')} runs until ${cure.dueOn} after the default notice of ${cure.startedOn}; restricting before then breaches the contract.` };
+      return {
+        code: 'cure_period',
+        reason: bullets([
+          `${usdShort(owed(defaulted))} in default, but the cure period runs until ${day(cure.dueOn)}.`,
+          `The default notice went out ${day(cure.startedOn)}.`,
+          'Restricting before then would breach the contract.',
+        ]),
+      };
     }
-    return { code: 'awaiting_default_notice', reason: `${usd(owed(defaulted))} in default on ${ids(defaulted)}; no default notice has gone out yet, so the cure period${cite(v, 'cure')} has not started (pol-007 sends it).` };
+    return {
+      code: 'awaiting_default_notice',
+      reason: bullets([
+        `${usdShort(owed(defaulted))} in default on ${plural(defaulted.length, 'invoice')}.`,
+        'No default notice has gone out yet, so the cure period has not started.',
+        'Sending the notice starts it.',
+      ]),
+    };
   }
   const rejected = rejectedSince(v, episode, 'RESTRICTION');
   if (rejected) {
-    const why = rejected.detail ? `: “${rejected.detail}”` : '';
-    return { code: 'controller_rejected', reason: `A controller rejected a restriction on ${rejected.simDate}${why}. Not escalating again until the client cures.` };
+    return {
+      code: 'controller_rejected',
+      reason: bullets([`A controller rejected a restriction on ${day(rejected.simDate)}.`, rejected.detail && `They said “${rejected.detail}”.`, 'Not escalating again until the client cures.']),
+    };
   }
   return restriction(v, today, ladder, escalationDays, world, agreedLevers(v, episode));
 }
@@ -88,14 +108,20 @@ function openWork(v: ClientView, world: World): Wait | undefined {
   for (const w of [...v.workItems].sort((a, b) => a.id - b.id)) {
     if (!OUR_KINDS.has(w.kind)) continue;
     if (OPEN.has(w.state)) {
-      return { code: 'pending_decision', reason: `${w.kind.replace(/_/g, ' ').toLowerCase()} WI-${w.id} is waiting for a ${w.requiredRole.toLowerCase()}: ${w.title}.` };
+      return {
+        code: 'pending_decision',
+        reason: bullets([`A ${w.kind.replace(/_/g, ' ').toLowerCase()} (WI-${w.id}) is waiting for a ${w.requiredRole.toLowerCase()}.`, sentence(w.title), 'Nothing new until it is decided.']),
+      };
     }
     if (w.state === 'APPROVED' && EXECUTED_KINDS.has(w.kind)) {
       const error = world.failedCommands.get(w.id);
       if (error !== undefined) {
-        return { code: 'gateway_failed', reason: `WI-${w.id} (${w.title}) was approved but the gateway could not execute it${error ? `: ${error}` : ''}. A person needs to retry or cancel it.` };
+        return {
+          code: 'gateway_failed',
+          reason: bullets([`WI-${w.id} was approved but the gateway could not execute it.`, sentence(w.title), error && `The gateway said: ${sentence(error)}`, 'A person needs to retry or cancel it.']),
+        };
       }
-      return { code: 'pending_decision', reason: `WI-${w.id} (${w.title}) is approved and executing through the gateway.` };
+      return { code: 'pending_decision', reason: bullets([`WI-${w.id} is approved and executing through the gateway.`, sentence(w.title)]) };
     }
   }
   return undefined;
@@ -104,25 +130,28 @@ function openWork(v: ClientView, world: World): Wait | undefined {
 /** Money or a promise on the way: don't collect or restrict. */
 function waiting(v: ClientView, today: string, escalationDays: number): Wait | undefined {
   const m = v.inTransit[0];
-  if (m) return { code: 'payment_in_transit', reason: `${usd(m.amountCents)} ${m.rail} ${m.bankRef} from ${m.origName} was sent ${m.valueOn} and has not posted; acting only on posted funds.` };
+  if (m) return { code: 'payment_in_transit', reason: bullets([`${usdShort(m.amountCents)} ${m.rail} ${m.bankRef} from ${m.origName} was sent ${day(m.valueOn)} and has not posted.`, 'Acting only on posted funds.']) };
   const unapplied = unappliedCash(v)[0];
   if (unapplied) {
-    return { code: 'payment_unapplied', reason: `${usd(unapplied.amountCents)} ${unapplied.rail} ${unapplied.bankRef} from ${unapplied.origName} arrived ${unapplied.valueOn} and is not applied yet (${unapplied.matchStatus}); not collecting or restricting until it is.` };
+    return {
+      code: 'payment_unapplied',
+      reason: bullets([`${usdShort(unapplied.amountCents)} ${unapplied.rail} ${unapplied.bankRef} from ${unapplied.origName} arrived ${day(unapplied.valueOn)} and is not applied to an invoice yet.`, 'Not collecting or restricting until it is.']),
+    };
   }
   const match = v.workItems.find((w) => w.kind === 'PAYMENT_MATCH' && OPEN.has(w.state));
-  if (match) return { code: 'payment_unapplied', reason: `Payment match WI-${match.id} is waiting for a ${match.requiredRole.toLowerCase()}: ${match.title}.` };
+  if (match) return { code: 'payment_unapplied', reason: bullets([`Payment match WI-${match.id} is waiting for a ${match.requiredRole.toLowerCase()}.`, sentence(match.title)]) };
   const promise = v.deadlines.find((d) => d.kind === 'promise_to_pay' && d.status === 'open');
-  if (promise) return { code: 'promise_to_pay', reason: `Promise to pay by ${promise.dueOn}${promise.note ? ` (${promise.note})` : ''}.` };
+  if (promise) return { code: 'promise_to_pay', reason: bullets([`Promise to pay by ${day(promise.dueOn)}.`, promise.note && sentence(promise.note)]) };
   const until = graceUntil(v, today, escalationDays);
-  if (until) return { code: 'approved_exception', reason: `A controller approved an exception; holding off until ${until}.` };
+  if (until) return { code: 'approved_exception', reason: bullets(['A controller approved an exception.', `Holding off until ${day(until)}.`]) };
   return undefined;
 }
 
 function noDebit(v: ClientView, holdOff?: Wait, debitRejected?: { simDate: string }): string {
-  if (debitRejected) return `A controller rejected collecting from custody on ${debitRejected.simDate}.`;
-  if (holdOff) return `Not collecting from custody: ${holdOff.reason}`;
-  if (!allowed(v, 'debit')) return `Custody can't be debited without the client's consent${cite(v, 'debit')}.`;
-  return `USD custody of ${usd(usdCash(v))} doesn't cover any overdue invoice.`;
+  if (debitRejected) return `A controller rejected collecting from custody on ${day(debitRejected.simDate)}.`;
+  if (holdOff) return `Not collecting from custody. ${firstPoint(holdOff.reason)}`;
+  if (!allowed(v, 'debit')) return "Custody can't be debited without the client's consent.";
+  return `USD custody of ${usdShort(usdCash(v))} doesn't cover any overdue invoice.`;
 }
 
 function cureBlocks(v: ClientView): boolean {
@@ -145,7 +174,7 @@ function escalationClock(v: ClientView, defaulted: InvoiceRow[]): string {
 }
 
 /** The step a restricted lever is on, from the work item that set it (or its label, for restrictions set before this agent). */
-function currentStep(v: ClientView, lever: LeverRow): string | undefined {
+export function currentStep(v: ClientView, lever: LeverRow): string | undefined {
   if (lever.state === 'active' || lever.state === 'not_used') return undefined;
   const item = v.workItems.find((w) => w.id === lever.workItemId);
   if (item?.kind === 'RESTRICTION') return proposalOf(item).step ?? undefined;
@@ -155,7 +184,7 @@ function currentStep(v: ClientView, lever: LeverRow): string | undefined {
   return DETAIL_STEP[lever.detail] ?? lever.detail;
 }
 
-function usableSteps(v: ClientView, lever: string, ladder: Record<string, string[]>): string[] {
+export function usableSteps(v: ClientView, lever: string, ladder: Record<string, string[]>): string[] {
   let steps = (ladder[lever] ?? []).filter((s) => !NEVER_PROPOSED.has(s));
   if (!allowed(v, 'prepay')) steps = steps.filter((s) => s !== 'REQUIRE_PREPAY');
   if (lever === 'trading' && hedged(v)) steps = steps.filter((s) => s !== 'CLOSE_ONLY');
@@ -194,27 +223,30 @@ function restriction(v: ClientView, today: string, ladder: Record<string, string
   }
 
   if (!candidates.length) {
-    const why = !Object.keys(ladder).length ? "the platform's capability table is empty, so no restriction step is known"
-      : onlyLevers ? `the controller-approved plan limits restrictions to ${[...onlyLevers].sort().join(', ')}, already in place`
-      : rungsInPlace ? 'every step the contract and policy allow is already in place'
-      : 'the contract gives no lever for the unpaid products (no set-off right, no cross-default)';
-    return { code: 'no_further_step', reason: `${usd(owed(overdue))} still past due, but ${why}; escalating needs a person.` };
+    const why = !Object.keys(ladder).length ? "The platform's capability table is empty, so no restriction step is known."
+      : onlyLevers ? `The controller-approved plan limits restrictions to ${listed([...onlyLevers].sort().map((l) => LEVER_WORDS[l] ?? l))}, and they are already in place.`
+      : rungsInPlace ? 'Every step the contract and policy allow is already in place.'
+      : 'The contract gives no lever for the unpaid products. It has no set-off right and no cross-default.';
+    return { code: 'no_further_step', reason: bullets([`${usdShort(owed(overdue))} still past due.`, why, 'Escalating needs a person.']) };
   }
   const defaulted = defaultedInvoices(v, today);
   const clock = escalationClock(v, defaulted);
   let readyOn = clock;
-  let basis = '';
+  let after = '';
+  let unrecorded = '';
   if (rungsInPlace) {
     const episode = episodeStart(v, defaulted);
     const approved = v.approvals.filter((a) => a.workItemKind === 'RESTRICTION' && a.simDate >= episode).map((a) => a.simDate);
     const last = approved.length ? approved.reduce((a, b) => (a > b ? a : b)) : undefined;
-    basis = last && last >= clock
-      ? `the last restriction was approved on ${last}`
-      : `the cure period ended on ${clock}; the restrictions in place were set before this agent, so when they started is not recorded`;
+    after = last && last >= clock ? `the last restriction was approved on ${day(last)}` : `the cure period ended on ${day(clock)}`;
+    unrecorded = last && last >= clock ? '' : 'The restrictions in place were set before this agent, so when they started is not recorded.';
     readyOn = addDays([clock, ...approved].reduce((a, b) => (a > b ? a : b)), escalationDays);
   }
   if (today < readyOn) {
-    return { code: 'escalation_spacing', reason: `A restriction is in place; the next step waits until ${readyOn} (${escalationDays} days after ${basis}), giving the client time to pay.` };
+    return {
+      code: 'escalation_spacing',
+      reason: bullets(['A restriction is in place.', `The next step waits until ${day(readyOn)}, ${escalationDays} days after ${after}, to give the client time to pay.`, unrecorded]),
+    };
   }
 
   const chosen = candidates.sort((a, b) => Number(a.crossDefault) - Number(b.crossDefault) || a.position - b.position || a.group - b.group || (a.lever < b.lever ? -1 : 1))[0]!;
@@ -222,22 +254,23 @@ function restriction(v: ClientView, today: string, ladder: Record<string, string
   const amount = owed(overdue);
   const name = v.client.name;
   const productUnpaid = unpaid.has(LEVER_PRODUCT[lever]!);
-  const why = [`${usd(amount)} past due on ${ids(overdue)} (${[...unpaid].sort().join(', ')}).`];
+  const products = listed([...unpaid].sort().map((p) => PRODUCT_WORDS[p] ?? p.toLowerCase()));
+  const why: (string | false)[] = [`${usdShort(amount)} overdue on ${plural(overdue.length, 'invoice')} for ${products}.`];
   const cure = latestDeadline(v, 'cure_period');
-  if (cure?.status === 'expired') why.push(`Default notice of ${cure.startedOn}; the cure period ended ${cure.dueOn} unpaid${cite(v, 'cure')}.`);
-  if (rungsInPlace) why.push(`Still unpaid ${escalationDays}+ days after ${basis}.`);
+  if (cure?.status === 'expired') why.push(`Default notice sent ${day(cure.startedOn)}. The cure period ended ${day(cure.dueOn)} unpaid.`);
+  if (rungsInPlace) why.push(`Still unpaid ${escalationDays}+ days after ${after}.`, unrecorded);
   if (lever === 'withdrawals') {
-    why.push('Hold only the undisputed amount owed under the set-off clause; the rest of custody stays withdrawable.');
-    if (flagged) why.push('The client withdrew custody cash during its cure period (exploit flag), so secure the balance first.');
+    why.push('Holding only the undisputed amount owed under the set-off right. The rest of custody stays withdrawable.');
+    if (flagged) why.push('The client withdrew custody cash during its cure period, so the balance comes first.');
   } else if (!productUnpaid) {
-    why.push(`Nothing is overdue on ${lever}; the contract's cross-default clause allows restricting it.`);
+    why.push(`Nothing is overdue on ${LEVER_WORDS[lever] ?? lever}, but the contract's cross-default allows restricting it.`, `${STEP_ING[step] ?? step} is the gentlest step left.`);
   } else {
-    why.push(`${lever} is the product that is unpaid; ${step} is the gentlest step not yet taken.`);
+    why.push(`${STEP_ING[step] ?? step} is the gentlest step left.`);
   }
-  if (lever === 'trading' && hedged(v)) why.push('Open hedged positions: never close-only (pol-008); existing hedges stay intact.');
+  if (lever === 'trading' && hedged(v)) why.push('Open hedged positions stay open, so it is never close-only.');
   const comparison = cutoffComparison(v, lever, step, amount, world.capability, world.policies);
-  const decision = why.join(' ');
-  why.push(`Compared with a full cutoff: ${comparison.fullCutoff.summary}`);
+  const decision = bullets(why);
+  why.push(cutoffLine(comparison, lever));
 
   const isHold = lever === 'withdrawals' && step === 'HOLD_AMOUNT_OWED';
   const kept = v.levers.filter((l) => l.state !== 'not_used' && l.lever !== lever).map((l) => LEVER_WORDS[l.lever] ?? l.lever);
@@ -245,13 +278,28 @@ function restriction(v: ClientView, today: string, ladder: Record<string, string
   const lead = rungsInPlace ? `${name} is still unpaid, ${usdShort(amount)} overdue.` : cure?.status === 'expired' ? `${name} missed its cure date with ${usdShort(amount)} overdue.` : `${name} is ${usdShort(amount)} overdue.`;
   const act = isHold ? `Holding the overdue amount${kept.length ? `; ${listed(kept)} stays open` : ''}.` : `${PROPOSAL_WORDS[step] ?? step}.`;
   return {
-    kind: 'restriction', lever, step, reasoning: why.join(' '), policyRef: 'pol-006', boundaries: [comparison], confidence: !productUnpaid && lever !== 'withdrawals' ? 0.75 : 0.9,
+    kind: 'restriction', lever, step, reasoning: bullets(why), policyRef: 'pol-006', boundaries: [comparison], confidence: !productUnpaid && lever !== 'withdrawals' ? 0.75 : 0.9,
     summary: what, what, headline: `${lead} ${act}`, why: decision,
   };
 }
 
+/** What a full cutoff would do on top of the proposal, in one sentence. */
+const POLICY_WORDS: Record<string, string> = { 'pol-006': 'the one-step policy', 'pol-008': 'the hedged-book policy' };
+function cutoffLine(c: ReturnType<typeof cutoffComparison>, lever: string): string {
+  const f = c.fullCutoff;
+  const others = f.leversCut.filter((l) => l !== lever && l !== 'withdrawals').map((l) => LEVER_WORDS[l] ?? l);
+  const items = [
+    f.custodyFrozenCents > c.proposed.custodyFrozenCents && `freeze all ${usdShort(f.custodyFrozenCents)} of custody`,
+    others.length && `stop ${listed(others)}`,
+    f.positionsForceClosed && `force-close ${plural(f.positionsForceClosed, 'open position')}${f.hedgesForceClosed ? `, ${f.hedgesForceClosed} of them hedged` : ''}`,
+    ...f.clausesBreached.map((b) => `breach the ${b.kind.replace(/_/g, ' ')} clause`),
+    f.policiesBreached.length > 0 && `break ${listed(f.policiesBreached.map((p) => POLICY_WORDS[p] ?? 'a policy'))}`,
+  ].filter(Boolean) as string[];
+  return `A full cutoff would ${items.length ? `also ${listed(items)} and would ` : ''}need a second approver.`;
+}
+
 /** Every overdue invoice USD custody covers, oldest first, in one debit (debits apply without a person). */
-function custodyDebit(v: ClientView, today: string): Move | undefined {
+export function custodyDebit(v: ClientView, today: string): Move | undefined {
   if (!allowed(v, 'debit')) return undefined;
   const overdue = overdueInvoices(v, today);
   const cash = usdCash(v);
@@ -265,8 +313,12 @@ function custodyDebit(v: ClientView, today: string): Move | undefined {
     }
   }
   if (!chosen.length) return undefined;
-  let reasoning = `${usd(total)} past due on ${ids(chosen)}. Contract §${clause(v, 'debit')!.clause} allows debiting fees from custody, and USD custody of ${usd(cash)} covers it. Collecting first avoids any restriction.`;
-  if (chosen.length < overdue.length) reasoning += ` Custody covers ${chosen.length} of ${overdue.length} overdue invoices; the rest stays in collections.`;
+  const reasoning = bullets([
+    `${usdShort(total)} overdue on ${plural(chosen.length, 'invoice')}, and USD custody of ${usdShort(cash)} covers it.`,
+    chosen.length < overdue.length && `Custody covers ${chosen.length} of ${overdue.length} overdue invoices. The rest stays in collections.`,
+    'The contract allows debiting fees from custody.',
+    'Collecting first avoids any restriction.',
+  ]);
   const name = v.client.name;
   return {
     kind: 'custody_debit', invoiceIds: chosen.map((i) => i.id), reasoning, policyRef: 'pol-005', confidence: 0.9, summary: `debit ${usdShort(total)} from ${name}'s custody`,
@@ -282,7 +334,7 @@ function restore(v: ClientView): Move | undefined {
   const name = v.client.name;
   return {
     kind: 'restore', lever: lever.lever, policyRef: 'pol-011', confidence: 0.95,
-    reasoning: `Nothing is in default any more; ${lever.lever} (${lever.detail}) goes back to normal.`,
+    reasoning: bullets(['Nothing is in default any more.', `${capitalize(LEVER_WORDS[lever.lever] ?? lever.lever)} (${lever.detail.toLowerCase()}) goes back to normal.`]),
     summary: `restore ${name}'s ${LEVER_WORDS[lever.lever] ?? lever.lever}`, what: `restore ${name}'s ${LEVER_WORDS[lever.lever] ?? lever.lever}`,
     headline: `${name} is no longer in default. Restoring ${LEVER_WORDS[lever.lever] ?? lever.lever}.`,
   };
@@ -301,7 +353,7 @@ function noticeOwed(v: ClientView, world: World): NoticeMove | undefined {
     if (item.kind === 'RESTRICTION' && (!stillRestricted || !overdueInvoices(v, world.today).length)) continue;
     return {
       kind: 'notice', channel: 'email', body: noticeBody(v, item, world, ref), policyRef: 'pol-007', confidence: 0.95,
-      reasoning: `Tell the client what changed on WI-${item.id}, why, and how to restore it.`, summary: `notice to ${v.client.name} about WI-${item.id}`,
+      reasoning: bullets([`A ${item.kind === 'RESTORE' ? 'restore' : 'restriction'} (WI-${item.id}) is live and the client has not been told.`, 'The notice says what changed, why and how to restore access.']), summary: `notice to ${v.client.name} about WI-${item.id}`,
     };
   }
   return undefined;
@@ -346,4 +398,13 @@ function investigationsDue(v: ClientView, world: World): Move[] {
     }
   }
   return moves;
+}
+
+/** The next step up a lever's ladder that the contract and policy allow, or undefined when every one is in place. */
+export function nextStep(v: ClientView, lever: string, ladder: Record<string, string[]>): string | undefined {
+  const l = v.levers.find((x) => x.lever === lever);
+  if (!l || l.state === 'not_used') return undefined;
+  const steps = usableSteps(v, lever, ladder);
+  const step = currentStep(v, l);
+  return steps[step && steps.includes(step) ? steps.indexOf(step) + 1 : step ? steps.length : 0];
 }

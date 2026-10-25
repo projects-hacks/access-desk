@@ -14,6 +14,14 @@ export const PROPOSAL_WORDS: Record<string, string> = {
   NO_NEW_BORROWING: 'Pause new borrowing',
   LOWER_LINE: 'Lower the credit line',
 };
+/** The product a lever's unpaid invoices are for, in words. */
+export const PRODUCT_WORDS: Record<string, string> = { API: 'API', FINANCING: 'financing', TRADING: 'trading', CUSTODY: 'custody' };
+/** The step, as what the desk is doing. */
+export const STEP_ING: Record<string, string> = {
+  REQUIRE_PREPAY: 'Requiring prepayment for API access', RATE_LIMIT: 'Rate-limiting API access', READ_ONLY: 'Setting API access to read-only', PAUSE_OTC: 'Pausing OTC trading',
+  NO_NEW_POSITIONS: 'Stopping new positions', CLOSE_ONLY: 'Setting trading to close-only', NO_NEW_BORROWING: 'Pausing new borrowing', LOWER_LINE: 'Lowering the credit line',
+  HOLD_AMOUNT_OWED: 'Holding the amount owed',
+};
 /** What the client is told was done. */
 export const STEP_WORDS: Record<string, string> = {
   REQUIRE_PREPAY: 'required prepayment for new API usage',

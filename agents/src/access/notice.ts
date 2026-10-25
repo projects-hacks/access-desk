@@ -34,14 +34,21 @@ const TEXT_SCHEMA = {
 /** Every word that carries a digit (amounts, dates, ids, references), without trailing punctuation. */
 export const tokens = (text: string) => new Set((text.match(TOKEN) ?? []).map((t) => t.replace(/[.,:;-]+$/, '')).filter(Boolean));
 
+/** Numbers in `text` that `allowed` does not contain. */
+export const invented = (allowed: string, text: string) => [...tokens(text)].filter((t) => !tokens(allowed).has(t)).sort();
+
+/** Amounts and invoice numbers of the draft that `text` dropped. */
+export const dropped = (draft: string, text: string) => {
+  const used = tokens(text);
+  return [...tokens(draft)].filter((t) => REQUIRED.test(t) && !used.has(t)).sort();
+};
+
 /** Why the rewrite can't be used, or undefined. Numbers must come from the draft; amounts and invoices must stay. */
 export function safe(draft: string, rewrite: string): string | undefined {
-  const allowed = tokens(draft);
-  const used = tokens(rewrite);
-  const invented = [...used].filter((t) => !allowed.has(t)).sort();
-  if (invented.length) return `numbers not in the facts: ${invented.join(', ')}`;
-  const dropped = [...allowed].filter((t) => REQUIRED.test(t) && !used.has(t)).sort();
-  if (dropped.length) return `dropped from the facts: ${dropped.join(', ')}`;
+  const extra = invented(draft, rewrite);
+  if (extra.length) return `numbers not in the facts: ${extra.join(', ')}`;
+  const lost = dropped(draft, rewrite);
+  if (lost.length) return `dropped from the facts: ${lost.join(', ')}`;
   return undefined;
 }
 

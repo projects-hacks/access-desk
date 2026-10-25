@@ -9,5 +9,7 @@ export const env = {
   /** The model behind Droid and the Claude fallback. */
   LLM_MODEL: process.env.LLM_MODEL ?? 'claude-opus-5-5',
   /** The agents act on the shared database, so exactly one process may run them: the hosted one sets this. */
+  /** rules = the rules decide; shadow = rules act and a Droid agent's choice is only logged; droid = the Droid agent acts, rules on failure. */
+  AGENT_MODE: (['shadow', 'droid'].includes(process.env.AGENT_MODE ?? '') ? process.env.AGENT_MODE : 'rules') as 'rules' | 'shadow' | 'droid',
   AGENTS_HOST: process.env.AGENTS_HOST === 'true',
 };

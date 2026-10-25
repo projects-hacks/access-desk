@@ -18,3 +18,21 @@ export const listed = (items: string[]) => (items.length <= 1 ? (items[0] ?? '')
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Dec 20" from an ISO date: what a controller says. */
+export const day = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1] ?? ''} ${Number(iso.slice(8, 10))}`;
+
+/** One short sentence: trailing full stops and spaces replaced by a single full stop. */
+export const sentence = (s: string) => capitalize(`${s.replace(/[.\s]+$/, '')}.`);
+
+/** Reasoning as points, one per "- " line (the console renders them as bullets). Lines past `max` join the last one. */
+export function bullets(lines: (string | false | undefined | null)[], max = 4): string {
+  const kept = lines.filter((l): l is string => !!l);
+  const out = kept.length > max ? [...kept.slice(0, max - 1), kept.slice(max - 1).join(' ')] : kept;
+  return out.map((l) => `- ${l}`).join('\n');
+}
+
+/** The first point of `bullets` text, without its dash. */
+export const firstPoint = (text: string) => (text.split('\n')[0] ?? '').replace(/^- /, '');

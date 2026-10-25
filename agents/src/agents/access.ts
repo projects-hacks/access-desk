@@ -1,9 +1,12 @@
 import { loadView, loadWorld } from '../access/load';
-import type { ClientView, Move, NoticeMove, Wait } from '../access/model';
+import type { ClientView, Move, NoticeMove, Plan, Wait, World } from '../access/model';
 import { wordNotice } from '../access/notice';
 import { ESCALATION_DAYS, ladders, plan } from '../access/plan';
 import { answered, overdueInvoices } from '../access/helpers';
 import { providerName, readNote, type RmReading } from '../access/pushback';
+import { env } from '../env';
+import { sageFacts } from '../tools/facts';
+import { droidChoice, investigateSage, needsJudgment, rulesChoice, shadowLine } from '../tools/investigate';
 import type { Agent, TaskContext } from '../types';
 
 /**
@@ -15,38 +18,77 @@ import type { Agent, TaskContext } from '../types';
 /** RM notes already read, so a note nobody has to answer isn't read again on every wake. */
 const readings = new Map<string, RmReading>();
 
+export interface Prep {
+  view: ClientView;
+  world: World;
+  plan: Plan;
+}
+
+/** Reads the client's RM notes and plans: what the rules would do, before anyone acts. */
+export async function prepare(ctx: TaskContext): Promise<Prep | undefined> {
+  const view = loadView(ctx.conn, ctx.task.clientId);
+  if (!view) return undefined;
+  const read = new Map<number, RmReading>();
+  for (const note of view.rmNotes) {
+    if (answered(view, note.id)) continue;
+    const key = `${view.client.id}:${note.id}:${note.text}`;
+    let reading = readings.get(key);
+    if (!reading) readings.set(key, (reading = await readNote(ctx.ask, note.text, view.client.name, ctx.today)));
+    read.set(note.id, reading);
+  }
+  const world = loadWorld(ctx.conn, view, ctx.today, read);
+  return { view, world, plan: plan(view, world, ladders(world.capability), ESCALATION_DAYS) };
+}
+
 export const access: Agent = {
   name: 'access',
   concurrency: 4,
   async handle(ctx) {
-    const view = loadView(ctx.conn, ctx.task.clientId);
-    if (!view) return `unknown client ${ctx.task.clientId}`;
-    const read = new Map<number, RmReading>();
-    for (const note of view.rmNotes) {
-      if (answered(view, note.id)) continue;
-      const key = `${view.client.id}:${note.id}:${note.text}`;
-      let reading = readings.get(key);
-      if (!reading) readings.set(key, (reading = await readNote(ctx.ask, note.text, view.client.name, ctx.today)));
-      read.set(note.id, reading);
-    }
-    const world = loadWorld(ctx.conn, view, ctx.today, read);
-    const p = plan(view, world, ladders(world.capability), ESCALATION_DAYS);
+    const prep = await prepare(ctx);
+    if (!prep) return `unknown client ${ctx.task.clientId}`;
+    const { view, plan: p } = prep;
+    const mode = env.AGENT_MODE;
+    if (mode === 'rules' || !needsJudgment(p)) return rulesPass(ctx, view, p);
+    const facts = sageFacts(ctx.conn, view, prep.world);
 
-    for (const move of p.bookkeeping) await execute(ctx, view, move);
-    const done: string[] = [];
-    if (p.bookkeeping.length) done.push(`${p.bookkeeping.length} records`);
-    if (p.decision) {
-      const refusal = await execute(ctx, view, p.decision);
-      done.push(refusal ? `${p.decision.summary} refused` : proposed(p.decision));
-    } else if (p.wait) {
-      if (p.recordWait) await recordWait(ctx, view, p.wait);
-      done.push(`waiting (${p.wait.code})`);
-    } else if (!overdueInvoices(view, ctx.today).length && !ctx.task.reason.startsWith('Daily review') && !p.bookkeeping.length) {
-      await say(ctx, `${view.client.name} is current; nothing to restrict.`);
+    if (mode === 'shadow') {
+      // The rules act as always; the Droid agent only says what it would have done.
+      const shadow = investigateSage(ctx, { plan: p, facts }, 'shadow');
+      const summary = await rulesPass(ctx, view, p);
+      console.log(shadowLine('access', view.client.name, rulesChoice(p), await shadow));
+      return summary;
     }
-    return done.join(' · ') || 'nothing to do';
+
+    const records = await bookkeeping(ctx, view, p);
+    const inv = await investigateSage(ctx, { plan: p, facts }, 'droid');
+    if (inv.decided) return [records, `${droidChoice(inv.outcomes).text} (Droid, ${inv.calls.length} tool calls)`].filter(Boolean).join(' · ');
+    console.log(`[access] ${view.client.name}: Droid gave no decision (${inv.error ?? 'no action taken'}), rules take over`);
+    return rulesPass(ctx, view, p, records);
   },
 };
+
+/** Precedents and investigations the rules record whatever else happens. */
+async function bookkeeping(ctx: TaskContext, view: ClientView, p: Plan): Promise<string> {
+  for (const move of p.bookkeeping) await execute(ctx, view, move);
+  return p.bookkeeping.length ? `${p.bookkeeping.length} records` : '';
+}
+
+/** Today's behaviour: bookkeeping, then the one decision (or a recorded wait) the rules chose. */
+async function rulesPass(ctx: TaskContext, view: ClientView, p: Plan, records?: string): Promise<string> {
+  const done: string[] = [];
+  const kept = records ?? (await bookkeeping(ctx, view, p));
+  if (kept) done.push(kept);
+  if (p.decision) {
+    const refusal = await execute(ctx, view, p.decision);
+    done.push(refusal ? `${p.decision.summary} refused` : proposed(p.decision));
+  } else if (p.wait) {
+    if (p.recordWait) await recordWait(ctx, view, p.wait);
+    done.push(`waiting (${p.wait.code})`);
+  } else if (!overdueInvoices(view, ctx.today).length && !ctx.task.reason.startsWith('Daily review') && !p.bookkeeping.length) {
+    await say(ctx, `${view.client.name} is current. Nothing to restrict.`);
+  }
+  return done.join(' · ') || 'nothing to do';
+}
 
 const proposed = (move: Move) => (move.kind === 'restriction' || move.kind === 'custody_debit' || move.kind === 'restore' ? `${move.summary} proposed` : move.summary);
 
@@ -114,7 +156,7 @@ export async function execute(ctx: TaskContext, view: ClientView, move: Move): P
 /** The model words the notice; the template goes out unless its wording passes the number check. */
 async function sendNotice(ctx: TaskContext, view: ClientView, move: NoticeMove): Promise<string | undefined> {
   const { text, by } = await wordNotice(ctx.ask, move.channel, move.body, `Client: ${view.client.name}`);
-  const reasoning = by ? `${move.reasoning} Worded by ${providerName(by)}; every number checked against the facts.` : move.reasoning;
+  const reasoning = by ? `${move.reasoning}\n- Worded by ${providerName(by)}. Every number checked against the facts.` : move.reasoning;
   return ctx.attempt(move.summary, () => ctx.conn.reducers.proposeNotice({
     clientId: view.client.id, channel: move.channel, body: text, reasoning, policyRef: move.policyRef, confidence: move.confidence,
   }));

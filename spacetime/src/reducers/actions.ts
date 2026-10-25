@@ -1,6 +1,6 @@
 import { SenderError, t } from 'spacetimedb/server';
 import { actorOf, addDays, audit, requireRole, simDate, type Ctx } from '../context';
-import { createWorkItem, overdueCents, recomputeInvoice, releaseHoldsIfCured, withdrawStaleProposals } from '../payments/apply';
+import { createWorkItem, overdueCents, recomputeInvoice, releaseHoldsIfCured, resolvePayer, withdrawStaleProposals } from '../payments/apply';
 import { GL, cr, dr, queueCommand, queueJournal } from '../payments/gateway';
 import { cureState, defaultedInvoices } from '../payments/deadlines';
 import { formatUsd } from '../payments/match';
@@ -27,6 +27,8 @@ const PROPOSERS = ['AGENT', 'CONTROLLER', 'ADMIN'] as const;
 /** Kinds that may run without a person, and the policy that must be active for it. */
 const AUTO_POLICY: Record<string, string> = { CUSTODY_DEBIT: 'pol-005', RESTRICTION: 'pol-006', RESTORE: 'pol-011', REMINDER: 'pol-007' };
 const LEVERS = ['withdrawals', 'trading', 'api', 'financing'] as const;
+/** A payment in transit longer than this is treated as stuck, not as on its way. */
+const IN_TRANSIT_DAYS = 5;
 export const LEVER_LABEL: Record<string, string> = { withdrawals: 'withdrawals', trading: 'trading', api: 'API access', financing: 'financing' };
 /** Lever state and label after each restriction step. */
 const STEP_EFFECT: Record<string, { state: string; detail: string }> = {
@@ -192,6 +194,11 @@ function restrict(
 
   const overdue = overdueInvoices(ctx, clientId);
   if (!overdue.length) throw new SenderError(`${c.name} has nothing overdue`);
+  // Money on its way is not ignored: no restriction while a recent payment is still in transit.
+  // One stuck far longer than a wire takes is not a payment the desk waits for.
+  const coming = [...ctx.db.cashMovement.iter()].find((m) => m.direction === 'in' && m.matchStatus === 'in_transit'
+    && m.valueOn > addDays(simDate(ctx), -IN_TRANSIT_DAYS) && resolvePayer(ctx, m)?.clientId === clientId);
+  if (coming) throw new SenderError(`${formatUsd(coming.amountCents)} from ${coming.origName || c.name} is on its way (sent ${coming.valueOn}); wait for it to post`);
   const owed = overdue.reduce((s, i) => s + i.amountCents - i.paidCents, 0n);
   const contract = ctx.db.contract.clientId.find(clientId);
   const products = new Set(overdue.map((i) => i.product));

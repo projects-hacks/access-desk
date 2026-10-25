@@ -1,5 +1,5 @@
 import { LEVER_WORDS, PROPOSAL_WORDS, clause } from './helpers';
-import { listed, plural, usd } from './format';
+import { capitalize, listed, plural, usd } from './format';
 import type { CapabilityRow, ClientView, PolicyRow } from './model';
 
 /** What a full cutoff of the account would cost, assumed as a share of notional (bps) when positions are force-closed. */
@@ -38,7 +38,7 @@ export function cutoffComparison(v: ClientView, lever: string, step: string, owe
   if (positions.length) {
     full.push(`force-closes ${plural(positions.length, 'open position')}${hedges.length ? ` incl. ${hedges.length} hedged` : ''} (${usd(notional)} notional, est. ${usd(unwind)} unwind cost at ${UNWIND_COST_BPS} bps)`);
   }
-  if (breaches.length || broken.length) full.push(`breaches ${listed([...breaches.map((b) => `§${b.clause} (${b.kind.replace(/_/g, ' ')})`), ...broken])}`);
+  if (breaches.length || broken.length) full.push(`breaches ${listed([...breaches.map((b) => `the ${b.kind.replace(/_/g, ' ')} clause`), ...broken.map((id) => POLICY_NAMES[id] ?? 'a policy')])}`);
   full.push('needs two approvers');
   full[0] = full[0]!.charAt(0).toUpperCase() + full[0]!.slice(1);
   return {
@@ -46,13 +46,13 @@ export function cutoffComparison(v: ClientView, lever: string, step: string, owe
     owedCents,
     assumptions: { unwindCostBps: UNWIND_COST_BPS },
     proposed: {
-      lever, step, summary: `${proposedParts.join('; ')}.`,
+      lever, step, summary: `${proposedParts.map(capitalize).join('. ')}.`,
       custodyFrozenCents: held, leversCut: [], leversOpen: inUse.filter((l) => l !== lever),
       positionsForceClosed: 0, hedgesForceClosed: 0, clausesBreached: [], policiesBreached: [],
       approversNeeded: twoApprovers.has(`${lever}/${step}`) ? 2 : autoApplies(v, policies) ? 0 : 1,
     },
     fullCutoff: {
-      summary: `${full.join('; ')}.`,
+      summary: `${full.map(capitalize).join('. ')}.`,
       custodyFrozenCents: custody, frozenToOwed: owedCents ? Math.round((custody / owedCents) * 10) / 10 : null,
       leversCut: inUse, leversOpen: [],
       positionsForceClosed: positions.length, hedgesForceClosed: hedges.length, notionalCents: notional,
@@ -61,5 +61,7 @@ export function cutoffComparison(v: ClientView, lever: string, step: string, owe
     },
   };
 }
+
+const POLICY_NAMES: Record<string, string> = { 'pol-006': 'the one-step policy', 'pol-008': 'the hedged-book policy' };
 
 export type CutoffComparison = ReturnType<typeof cutoffComparison>;

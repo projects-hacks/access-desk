@@ -1,5 +1,5 @@
 import { OPEN, allowed, answered, cite, clause, defaultedInvoices, ids, latestDeadline, noteTag, openInvoices, owed, proposalOf, usdCash } from './helpers';
-import { listed, usd } from './format';
+import { bullets, day, listed, plural, sentence, usd, usdShort } from './format';
 import type { CaseProposal, CashRow, ClientView, Move, NoticeMove, RmNoteRow, WireEvidence, WorkItemRow, World } from './model';
 import { readerName, type RmReading } from './pushback';
 
@@ -16,7 +16,7 @@ export const unappliedCash = (v: ClientView): CashRow[] => {
   return v.cash.filter((m) => m.status === 'posted' && UNAPPLIED.has(m.matchStatus) && m.valueOn >= since);
 };
 
-const readBy = (reading?: RmReading) => (reading?.readBy ? ` Note read by ${readerName(reading)}.` : '');
+const readBy = (reading?: RmReading) => !!reading?.readBy && `Note read by ${readerName(reading)}.`;
 const byId = <T extends { id: number }>(rows: T[]) => [...rows].sort((a, b) => a.id - b.id);
 
 /** An RM note the agent hasn't read or answered yet: no step and no collection until it has. */
@@ -26,7 +26,7 @@ export function notePending(v: ClientView, world: World) {
     const reading = world.readings.get(note.id);
     if (reading === undefined || ACTIONABLE.has(reading.intent)) {
       const what = reading === undefined ? 'is not read yet' : `(${reading.intent.replace(/_/g, ' ')}) is not answered yet`;
-      return { code: 'rm_note_pending', reason: `RM note ${note.id} from ${note.author} ${what}; no restriction step or custody debit until it is.` };
+      return { code: 'rm_note_pending', reason: bullets([`RM note ${note.id} from ${note.author} ${what}.`, 'No restriction step or custody debit until it is answered.']) };
     }
   }
   return undefined;
@@ -46,7 +46,7 @@ export function rmReply(v: ClientView, world: World): Move | undefined {
 export function rmReplyMove(v: ClientView, note: RmNoteRow, finding: string, reading?: RmReading): NoticeMove {
   return {
     kind: 'notice', channel: 'rm', body: `${finding} ${noteTag(note.id)}`, policyRef: 'pol-007', confidence: 0.9,
-    reasoning: `RM ${note.author} says ${v.client.name} already paid; checked the bank feed before acting.${readBy(reading)}`,
+    reasoning: bullets([`${note.author} says ${v.client.name} already paid.`, 'Checked the bank feed before replying.', readBy(reading)]),
     summary: `reply to ${note.author} on ${v.client.name}'s payment`,
   };
 }
@@ -83,7 +83,7 @@ function paymentCheck(v: ClientView, note: RmNoteRow, reading: RmReading, world:
       const after = rmReplyMove(v, note, `${foundPayment(m.amountCents, m.origName, evidence.invoices, m.bankRef, m.valueOn)} It is being applied now; access comes back as soon as it is.`, reading);
       return {
         kind: 'payment_match', movementId: m.id, rmNoteId: note.id, evidence, reply, after,
-        reasoning: `RM ${note.author} says ${name} paid. Evidence: ${evidence.signals.map((s) => s.detail).join('; ')}.${readBy(reading)}`,
+        reasoning: bullets([`${note.author} says ${name} paid.`, ...evidence.signals.filter((s) => s.kind !== 'rm_says_paid').map((s) => sentence(s.detail)), readBy(reading)]),
         summary: `match ${m.bankRef} to ${name} on ${note.author}'s word and the evidence`,
       };
     }
@@ -182,17 +182,16 @@ function exceptionCase(v: ClientView, note: RmNoteRow, reading: RmReading, world
   const defaulted = defaultedInvoices(v, world.today);
   const restricted = v.levers.filter((l) => l.state === 'limited' || l.state === 'off').map((l) => `${l.lever} (${l.detail})`);
   const past = v.precedents.filter((p) => p.decision);
-  const facts = [
-    defaulted.length ? `${usd(owed(defaulted))} past due on ${ids(defaulted)}.` : 'Nothing is in default today.',
+  const facts = bullets([
+    defaulted.length ? `${usdShort(owed(defaulted))} past due on ${plural(defaulted.length, 'invoice')}.` : 'Nothing is in default today.',
     restricted.length ? `Restricted now: ${restricted.join(', ')}.` : 'No restrictions in place.',
-    `Tier ${v.client.tier}${v.client.strategic ? ', strategic' : ''}; RM ${v.client.relationshipManager}.`,
-  ];
-  if (past.length) facts.push(`Precedents: ${past.slice(-3).map((p) => `${p.decidedOn} ${p.decision} → ${p.outcome}`).join('; ')}.`);
-  facts.push(`The agent cannot grant exceptions; a controller decides. Escalation is paused while this is open.${readBy(reading)}`);
+    past.length > 0 && `Past decisions on this client: ${past.slice(-3).map((p) => `${p.decision.toLowerCase()} on ${day(p.decidedOn)}${p.outcome ? ` (${p.outcome.toLowerCase()})` : ''}`).join(', ')}.`,
+    `The agent cannot grant exceptions, so a controller decides. Escalation is paused while this is open.${readBy(reading) ? ` ${readBy(reading)}` : ''}`,
+  ]);
   const proposal: CaseProposal = {
     kind: 'NOVEL_CASE', subjectId: `rm_note:${note.id}`, title: `${note.author} asks to hold off on ${v.client.name}`, amountCents: owed(defaulted),
     proposal: { rmNoteId: note.id, request: note.text, graceUntil: reading.graceUntil, reason: reading.reason, summary: reading.summary },
-    reasoning: facts.join(' '), policyRef: 'pol-006', clausesCited: [], confidence: 0.5,
+    reasoning: facts, policyRef: 'pol-006', clausesCited: [], confidence: 0.5,
   };
   return { kind: 'case', proposal, summary: proposal.title };
 }
@@ -219,37 +218,37 @@ function materialEventCase(v: ClientView, note: RmNoteRow, reading: RmReading, w
   const cure = latestDeadline(v, 'cure_period');
   const withdrawn = v.accessRequests.filter((r) => r.action === 'withdraw' && r.decision !== 'denied').reduce((s, r) => s + r.allowedCents, 0);
   const flagged = v.flags.filter((f) => f.status === 'open');
-  const covering = world.policies.filter((p) => /change of control|acqui|merger|insolv/i.test(p.title + p.ruleJson)).map((p) => p.policyId);
+  const covering = world.policies.filter((p) => /change of control|acqui|merger|insolv/i.test(p.title + p.ruleJson)).map((p) => p.title);
 
   const steps: [string, string][] = [
-    ['rm_note', `${note.author}: ${name} is ${EVENT_WORDS[event]}${who}${when ? `, effective ${when}` : ''}.`],
-    ['policy_search', covering.length ? `Covered by ${covering.join(', ')}.` : `None of the ${world.policies.length} active policies covers a change of control: this needs a controller.`],
-    ['contract', `${[
-      coc?.allowed ? `§${coc.clause}: ${coc.text.replace(/\.+$/, '')}` : 'No change-of-control clause',
-      setOff?.allowed ? `§${setOff.clause} set-off allowed` : 'no set-off right',
-      debit?.allowed ? 'custody debits allowed' : `debits need written consent${cite(v, 'debit')}`,
-      cure && (cure.status === 'open' || cure.status === 'expired') ? `cure period ${cure.status} until ${cure.dueOn}` : undefined,
-    ].filter(Boolean).join('; ')}.`],
-    ['exposure', `${usd(inDefault)} in default, ${usd(totalOpen)} open in total; custody holds ${usd(cash)} USD of ${usd(custody)} overall.`],
-    ['custody_activity', `${withdrawn ? `${usd(withdrawn)} withdrawn from custody through the platform` : 'No withdrawals through the platform'}${flagged.length ? `; open flags: ${flagged.map((f) => f.pattern).join(', ')}` : ''}.`],
+    ['rm_note', `${note.author}: ${name} is ${EVENT_WORDS[event]}${who}${when ? `, effective ${day(when)}` : ''}.`],
+    ['policy_search', covering.length ? `Covered by ${listed(covering)}.` : `None of the ${world.policies.length} active policies covers a change of control, so this needs a controller.`],
+    ['contract', [
+      coc?.allowed ? `Change of control: ${sentence(coc.text)}` : 'No change-of-control clause.',
+      setOff?.allowed ? 'Set-off is allowed.' : 'No set-off right.',
+      debit?.allowed ? 'Custody debits are allowed.' : 'Debits need the client\'s written consent.',
+      cure && (cure.status === 'open' || cure.status === 'expired') ? `The cure period is ${cure.status}, until ${day(cure.dueOn)}.` : '',
+    ].filter(Boolean).join(' ')],
+    ['exposure', `${usdShort(inDefault)} in default and ${usdShort(totalOpen)} open in total. Custody holds ${usdShort(cash)} in USD of ${usdShort(custody)} overall.`],
+    ['custody_activity', `${withdrawn ? `${usdShort(withdrawn)} withdrawn from custody through the platform.` : 'No withdrawals through the platform.'}${flagged.length ? ` Open flags: ${flagged.map((f) => f.pattern.replace(/_/g, ' ')).join(', ')}.` : ''}`],
   ];
   const past = v.precedents.filter((p) => p.decision);
-  if (past.length) steps.push(['precedents', past.slice(-3).map((p) => `${p.decidedOn} ${p.proposed} → ${p.decision} (${p.outcome})`).join('; ')]);
+  if (past.length) steps.push(['precedents', past.slice(-3).map((p) => sentence(`${day(p.decidedOn)}: ${p.proposed}, ${p.decision.toLowerCase()}${p.outcome ? `, ${p.outcome.toLowerCase()}` : ''}`)).join(' ')]);
 
   const plan: string[] = [];
-  if (coc?.allowed) plan.push(`Invoke §${coc.clause}: all ${usd(totalOpen)} open becomes payable at closing${when ? ` on ${when}` : ''}; send the acquirer a payoff statement.`);
-  if (cure?.status === 'open') plan.push(`No restriction before the cure period ends ${cure.dueOn}${cite(v, 'cure')}.`);
+  if (coc?.allowed) plan.push(`Invoke the change-of-control clause. All ${usdShort(totalOpen)} open becomes payable at closing${when ? ` on ${day(when)}` : ''}. Send the acquirer a payoff statement.`);
+  if (cure?.status === 'open') plan.push(`No restriction before the cure period ends ${day(cure.dueOn)}.`);
   const running = v.levers.filter((l) => l.lever !== 'withdrawals' && l.state !== 'not_used').map((l) => (l.lever === 'api' ? 'API access' : l.lever));
-  if (setOff?.allowed && inDefault) plan.push(`If still unpaid then, hold ${usd(inDefault)} of withdrawals under §${setOff.clause}; keep ${running.join(' and ') || 'everything else'} running so the deal is not disrupted.`);
+  if (setOff?.allowed && inDefault) plan.push(`If still unpaid then, hold ${usdShort(inDefault)} of withdrawals under the set-off right. Keep ${running.join(' and ') || 'everything else'} running so the deal is not disrupted.`);
   if (!debit?.allowed) plan.push('Ask the RM for written consent to debit custody, which would settle it today.');
-  if (cash < totalOpen || flagged.length) plan.push('Custody cash is moving out: secure the balance before closing rather than after.');
+  if (cash < totalOpen || flagged.length) plan.push('Custody cash is moving out. Secure the balance before closing rather than after.');
   plan.push(`Ask ${note.author} for the closing date, the acquirer's legal entity and whether the MSA is assigned.`);
   steps.push(['proposal', plan.join(' ')]);
 
   const proposal: CaseProposal = {
     kind: 'NOVEL_CASE', subjectId: `rm_note:${note.id}`, title: `${name} is ${EVENT_WORDS[event]}${who}: no policy covers it`, amountCents: totalOpen,
     proposal: { rmNoteId: note.id, event, counterparty: reading.counterparty, effectiveDate: when, onlyLevers: ['withdrawals'], investigation: steps.map(([tool, summary]) => ({ tool, summary })) },
-    reasoning: plan.join(' ') + readBy(reading), policyRef: 'none',
+    reasoning: bullets([...plan, readBy(reading)]), policyRef: 'none',
     clausesCited: [coc, setOff].filter((c) => c?.allowed).map((c) => c!.clause), confidence: 0.6,
   };
   return { kind: 'case', proposal, summary: proposal.title };

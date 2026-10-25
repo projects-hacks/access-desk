@@ -5,6 +5,7 @@ import type { Ask } from '../types';
 import { claude } from './claude';
 import { droid } from './droid';
 import { AnswerRejected, DecisionUnavailable } from './errors';
+import { inTurn } from './turn';
 
 export { AnswerRejected, DecisionUnavailable };
 
@@ -23,7 +24,7 @@ export interface Provider {
 const RETRY_NOTE = 'Your previous answer was rejected. Answer the original request again, fixing this:';
 
 /** The `droid` CLI is found on PATH (the SDK starts it as a subprocess). */
-function droidInstalled(): boolean {
+export function droidInstalled(): boolean {
   for (const dir of (process.env.PATH ?? '').split(delimiter)) {
     try {
       accessSync(join(dir, 'droid'), constants.X_OK);
@@ -44,27 +45,6 @@ export function configuredProviders(): Provider[] {
 function clean(text: string): string {
   const t = text.trim();
   return /^```(?:json)?\s*([\s\S]*?)\s*```$/.exec(t)?.[1] ?? t;
-}
-
-/**
- * Model calls in flight across all four agents. Each Droid call is its own CLI process, so this
- * (not the agents' concurrency) is what bounds the container's memory; the rest wait their turn.
- */
-const MAX_IN_FLIGHT = Number(process.env.LLM_CONCURRENCY ?? 2);
-let inFlight = 0;
-const waiting: (() => void)[] = [];
-
-async function inTurn<T>(call: () => Promise<T>): Promise<T> {
-  // A finished call hands its slot straight to the next waiter, so the count never overshoots.
-  if (inFlight < MAX_IN_FLIGHT) inFlight++;
-  else await new Promise<void>((resolve) => waiting.push(resolve));
-  try {
-    return await call();
-  } finally {
-    const next = waiting.shift();
-    if (next) next();
-    else inFlight--;
-  }
 }
 
 async function answer(providers: Provider[], prompt: string, schema: Record<string, unknown>): Promise<{ text: string; by: Answered }> {

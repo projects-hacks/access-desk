@@ -279,7 +279,7 @@ describe('payment attribution', () => {
     assert.equal(m.kind, 'payment_match');
     assert.deepEqual(m.evidence.signals.map((s) => s.kind), ['rm_says_paid', 'amount_matches_invoices', 'amount_matches_claim']);
     assert.deepEqual([m.evidence.bankRef, m.evidence.invoices], ['JD-0001', ['INV-1']]);
-    assert.match(m.reasoning, /RM Priya Nair says Acme paid/);
+    assert.match(m.reasoning, /Priya Nair says Acme paid/);
   });
 
   test('a wire that does not fit is not proposed', () => {
@@ -316,11 +316,13 @@ describe('material events', () => {
     assert.deepEqual(steps.map((s) => s.tool), ['rm_note', 'policy_search', 'contract', 'exposure', 'custody_activity', 'proposal']);
     const by = Object.fromEntries(steps.map((s) => [s.tool, s.summary]));
     assert.match(by.policy_search!, /None of the 1 active policies covers a change of control/);
-    assert.match(by.contract!, /§12\.4/);
+    assert.match(by.contract!, /Change of control: Amounts due become payable/);
+    assert.doesNotMatch(Object.values(by).join(' '), /§|pol-\d|\d{4}-\d{2}-\d{2}/);
     assert.match(p.title, /Meridian Holdings/);
-    assert.match(p.reasoning, /Invoke §12\.4/);
-    assert.match(p.reasoning, /No restriction before the cure period ends 2026-03-14/);
-    assert.match(p.reasoning, /hold \$61,400\.00 of withdrawals under §7\.2/);
+    assert.match(p.reasoning, /Invoke the change-of-control clause/);
+    assert.match(p.reasoning, /No restriction before the cure period ends Mar 14/);
+    assert.match(p.reasoning, /hold \$61,400 of withdrawals under the set-off right/);
+    assert.ok(p.reasoning.split('\n').length <= 4 && p.reasoning.split('\n').every((l) => l.startsWith('- ')));
     assert.match(p.reasoning, /written consent to debit/);
     assert.deepEqual(p.clausesCited, ['12.4', '7.2']);
   });
@@ -328,9 +330,9 @@ describe('material events', () => {
   test('cash leaving custody is called out', () => {
     const p = caseOf(cobalt({ accessRequests: [{ action: 'withdraw', decision: 'approved', allowedCents: 135_000_000 }], flags: [{ status: 'open', pattern: 'withdrawal_during_cure' }] }));
     const by = Object.fromEntries((p.proposal.investigation as { tool: string; summary: string }[]).map((s) => [s.tool, s.summary]));
-    assert.match(by.custody_activity!, /\$1,350,000\.00 withdrawn/);
-    assert.match(by.custody_activity!, /withdrawal_during_cure/);
-    assert.match(p.reasoning, /secure the balance before closing/);
+    assert.match(by.custody_activity!, /\$1,350,000 withdrawn/);
+    assert.match(by.custody_activity!, /withdrawal during cure/);
+    assert.match(p.reasoning, /Secure the balance before closing/);
   });
 
   test('the approved plan restricts only withdrawals', () => {
@@ -371,7 +373,7 @@ describe('why the agent did not act', () => {
     assert.match(waited(cases.payment_in_transit)!.reason, /WI-5412/);
     assert.match(waited(cases.promise_to_pay)!.reason, /CFO promised a wire/);
     assert.match(waited(cases.controller_rejected)!.reason, /“Too strict for this tier”/);
-    assert.match(waited(cases.escalation_spacing)!.reason, /until 2026-03-22/);
+    assert.match(waited(cases.escalation_spacing)!.reason, /until Mar 22/);
   });
 
   test('inside the grace period, it explains why nothing was collected', () => {
@@ -379,17 +381,17 @@ describe('why the agent did not act', () => {
     v.invoices[0]!.dueOn = '2026-03-15';
     const w = waited(v)!;
     assert.equal(w.code, 'grace_period');
-    assert.match(w.reason, /in default from 2026-03-26/);
-    assert.match(w.reason, /consent \(§6\.3\)/);
+    assert.match(w.reason, /Default starts Mar 26/);
+    assert.match(w.reason, /without the client's consent/);
     const rejected = view({ debit: true, usd: 100_000_000, rejections: [event('REJECTED', '2026-03-17', 6, 'CUSTODY_DEBIT')] });
     rejected.invoices[0]!.dueOn = '2026-03-15';
-    assert.match(waited(rejected)!.reason, /A controller rejected collecting from custody on 2026-03-17/);
+    assert.match(waited(rejected)!.reason, /A controller rejected collecting from custody on Mar 17/);
   });
 
   test('a failed gateway command is called out', () => {
     const w = waited(view({ workItems: [item(9, 'RESTRICTION', 'APPROVED')] }), { failedCommands: new Map([[9, 'admin API timeout']]) })!;
     assert.equal(w.code, 'gateway_failed');
-    assert.match(w.reason, /admin API timeout/);
+    assert.match(w.reason, /Admin API timeout/);
   });
 
   test('the same reason is recorded once', () => {
@@ -478,8 +480,8 @@ describe('the cutoff comparison', () => {
     assert.equal(full.frozenToOwed, 200);
     assert.deepEqual(full.clausesBreached.map((b: { clause: string }) => b.clause), ['11']);
     assert.deepEqual(full.policiesBreached, ['pol-006', 'pol-008']);
-    assert.match(m.reasoning, /Compared with a full cutoff: Freezes all/);
-    assert.match(full.summary, /§11 \(no forced close\)/);
+    assert.match(m.reasoning, /A full cutoff would also freeze all \$10,000,000 of custody/);
+    assert.match(full.summary, /the no forced close clause/);
     assert.deepEqual([c.proposed.approversNeeded, full.approversNeeded], [0, 2]);
   });
 
@@ -488,7 +490,7 @@ describe('the cutoff comparison', () => {
     v.client.tier = 1;
     assert.equal(compare(v).c.proposed.approversNeeded, 1);
     v.clauses[v.clauses.length - 1]!.clause = '14.2';
-    assert.match(compare(v).c.fullCutoff.summary, /§14\.2 \(no forced close\)/);
+    assert.deepEqual(compare(v).c.fullCutoff.clausesBreached.map((b: { clause: string }) => b.clause), ['14.2']);
   });
 
   test('a hold shows its share of custody', () => {
@@ -501,6 +503,19 @@ describe('the cutoff comparison', () => {
 });
 
 describe('what the agent says on the panel', () => {
+  test('reasoning is a few plain points: no codes, no ISO dates, no invoice lists', () => {
+    const owed: [string, string, number][] = Array.from({ length: 9 }, (_, i) => [`INV-${1600 + i}`, i % 2 ? 'API' : 'FINANCING', 1_000_000]);
+    const m = restriction(only(view({ products: ['API', 'FINANCING'], owed, levers: levers(active, otcPaused).filter((l) => l.lever !== 'trading') })));
+    for (const text of [m.reasoning, m.why]) {
+      const lines = text.split('\n');
+      assert.ok(lines.length >= 2 && lines.length <= 4, text);
+      assert.ok(lines.every((l) => l.startsWith('- ')), text);
+      assert.doesNotMatch(text, /§|pol-\d|[A-Z]+_[A-Z_]+|\d{4}-\d{2}-\d{2}|INV-\d|;|—/, text);
+    }
+    assert.match(m.reasoning, /^- \$90,000 overdue on 9 invoices for /);
+    assert.match(m.reasoning, /Default notice sent Feb 14\. The cure period ended Mar 1 unpaid\./);
+  });
+
   test('a hold names the client, the amount, and what stays open', () => {
     const m = restriction(only(view({ flags: [{ status: 'open', pattern: 'withdrawal_during_cure' }] })));
     assert.equal(m.headline, 'Acme missed its cure date with $50,000 overdue. Holding the overdue amount; trading stays open.');

@@ -89,10 +89,10 @@ test('a notice goes out as the template unless the model words it within the fac
   const plain = fake();
   await execute(plain.ctx, v, move);
   assert.match(plain.calls[0]!.args.body, /^We have paused OTC trading because \$50,000\.00 is past due \(INV-1\)/);
-  assert.equal(plain.calls[0]!.args.reasoning, 'Tell the client what changed on WI-9, why, and how to restore it.');
+  assert.equal(plain.calls[0]!.args.reasoning, '- A restriction (WI-9) is live and the client has not been told.\n- The notice says what changed, why and how to restore access.');
 
   const reworded = fake({ ask: answering({ text: 'Your OTC trading is paused until the $50,000.00 on INV-1 is paid.' }) });
   await execute(reworded.ctx, v, move);
   assert.equal(reworded.calls[0]!.args.body, 'Your OTC trading is paused until the $50,000.00 on INV-1 is paid. (ref WI-9)');
-  assert.match(reworded.calls[0]!.args.reasoning, /Worded by Claude; every number checked against the facts\./);
+  assert.match(reworded.calls[0]!.args.reasoning, /\n- Worded by Claude\. Every number checked against the facts\.$/);
 });
