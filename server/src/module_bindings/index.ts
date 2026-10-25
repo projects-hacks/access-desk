@@ -34,6 +34,9 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import SetStrategicReducer from "./set_strategic_reducer";
+import RecordConsolePrecedentReducer from "./record_console_precedent_reducer";
+import ProposeGuidelineChangeReducer from "./propose_guideline_change_reducer";
 import AddRmNoteReducer from "./add_rm_note_reducer";
 import AdvanceClockReducer from "./advance_clock_reducer";
 import AssignRoleReducer from "./assign_role_reducer";
@@ -722,6 +725,9 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("set_strategic", SetStrategicReducer),
+  __reducerSchema("record_console_precedent", RecordConsolePrecedentReducer),
+  __reducerSchema("propose_guideline_change", ProposeGuidelineChangeReducer),
   __reducerSchema("add_rm_note", AddRmNoteReducer),
   __reducerSchema("advance_clock", AdvanceClockReducer),
   __reducerSchema("assign_role", AssignRoleReducer),

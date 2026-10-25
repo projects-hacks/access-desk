@@ -16,3 +16,4 @@ export { recordAgentRun, recordWait } from './reducers/runs';
 export { proposePaymentMatch } from './reducers/matches';
 export { recordPolicyOutcome, upsertCreditProfile, upsertExploitFlag } from './reducers/credit';
 export { proposePermissionChange, proposeTierChange } from './reducers/manual';
+export { proposeGuidelineChange, recordConsolePrecedent, setStrategic } from './reducers/guidelines';

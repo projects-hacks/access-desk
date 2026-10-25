@@ -103,7 +103,8 @@ function AgentTicker() {
   const [shownAt, setShownAt] = useState({ id: newest, at: Date.now() });
   if (newest !== shownAt.id) setShownAt({ id: newest, at: Date.now() });
   if (!recent.length) return null;
-  const e = recent[Math.floor((now - shownAt.at) / 4500) % recent.length]!;
+  // `now` can lag the reset of shownAt by a tick; never let the index go negative.
+  const e = recent[Math.max(0, Math.floor((now - shownAt.at) / 4500)) % recent.length]!;
   const title = e.workItemId !== undefined ? items.find((w) => w.id === e.workItemId)?.title : undefined;
   const { verb, what } = narrate(e, title);
   const who = session.name && e.actorName === session.name ? 'You' : actor(e);

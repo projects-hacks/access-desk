@@ -6,6 +6,9 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import SetStrategicReducer from "../set_strategic_reducer";
+import RecordConsolePrecedentReducer from "../record_console_precedent_reducer";
+import ProposeGuidelineChangeReducer from "../propose_guideline_change_reducer";
 import AddRmNoteReducer from "../add_rm_note_reducer";
 import AdvanceClockReducer from "../advance_clock_reducer";
 import AssignRoleReducer from "../assign_role_reducer";
@@ -61,6 +64,9 @@ import UpsertPositionReducer from "../upsert_position_reducer";
 import UpsertPrecedentReducer from "../upsert_precedent_reducer";
 import UpsertRawRecordReducer from "../upsert_raw_record_reducer";
 
+export type SetStrategicParams = __Infer<typeof SetStrategicReducer>;
+export type RecordConsolePrecedentParams = __Infer<typeof RecordConsolePrecedentReducer>;
+export type ProposeGuidelineChangeParams = __Infer<typeof ProposeGuidelineChangeReducer>;
 export type AddRmNoteParams = __Infer<typeof AddRmNoteReducer>;
 export type AdvanceClockParams = __Infer<typeof AdvanceClockReducer>;
 export type AssignRoleParams = __Infer<typeof AssignRoleReducer>;

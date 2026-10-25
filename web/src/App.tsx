@@ -11,13 +11,13 @@ import { AuditLog } from './screens/AuditLog';
 import { BankBooks } from './screens/BankBooks';
 import { ClientPortal } from './screens/ClientPortal';
 import { Clients } from './screens/Clients';
-import { CreditDesk } from './screens/CreditDesk';
+import { CreditAnalyst } from './screens/credit/CreditAnalyst';
 import { WorkQueue } from './screens/WorkQueue';
 
 const SCREENS = {
   clients: { label: 'Clients', component: Clients, icon: Users },
   approvals: { label: 'Approvals', component: WorkQueue, icon: Inbox },
-  credit: { label: 'Credit', component: CreditDesk, icon: Gauge },
+  credit: { label: 'Credit Analyst', component: CreditAnalyst, icon: Gauge },
   bank: { label: 'Bank', component: BankBooks, icon: Landmark },
   audit: { label: 'Audit log', component: AuditLog, icon: ScrollText },
   portal: { label: 'Client view', component: ClientPortal, icon: Eye },
