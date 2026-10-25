@@ -26,7 +26,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const day = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
 
 /**
- * Each business day: every reminder a client's policy promises, once per invoice, sent the
+ * Each business day: every reminder a client's policy promises, once per due date, sent the
  * same way as any notice (pol-007, no approval). A client already in default gets the default
  * notice instead, so a reminder never stands in for it or starts a cure period.
  */
@@ -37,17 +37,25 @@ export function sendPolicyReminders(ctx: Ctx, today: string) {
     const c = ctx.db.client.id.find(p.clientId);
     if (!c || defaultedInvoices(ctx, c.id, today).length) continue;
     const horizon = addDays(today, reminder.value!);
+    // One reminder per due date, listing every invoice due that day.
+    const byDue = new Map<string, { id: string; owed: bigint }[]>();
     for (const inv of ctx.db.invoice.clientId.filter(c.id)) {
       if (inv.paidCents >= inv.amountCents || inv.status === 'void' || inv.status === 'disputed') continue;
-      if (inv.dueOn <= today || inv.dueOn > horizon) continue;
-      const subjectId = `reminder:${inv.id}`;
+      if (inv.dueOn < today || inv.dueOn > horizon) continue;
+      byDue.set(inv.dueOn, [...(byDue.get(inv.dueOn) ?? []), { id: inv.id, owed: inv.amountCents - inv.paidCents }]);
+    }
+    for (const [dueOn, invoices] of byDue) {
+      const subjectId = `reminder:${c.id}:${dueOn}`;
       if ([...ctx.db.workItem.clientId.filter(c.id)].some((w) => w.kind === 'REMINDER' && w.subjectId === subjectId)) continue;
-      const owed = inv.amountCents - inv.paidCents;
-      const body = `Reminder: ${inv.id} for ${formatUsd(owed)} is due on ${day(inv.dueOn)}. Paying by then keeps your account in good standing.`;
+      const owed = invoices.reduce((sum, i) => sum + i.owed, 0n);
+      const ids = invoices.map((i) => i.id).sort();
+      const list = ids.length > 1 ? `${ids.slice(0, -1).join(', ')} and ${ids.at(-1)}` : ids[0]!;
+      const when = dueOn === today ? 'today' : `on ${day(dueOn)}`;
+      const body = `Reminder: ${list} for ${formatUsd(owed)} ${ids.length > 1 ? 'are' : 'is'} due ${when}. Paying by then keeps your account in good standing.`;
       const item = createWorkItem(ctx, {
-        kind: 'REMINDER', clientId: c.id, subjectId, amountCents: owed, title: `Reminder to ${c.name} before ${inv.id} is due`,
-        proposal: { channel: 'email', body, policy_key: p.key }, policyRef: p.policyId,
-        reasoning: `- ${c.name}'s own policy "${p.title}" sends a reminder ${reminder.value} days before each due date.\n- ${inv.id} is due ${day(inv.dueOn)}.`,
+        kind: 'REMINDER', clientId: c.id, subjectId, amountCents: owed, title: `Reminder to ${c.name}: ${formatUsd(owed)} due ${when}`,
+        proposal: { channel: 'email', body, policy_key: p.key, invoices: ids }, policyRef: p.policyId,
+        reasoning: `- ${c.name}'s own policy "${p.title}" sends a reminder ${reminder.value} days before each due date.\n- ${list} ${ids.length > 1 ? 'are' : 'is'} due ${when}.`,
         confidence: 1, requiredRole: 'CONTROLLER', autoApplied: true,
       });
       executeApproved(ctx, item.id);
