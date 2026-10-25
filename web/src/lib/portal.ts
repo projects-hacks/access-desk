@@ -159,9 +159,9 @@ function connect(): DbConnection {
   for (const v of views) {
     v.onInsert(changed);
     v.onDelete(changed);
+    // Rows with a primary key change in place: an order going from queued to filled is an update.
+    (v as { onUpdate?: (cb: () => void) => void }).onUpdate?.(changed);
   }
-  // Prices move in place; an order's status change (queued to filled) arrives as delete + insert.
-  conn.db.assetPrice.onUpdate(changed);
   // Dev only: `portalConn.db` in the console shows what this connection actually holds.
   if (import.meta.env.DEV) (window as unknown as { portalConn: DbConnection }).portalConn = conn;
   return conn;

@@ -37,7 +37,7 @@ const two = (n: number) => String(n).padStart(2, '0');
  * day runs from its first audit row to the next day's (or for the clock's pace if it is today), and
  * the moment is placed on that day's 08:00–18:00.
  */
-export function useSimTime(): (at: { microsSinceUnixEpoch: bigint }, simDate: string) => string {
+export function useSimTime(): (at: { microsSinceUnixEpoch: bigint }, simDate?: string) => string {
   const [audit] = useTable(tables.auditEvent);
   const clock = useClock();
   return useMemo(() => {
@@ -52,9 +52,11 @@ export function useSimTime(): (at: { microsSinceUnixEpoch: bigint }, simDate: st
     const next = new Map(days.map((d, i) => [d, days[i + 1]]));
     const pace = (clock?.secondsPerDay || 240) * 1000;
     return (at, simDate) => {
-      const s = start.get(simDate);
+      // A row without a sim date (a trade order) belongs to the last day that started before it.
+      const day = simDate ?? days.filter((d) => start.get(d)! <= ms(at)).at(-1) ?? '';
+      const s = start.get(day);
       if (s === undefined) return '';
-      const n = next.get(simDate);
+      const n = next.get(day);
       const length = n ? start.get(n)! - s : pace;
       const frac = Math.min(0.999, Math.max(0, (ms(at) - s) / length));
       const minutes = OPEN_MIN + Math.floor(frac * HOURS_MIN);

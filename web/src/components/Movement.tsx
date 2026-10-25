@@ -42,7 +42,7 @@ export function Movement({ m, apps, fresh, known }: { m: CashMovement; apps: Pay
           <ul className="list kv">
             <li><span>Type</span><span>{label(m.category)} · {rail(m)}</span></li>
             {m.origAccount && <li><span>{out ? 'Beneficiary account' : 'Payer account'}</span><span className="mono">{m.origAccount}</span></li>}
-            <li><span>References</span><span className="mono">{m.refs.join(' ') || '—'}</span></li>
+            <li><span>References</span><span className="mono">{m.refs.join(' ') || '-'}</span></li>
             {m.remittance && <li><span>Remittance</span><span>{m.remittance}</span></li>}
             {m.instructedCents !== undefined && (
               <li><span>Sent / charges</span><span className="tnum">{money(m.instructedCents)} / {money(m.chargesCents ?? 0n)} {m.chargeBearer ?? ''}</span></li>

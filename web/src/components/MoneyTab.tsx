@@ -44,7 +44,7 @@ export function MoneyTab({ row }: { row: ClientRow }) {
       <div className="stats">
         <Stat label="Custody" value={money(total, true)} />
         <Stat label="USD cash" value={money(usd)} />
-        <Stat label="Held" value={held ? money(held) : '—'} bad={held > 0n} />
+        <Stat label="Held" value={held ? money(held) : '-'} bad={held > 0n} />
         <Stat label="Withdrawable" value={money(available)} />
       </div>
 
@@ -132,7 +132,7 @@ function Stat({ label, value, bad }: { label: string; value: string; bad?: boole
   return (
     <div className="stat">
       <div className="eyebrow">{label}</div>
-      <div className={`stat-value ${bad ? 'late' : ''}`}>{value}</div>
+      <div className={`stat-value ${bad ? 'late' : ''} ${value === '-' ? 'muted' : ''}`}>{value}</div>
     </div>
   );
 }

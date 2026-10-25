@@ -6,7 +6,7 @@ import { SlidingPill } from '../components/SlidingPill';
 import { sameNews } from '../lib/agents';
 import { actor, agentOf } from '../lib/bank';
 import { LEVERS } from '../lib/clients';
-import { label, plainText, simDay } from '../lib/format';
+import { bulletLines, label, plainText, simDay } from '../lib/format';
 import { useSimTime } from '../lib/session';
 import { tables } from '../module_bindings';
 import type { AuditEvent } from '../module_bindings/types';
@@ -243,7 +243,7 @@ export function AuditLog() {
                           )}
                         </div>
                         {e.detail && !sameNews(e.detail, sentence(e), clientName.get(e.clientId)) && (
-                          <div className="muted activity-detail">{plainText(e.detail, clientName)}</div>
+                          <Prose className="muted activity-detail" text={e.detail} names={clientName} />
                         )}
                         {override && (
                           <div className="activity-override">
@@ -253,7 +253,9 @@ export function AuditLog() {
                               : ''}
                           </div>
                         )}
-                        {why && <blockquote className="activity-why">“{why}”</blockquote>}
+                        {why && (bulletLines(why)
+                          ? <Prose className="activity-why" text={why} names={clientName} />
+                          : <blockquote className="activity-why">“{why}”</blockquote>)}
                         {e.policyRef && e.policyRef !== 'manual' && (
                           <span className="activity-policy">
                             Under policy: {policyTitle.get(e.policyRef.split(':')[0]!)?.title ?? plainText(e.policyRef)}
@@ -351,4 +353,15 @@ function sentence(e: AuditEvent): string {
     default:
       return label(e.action);
   }
+}
+
+/** Text a person or agent wrote: "- " points as a list, anything else as one line. */
+function Prose({ text, names, className }: { text: string; names: Map<string, string>; className: string }) {
+  const lines = bulletLines(text);
+  if (!lines) return <div className={className}>{plainText(text, names)}</div>;
+  return (
+    <ul className={`${className} activity-points`}>
+      {lines.map((l, i) => <li key={i}>{plainText(l, names)}</li>)}
+    </ul>
+  );
 }

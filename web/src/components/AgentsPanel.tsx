@@ -6,7 +6,7 @@ import {
 import { AGENTS, clock, EARLIER_LIMIT, isAgent, offset, sameNews, useAgents, withoutClient, type EpisodeView, type Need } from '../lib/agents';
 import type { EpisodeStep } from '../module_bindings/types';
 import { Hint } from './Hint';
-import { simDay } from '../lib/format';
+import { bulletLines, simDay } from '../lib/format';
 import { useSession, useSimTime } from '../lib/session';
 
 type Actor = { name: string; role?: string; about: string; icon: LucideIcon; hue: number; low?: boolean; ink?: boolean };
@@ -107,7 +107,18 @@ function StepRow({ step, t0, last, animate }: { step: EpisodeStep; t0: number; l
         >
           {step.text}
         </div>
-        {step.reason && (
+        {step.reason && (bulletLines(step.reason) ? (
+          <ul
+            className={`ap-reason list ${open || typing ? 'open' : ''}`}
+            {...activate(() => setOpen(!open))}
+            aria-expanded={open}
+            title={open ? 'Show less' : 'Show more'}
+          >
+            {step.reason.slice(0, typed).split('\n').map((l) => l.replace(/^-\s?/, '')).filter(Boolean).map((l, i, all) => (
+              <li key={i}>{l}{typing && i === all.length - 1 ? '▍' : ''}</li>
+            ))}
+          </ul>
+        ) : (
           <div
             className={`ap-reason ${open || typing ? 'open' : ''}`}
             {...activate(() => setOpen(!open))}
@@ -116,7 +127,7 @@ function StepRow({ step, t0, last, animate }: { step: EpisodeStep; t0: number; l
           >
             {`“${step.reason.slice(0, typed)}${typing ? '▍' : '”'}`}
           </div>
-        )}
+        ))}
         {step.checks.length > 0 && !typing && (
           <div className="ap-checks">
             {step.checks.map((c, i) =>
@@ -311,7 +322,7 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
           <section className="ap-section">
             <h4 className="ap-head">Needs a person</h4>
             {needs.slice(0, 3).map((n) => (
-              <NeedCard key={n.episodeId} need={n} onOpen={() => onOpenApprovals(n)} />
+              <NeedCard key={String(n.workItemId)} need={n} onOpen={() => onOpenApprovals(n)} />
             ))}
             {needs.length > 3 && <p className="ap-more">+{needs.length - 3} more in approvals</p>}
           </section>

@@ -564,6 +564,9 @@ pre.raw { margin: 0; padding: 10px 12px; font-family: var(--mono); font-size: 12
 .activity-client { color: var(--muted); }
 .activity-client::before { content: '· '; }
 .activity-detail { font-size: 13px; overflow-wrap: anywhere; }
+.activity-points { margin: 2px 0 0; padding-left: 18px; }
+.activity-points li { margin: 1px 0; }
+ul.activity-why { padding-left: 26px; }
 .actor { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .actor.person { background: var(--accent); color: #fff; }
 .actor.agent { background: var(--info-soft); color: var(--info); }
@@ -931,6 +934,10 @@ i.open { background: #f2c2c6; }
 .ap-reason { font-size: 12.5px; line-height: 1.45; font-style: italic; color: #6b717b; cursor: pointer; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .ap-reason:hover { color: #3f444c; }
 .ap-reason.open { -webkit-line-clamp: unset; }
+.ap-reason.list { display: block; margin: 2px 0 0; padding-left: 15px; font-style: normal; max-height: 2.9em; }
+.ap-reason.list.open { max-height: none; }
+.ap-reason.list li { margin: 1px 0; }
+.ap-reason.list li::marker { color: #a3a8b0; }
 .ap-t { padding-top: 3px; font-size: 11px; line-height: 20px; color: var(--faint); white-space: nowrap; }
 .ap-checks { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 1px; }
 .ap-check { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 4px 8px 4px 6px; border: 1px solid transparent; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 1; }
@@ -1042,4 +1049,88 @@ i.open { background: #f2c2c6; }
 @media (max-width: 720px) {
   .appbar .platform-date { display: none; }
   .platform-date.compact { display: flex; margin-left: 0; }
+}
+
+/* Responsive fit (1024 to 1920 wide, and phones) */
+/* Header: the tabs shrink and scroll inside their own area; the date tile and the controller pill compact before they crowd them. */
+.appbar > .screens { flex: 0 1 auto; min-width: 0; }
+@media (max-width: 1365px) {
+  .appbar { gap: 20px; }
+  .appbar .cal-weekday, .appbar .controller-name { display: none; }
+  .appbar .topbar-session { padding: 4px 4px 4px 12px; }
+  .appbar .controller { padding-right: 0; }
+}
+@media (max-width: 1199px) {
+  .appbar { padding: 0 24px; gap: 16px; }
+  .appbar .platform-name { display: none; }
+  .appbar .cal { padding-left: 0; border-left: 0; }
+  .appbar .screens button { padding: 7px 10px; }
+}
+@media (max-width: 720px) {
+  .appbar { padding: 0 16px; gap: 12px; }
+  /* On a phone the controller shows as just the avatar, after the scrolling tabs. */
+  .appbar .topbar-session { display: flex; margin-left: auto; padding: 3px 3px 3px 10px; }
+}
+
+/* The mid-width panel must match the room the page leaves for it (the base .ap width came later and won). */
+@media (min-width: 900px) and (max-width: 1199px) { .ap { width: 340px; } }
+
+/* Client tables beside the agents panel or on a narrower screen: tighter cells, headers and names wrap, Next step takes two lines. */
+.app.agents-open .table.clients th, .app.agents-open .table.clients td { padding-left: 8px; padding-right: 8px; }
+.app.agents-open .table.clients th:first-child, .app.agents-open .table.clients td:first-child { padding-left: 14px; }
+.app.agents-open .table.clients th { white-space: normal; }
+.app.agents-open .table.clients td:first-child { min-width: 165px; }
+.app.agents-open .table.clients .client-cell .title, .app.agents-open .table.clients .client-cell .eyebrow, .app.agents-open .table.clients .num .eyebrow { white-space: normal; }
+.app.agents-open .table.clients .client-cell .title { overflow-wrap: normal; }
+.app.agents-open .table td.next { min-width: 120px; }
+.app.agents-open .table td.ask { min-width: 220px; }
+@media (max-width: 1279px) {
+  .table.clients th, .table.clients td { padding-left: 8px; padding-right: 8px; }
+  .table.clients th:first-child, .table.clients td:first-child { padding-left: 14px; }
+  .table.clients th { white-space: normal; }
+  .table.clients td:first-child { min-width: 165px; }
+  .table.clients .client-cell .title, .table.clients .client-cell .eyebrow, .table.clients .num .eyebrow { white-space: normal; }
+  .table.clients .client-cell .title { overflow-wrap: normal; }
+  .table td.next { min-width: 120px; }
+  .table td.ask { min-width: 220px; }
+}
+/* An ID never breaks at its hyphen. */
+.client-cell .eyebrow .mono { white-space: nowrap; }
+
+/* When the page itself is narrow (a phone, or a small laptop with the panel open), rows become cards with labelled fields. */
+main { container-type: inline-size; }
+@container (max-width: 700px) {
+  #root .table.cards, #root .table.cards thead, #root .table.cards tbody { display: block; }
+  #root .table.cards thead tr { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 16px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+  #root .table.cards th { position: static; padding: 0; border: 0; background: none; }
+  #root .table.cards th:not(:has(.sort)), #root .table.cards thead:not(:has(.sort)) { display: none; }
+  #root .table.cards tbody tr { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px 16px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  #root .table.cards tbody tr:last-child { border-bottom: 0; }
+  #root .table.cards td { position: static; display: block; min-width: 0; max-width: none; padding: 0; border: 0; text-align: left; box-shadow: none; z-index: auto; }
+  #root .table.cards td:empty { display: none; }
+  #root .table.cards td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; font-family: var(--sans); font-size: 11px; font-weight: 500; color: var(--faint); white-space: normal; }
+  #root .table.cards td.cell-main, #root .table.cards td.ask, #root .table.cards td.next, #root .table.cards td.cell-action { grid-column: 1 / -1; }
+  #root .table.cards td.cell-menu { position: absolute; top: 12px; right: 12px; z-index: 2; }
+  #root .table.cards tr:has(> .cell-menu) > .cell-main { padding-right: 40px; }
+  #root .table.cards td.cell-action .btn { width: 100%; justify-content: center; }
+  #root .table.cards .client-cell .title, #root .table.cards .client-cell .eyebrow, #root .table.cards .num .eyebrow { white-space: normal; }
+  #root .table.cards tbody tr.attention { box-shadow: inset 3px 0 0 var(--warn); }
+  #root .table.cards tbody tr.selected { box-shadow: inset 3px 0 0 var(--accent); }
+}
+
+@media (max-width: 720px) {
+  /* Headings and their actions stack instead of pushing the page sideways. */
+  .screen-head { flex-wrap: wrap; }
+  .ca-chip { white-space: normal; }
+  .ca-card-head { flex-wrap: wrap; }
+  /* Bank feed: the match pill sits under the amount, clear of the date. */
+  .movement details > summary > .badge { grid-column: 3; grid-row: 2; justify-self: end; }
+  /* An opened movement's applied amounts wrap instead of widening the page. */
+  .list.kv li > span.tnum { white-space: normal; }
+  /* Bank & books: account names keep their words; the figures scroll inside the table. */
+  .table.books td:nth-child(2) { min-width: 0; }
+  .table.books td:first-child { min-width: 150px; }
+  /* Learning > the agent's own view: its wide tables scroll inside their card. */
+  .credit .credit-grid { grid-template-columns: minmax(0, 1fr); }
+  .credit .credit-grid > *, .credit .accuracy { min-width: 0; overflow-x: auto; }
 }

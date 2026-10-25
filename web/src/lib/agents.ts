@@ -3,6 +3,7 @@ import { useTable } from 'spacetimedb/react';
 import { tables } from '../module_bindings';
 import type { AgentTask, Episode, EpisodeStep } from '../module_bindings/types';
 import { ago, useNow } from './bank';
+import { waitingReason } from './autonomy';
 import { plainText } from './format';
 
 /** The four Factory Droids, in roster order: who they are to the people watching, and what each is for. */
@@ -140,6 +141,7 @@ export function useAgents(): AgentsView {
   const [clients, clientsReady] = useTable(tables.client);
   const [clockRows] = useTable(tables.clock);
   const [audit] = useTable(tables.auditEvent);
+  const [items] = useTable(tables.workItem);
   const today = clockRows[0]?.simDate ?? '';
   const ready = tasksReady && episodesReady && stepsReady && clientsReady;
   const now = useNow(1000);
@@ -216,20 +218,20 @@ export function useAgents(): AgentsView {
       return { key, name, role, purpose, working: running.length > 0, status };
     });
 
-    const needs = views
-      .filter((v) => v.episode.kind === 'waiting')
-      .map((v): Need => {
-        const withItem = v.steps.find((s) => s.workItemId > 0n);
-        const proposal = withItem?.text ?? v.episode.outcome ?? v.episode.trigger;
-        return {
-          episodeId: v.episode.id,
-          clientId: v.episode.clientId,
-          workItemId: withItem?.workItemId,
-          clientName: v.clientName,
-          title: proposal,
-          detail: v.episode.outcome && v.episode.outcome !== proposal ? v.episode.outcome : '',
-        };
-      });
+    // The same requests Approvals lists as waiting, each with the episode that raised it.
+    const clientById = new Map(clients.map((c) => [c.id, c]));
+    const episodeOf = new Map(steps.filter((s) => s.workItemId > 0n).map((s) => [s.workItemId, s.episodeId]));
+    const needs = items
+      .filter((w) => !w.autoApplied && waitingReason(w, clientById.get(w.clientId)))
+      .sort((a, b) => (a.id < b.id ? 1 : -1))
+      .map((w): Need => ({
+        episodeId: episodeOf.get(w.id) ?? 0n,
+        clientId: w.clientId,
+        workItemId: w.id,
+        clientName: nameOf(w.clientId),
+        title: tidy(w.title, names),
+        detail: waitingReason(w, clientById.get(w.clientId)) ?? '',
+      }));
 
     return {
       ready,
@@ -245,5 +247,5 @@ export function useAgents(): AgentsView {
       working: roster.some((r) => r.working) || !!live?.running,
       isFresh: (step: EpisodeStep) => now - (arrivals.get(step.id) ?? 0) < SETTLE_MS,
     };
-  }, [tasks, episodes, steps, clients, audit, today, ready, now, arrivals]);
+  }, [tasks, episodes, steps, clients, audit, items, today, ready, now, arrivals]);
 }

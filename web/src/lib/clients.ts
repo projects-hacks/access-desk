@@ -134,7 +134,7 @@ export function useClientRows(): ClientRow[] {
                   ? 'Restore access'
                   : restricted
                     ? 'Restores when paid'
-                    : '—';
+                    : '-';
 
       return {
         client,

@@ -300,11 +300,11 @@ const byKey = (m?: ByMeta) => (m?.decided_by !== 'claude' ? 'rules' : m.provider
 function byLabel(m: ByMeta | undefined, long = true): string {
   const k = byKey(m);
   if (!m?.provider) return k === 'claude' ? (long ? 'Decided by Claude' : 'Claude') : (long ? 'Decided by rules' : 'rules');
-  const who = k === 'rules' ? 'rules' : k === 'factory' ? `Factory${m.model ? ` (${m.model})` : ''}` : 'Claude (Anthropic)';
+  const who = k === 'rules' ? 'rules' : k === 'factory' ? 'Droid' : 'Claude (Anthropic)';
   return long ? `Decided by ${who}` : who;
 }
 /** The short name for "<name>: tier change" lines. */
-const modelName = (m?: ByMeta) => (m?.provider === 'factory' ? 'Factory' : 'Claude');
+const modelName = (m?: ByMeta) => (m?.provider === 'factory' ? 'Droid' : 'Claude');
 
 /** Who decided, Claude's choice next to the rules' baseline, and the guardrails that applied. */
 function Decision({ meta, tier }: { meta: (DecisionMeta & { from_tier?: number }) | undefined; tier: number }) {
@@ -395,7 +395,7 @@ function Trace({ client, profile, flags, item, review, note, kept }: {
           <p>Value <b>{profile.valueScore}</b> = {b.size.toFixed(1)} <small>size of fees billed</small> + {b.breadth?.toFixed(1)} <small>{b.products} of 4 products</small></p>
         )}
         {profile && !b && <p>Reliability <b>{profile.reliabilityScore}</b> · value <b>{profile.valueScore}</b></p>}
-        {profile && <p>Coverage <b>{profile.coverageRatio.toFixed(2)}×</b>: {profile.coverageDetail} Expected to settle {profile.expectedSettleOn ?? '—'}{b?.median_lag !== undefined ? ` (typical lag ${b.median_lag} days)` : ''}.</p>}
+        {profile && <p>Coverage <b>{profile.coverageRatio.toFixed(2)}×</b>: {profile.coverageDetail} Expected to settle {profile.expectedSettleOn ?? '-'}{b?.median_lag !== undefined ? ` (typical lag ${b.median_lag} days)` : ''}.</p>}
       </li>
       <li>
         <h4>Patterns <span className="muted">exploit detectors</span></h4>
@@ -411,8 +411,8 @@ function Trace({ client, profile, flags, item, review, note, kept }: {
               {!!meta.baseline.reasons?.length && <ul>{meta.baseline.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
             </>
           : kept
-            ? <p><b>change proposed</b> <span className="muted">— Claude was asked and kept the tier (see Decision)</span></p>
-            : <p><b>keep tier {client.tier}</b> <span className="muted">— nothing to decide, so Claude was not asked</span></p>}
+            ? <p><b>change proposed</b> <span className="muted">: the agent was asked and kept the tier (see Decision)</span></p>
+            : <p><b>keep tier {client.tier}</b> <span className="muted">: nothing to decide, so the model was not asked</span></p>}
       </li>
       <li>
         <h4>Guardrails <span className="muted">what any decision must respect</span></h4>
@@ -432,7 +432,7 @@ function Trace({ client, profile, flags, item, review, note, kept }: {
               {!!choice.cited_invoice_ids.length && <p className="muted">Cites {choice.cited_invoice_ids.join(', ')}</p>}
             </>
           : kept
-            ? <p><span className="pill by-claude">Claude kept tier {client.tier}</span> {kept}</p>
+            ? <p><span className="pill by-claude">Agent kept tier {client.tier}</span> {kept}</p>
             : <p>{meta?.baseline ? `Rules decided: ${actionText(meta.baseline.action, from, meta.baseline.to_tier)}.` : `No change for ${client.name}.`}</p>}
       </li>
       <li>
@@ -572,7 +572,7 @@ function Feed({ audit, items, nameOf, tierOf }: {
           const time = a.at.toDate().toLocaleTimeString();
           const who = <span className={`who ${a.actorRole.toLowerCase()}`}>{a.actorRole === 'AGENT' ? 'agent' : a.actorRole.toLowerCase()}</span>;
           if (a.action === 'AGENT_WAITED') {
-            return <li key={String(a.id)} className="ev decision differs"><time>{time}</time><span className="who agent">Credit Analyst</span><b>{nameOf(a.clientId)}</b> <span className="pill by-claude">Claude kept the tier</span><span className="pill differs">differs from rules</span><p>{a.detail}</p></li>;
+            return <li key={String(a.id)} className="ev decision differs"><time>{time}</time><span className="who agent">Credit Analyst</span><b>{nameOf(a.clientId)}</b> <span className="pill by-claude">Agent kept the tier</span><span className="pill differs">differs from rules</span><p>{a.detail}</p></li>;
           }
           if (a.action === 'CREDIT_SCORED') {
             return <li key={String(a.id)} className="ev score"><time>{time}</time>{who}<b>{nameOf(a.clientId)}</b> scored · {a.toState}<span className="muted"> · {a.detail}</span></li>;
@@ -628,7 +628,7 @@ function FeedDecision({ time, w, tier, auto, gate }: { time: string; w: ItemRow;
       {differs && <span className="pill differs">differs from rules</span>}
       <Gate auto={auto} gate={gate} />
       <div className="vs">
-        <span>rules: <b>{m?.baseline ? actionText(m.baseline.action, from, m.baseline.to_tier) : '—'}</b></span>
+        <span>rules: <b>{m?.baseline ? actionText(m.baseline.action, from, m.baseline.to_tier) : '-'}</b></span>
         {c && <span>{modelName(m)}: <b>{actionText(c.action, from, c.to_tier)}</b>{c.policy ? ` + ${c.policy.kind === 'company_draft' ? 'new policy' : c.policy.policy_id}` : ''} · confidence {c.confidence.toFixed(2)}</span>}
         {m?.why && <span className="muted">asked because {m.why}</span>}
       </div>

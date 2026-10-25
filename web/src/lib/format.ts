@@ -51,6 +51,13 @@ export function plainDates(text: string): string {
   return text.replace(/\b\d{4}-(\d{2})-(\d{2})\b/g, (_all, m: string, d: string) => `${MONTHS[+m - 1] ?? m} ${+d}`);
 }
 
+const KEEP_UPPER = new Set(['LP', 'LLC', 'LLP', 'LTD', 'PLC', 'USD', 'USDC', 'ACH', 'API', 'RM', 'BTC', 'ETH', 'SOL', 'II', 'III', 'NA', 'AG', 'SA']);
+
+/** "ZEPHYR CAPITAL MGMT LP" as a bank sends it reads "Zephyr Capital Mgmt LP". */
+function titleCaseName(run: string): string {
+  return run.split(/(\s+)/).map((w) => (KEEP_UPPER.has(w.replace(/[.,]/g, '')) || /^\s+$/.test(w) ? w : w.charAt(0) + w.slice(1).toLowerCase())).join('');
+}
+
 /**
  * Display safety net for text the module or an agent wrote: dates become "Mar 14", client ids become
  * names, snake_case becomes words, a client's own policy key reads "this client's own policy", and
@@ -63,7 +70,11 @@ export function plainText(text: string, names: Map<string, string> = new Map()):
     .replace(/\bpol-\d+:ORG-\d+\b/gi, "this client's own policy")
     .replace(/\bORG-\d+\b/g, (id) => names.get(id) ?? 'the client')
     .replace(/\bpol-\d+\b/gi, 'policy')
-    .replace(/\bWI-\d+\b/g, 'this request')
+    // Bank and work item refs mean nothing in a sentence; the screen shows the payment itself.
+    .replace(/\s*\(\s*(?:WI|AC|TX|JD|WE|CW)-[A-Z]?\d+\s*\)/g, '')
+    .replace(/\s+(?:WI|AC|TX|JD|WE|CW)-[A-Z]?\d+\b/g, '')
+    .replace(/\b(?:WIRE|USDC)\b(?= (?:of|from|to)\b)/g, (w) => (w === 'WIRE' ? 'wire' : w))
+    .replace(/\b[A-Z][A-Z&'.]+(?:\s+[A-Z][A-Z&'.]+)+\b/g, titleCaseName)
     .replace(/\s*·?\s*\bscores? \d+(\.\d+)?/gi, '')
     .replace(/\s*\(?§\s*[\d.]+\)?/g, '')
     .replace(/\b[A-Z]+(?:_[A-Z]+)+\b/g, (w) => w.toLowerCase().replace(/_/g, ' '))
@@ -95,14 +106,17 @@ export function points(text: string): string[] {
     .replace(/\bEvidence: /g, 'Invoices: ')
     .replace(/\bTerms: /g, 'Change: ')
     .replace(/\bSuccess: /g, 'Works if: ');
-  const lines = clean.split('\n').map((l) => l.trim()).filter(Boolean);
-  const raw = lines.length > 1 && lines.every((l) => l.startsWith('- '))
-    ? lines.map((l) => l.slice(2))
-    : clean.split(/;\s+|(?<=[a-z0-9)%][.!?])\s+(?=[A-Z])/);
+  const raw = bulletLines(clean) ?? clean.split(/;\s+|(?<=[a-z0-9)%][.!?])\s+(?=[A-Z])/);
   return raw
     .map((p) => p.trim().replace(/[.;]+$/, ''))
     .filter(Boolean)
     .map((p) => `${p.charAt(0).toUpperCase()}${p.slice(1)}.`);
+}
+
+/** The lines of text an agent wrote as "- " points, or null when it is one paragraph. */
+export function bulletLines(text: string): string[] | null {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  return lines.length > 1 && lines.every((l) => l.startsWith('- ')) ? lines.map((l) => l.slice(2)) : null;
 }
 
 /** Asks the console to open one request in Approvals (the app listens; any screen can ask). */

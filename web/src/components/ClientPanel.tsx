@@ -96,13 +96,13 @@ function Overview({ row }: { row: ClientRow }) {
         <Stat label="Overdue" value={money(row.overdueCents)} />
         <Stat
           label="Days late"
-          value={row.daysPastDue ? `${row.daysPastDue}d` : '—'}
+          value={row.daysPastDue ? `${row.daysPastDue}d` : '-'}
           bad={row.inDefault}
         />
         <Stat
           label="Expected"
           value={
-            !row.expected ? '—' : 'prepay' in row.expected ? 'Prepay' : shortDate(row.expected.on)
+            !row.expected ? '-' : 'prepay' in row.expected ? 'Prepay' : shortDate(row.expected.on)
           }
         />
       </div>
@@ -209,7 +209,7 @@ function Stat({ label, value, bad }: { label: string; value: string; bad?: boole
   return (
     <div className="stat">
       <div className="eyebrow">{label}</div>
-      <div className={`stat-value ${bad ? 'late' : ''}`}>{value}</div>
+      <div className={`stat-value ${bad ? 'late' : ''} ${value === '-' ? 'muted' : ''}`}>{value}</div>
     </div>
   );
 }
@@ -222,7 +222,7 @@ function leverText(l: Lever) {
 
 /**
  * People change tier and permissions the same way agents do: each change is a proposal.
- * Routine ones apply at once; the rest wait in Approvals for a second controller.
+ * The controller is the person in the loop, so their changes apply at once.
  * The reasoning is what the agents read next time.
  */
 function ChangeAccess({ row }: { row: ClientRow }) {
@@ -405,8 +405,7 @@ function ChangeAccess({ row }: { row: ClientRow }) {
       ))}
       {results.some((r) => r.tone === 'good') && (
         <p className="eyebrow">
-          Changes apply at once, except for top clients (Tier 1 or strategic) and offboarding (every
-          permission off), which wait in Approvals for the other controller.
+          Changes apply at once and are recorded in the audit log.
         </p>
       )}
     </>

@@ -27,7 +27,7 @@ export function AutonomyBand() {
   const trend = useMemo(() => [...metrics].sort((a, b) => a.weekEnding.localeCompare(b.weekEnding)).slice(-12), [metrics]);
 
   const bank = sources.find((s) => s.source === 'bank');
-  const synced = bank?.lastSyncAt ? ago(now - Number(bank.lastSyncAt.microsSinceUnixEpoch / 1000n)) : '—';
+  const synced = bank?.lastSyncAt ? ago(now - Number(bank.lastSyncAt.microsSinceUnixEpoch / 1000n)) : '-';
   const tied = run && run.unexplainedCents === 0n;
 
   return (
@@ -35,7 +35,7 @@ export function AutonomyBand() {
       <div className="band-cell">
         <div className="eyebrow band-label"><Bot size={14} aria-hidden /> Decided on its own</div>
         <div className="band-value">
-          {d.total ? percent(d.auto / d.total) : '—'}
+          {d.total ? percent(d.auto / d.total) : <span className="muted">-</span>}
           <span className="band-sub">{d.auto} of {d.total} decisions</span>
         </div>
         {trend.length > 1 && (
@@ -64,7 +64,7 @@ export function AutonomyBand() {
       <div className="band-cell">
         <div className="eyebrow band-label"><Scale size={14} aria-hidden /> Books</div>
         <div className={`band-value ${!run ? '' : tied ? 'good' : 'bad'}`}>
-          {!run ? '—' : tied ? 'Tied' : money(run.unexplainedCents)}
+          {!run ? <span className="muted">-</span> : tied ? 'Tied' : money(run.unexplainedCents)}
           <span className="band-sub">{!run ? 'no tie-out yet' : tied ? 'bank = ledger, to the cent' : 'unexplained · sent to a controller'}</span>
         </div>
       </div>

@@ -15,7 +15,7 @@ import { demo } from '../lib/demo';
 import { money } from '../lib/format';
 import { PERMISSION_GROUPS, permissionOn } from '../lib/permissions';
 import { bindTo, placeOrder, usePortal, type PortalSnapshot } from '../lib/portal';
-import { useClock, usePlatform } from '../lib/session';
+import { useClock, usePlatform, useSimTime } from '../lib/session';
 import { tables } from '../module_bindings';
 import type { AssetPrice, BankAccount, TradeOrder } from '../module_bindings/types';
 
@@ -47,7 +47,7 @@ function pausedSentence(paused: Paused[]): string {
     i === 0 || /^[A-Z]{2,}/.test(w) ? w : w.charAt(0).toLowerCase() + w.slice(1),
   );
   const list = words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : (words[0] ?? '');
-  return `${list} ${words.length > 1 || /s$/.test(list) ? 'are' : 'is'} paused`;
+  return `${list} ${words.length > 1 || /[^s]s$/.test(list) ? 'are' : 'is'} paused`;
 }
 
 const PAGES = { home: 'Home', assets: 'My assets', pay: 'Pay balance' } as const;
@@ -318,6 +318,7 @@ export function ClientPortal() {
         <aside className="cx-panel">
           {panel === 'trade' ? (
             <TradePanel
+              key={row.client.id}
               row={row}
               paused={paused}
               prices={portal.prices}
@@ -388,12 +389,6 @@ type Side = keyof typeof SIDES;
 const TRADED = ['BTC', 'ETH'] as const;
 
 const qty = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 4 });
-const hhmm = (o: TradeOrder) =>
-  new Date(Number(o.at.microsSinceUnixEpoch / 1000n)).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
 
 /** One order in words: what happened, not what the database stores. */
 function orderWords(o: TradeOrder): string {
@@ -427,6 +422,7 @@ function TradePanel({
   const [error, setError] = useState<string>();
   // Newest order id when "Buy" was pressed: the answer is the first order after it.
   const [after, setAfter] = useState<bigint>();
+  const simTime = useSimTime();
   const trading = usesLever(row, 'trading');
   const hint = !trading || !can(paused, side);
   const withdrawals = usesLever(row, 'withdrawals');
@@ -567,7 +563,7 @@ function TradePanel({
                 <span>
                   <strong>{orderWords(o)}</strong>
                   <span className="muted">
-                    {o.status === 'refused' ? o.reason : `${money(o.amountCents)} · ${hhmm(o)}`}
+                    {o.status === 'refused' ? o.reason : [money(o.amountCents), simTime(o.at)].filter(Boolean).join(' · ')}
                   </span>
                 </span>
                 {o.status === 'refused' && <span className="cx-tag">Refused</span>}
@@ -847,7 +843,7 @@ function Pay({
 function WireCard({ row, wire }: { row: Row; wire: string }) {
   return (
     <div className="cx-card">
-      <p className="cx-wire">{wire || '—'}</p>
+      <p className="cx-wire">{wire || <span className="muted">-</span>}</p>
       <p className="cx-foot">
         Use <strong className="mono">{row.client.id}</strong> and the invoice numbers as the
         reference. Access comes back as soon as the payment arrives.

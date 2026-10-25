@@ -43,7 +43,7 @@ export function BankBooks() {
   const now = useNow();
 
   const bank = sources.find((s) => s.source === 'bank');
-  const synced = bank?.lastSyncAt ? ago(now - Number(bank.lastSyncAt.microsSinceUnixEpoch / 1000n)) : '—';
+  const synced = bank?.lastSyncAt ? ago(now - Number(bank.lastSyncAt.microsSinceUnixEpoch / 1000n)) : '-';
   const runBreaks = useMemo(() => breaks.filter((b) => run && b.runId === run.id), [breaks, run]);
   const shown = feed.filter(FEED_FILTERS[filter].test);
   const tied = run && run.unexplainedCents === 0n;

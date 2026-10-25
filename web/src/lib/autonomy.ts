@@ -8,8 +8,9 @@ export const REASONS = {
   top: { label: 'Top client', note: 'Restricting a Tier 1 or strategic client' },
   offboarding: { label: 'Offboarding', note: 'Closing a client down' },
   exploit: { label: 'Exploit fix', note: 'Changes the tier guidelines' },
+  policy: { label: 'Contract change', note: 'A client policy that changes the contract or moves money' },
   confidence: { label: 'Low confidence', note: 'The agent is under 10% sure' },
-  console: { label: 'Console change', note: 'The other controller approves' },
+  console: { label: 'Console change', note: 'Made by the controller' },
 } as const;
 
 export type ReasonKey = keyof typeof REASONS;
@@ -19,7 +20,7 @@ const isOpen = (w: WorkItem) => w.state === 'PROPOSED' || w.state === 'NEEDS_INF
 /** Which of the reasons put this item in front of a person (for open or decided items). */
 export function reasonFor(item: WorkItem, client?: Client): ReasonKey | undefined {
   if (item.autoApplied) return;
-  if (item.kind === 'POLICY_DRAFT') return 'exploit';
+  if (item.kind === 'POLICY_DRAFT') return item.policyRef.startsWith('exploit-fix-') ? 'exploit' : 'policy';
   if (item.title.startsWith('Offboarding')) return 'offboarding';
   if (item.policyRef === 'manual') return 'console';
   // Mirrors isTopClient in spacetime/src/autonomy.ts.

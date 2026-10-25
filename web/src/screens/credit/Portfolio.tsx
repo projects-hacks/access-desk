@@ -163,7 +163,7 @@ export function Portfolio({
             />
           </div>
           <div className="table-wrap ca-table">
-            <table className="table clients">
+            <table className="table clients cards">
               <thead>
                 <tr>
                   {header('name', 'Client')}
@@ -183,32 +183,32 @@ export function Portfolio({
                     className={c.client.id === selected.client.id ? 'selected' : ''}
                     onClick={() => setSelectedId(c.client.id)}
                   >
-                    <td>
+                    <td className="cell-main">
                       <div className="title">
                         {c.client.name}
                         {c.client.strategic && <span className="star"> · Strategic</span>}
                       </div>
                       <div className="eyebrow">{c.client.segment}</div>
                     </td>
-                    <td>
+                    <td data-label="Tier">
                       <TierTag tier={c.client.tier} />
                       {c.suggestedTier !== c.client.tier && (
                         <div className="eyebrow">model: T{c.suggestedTier}</div>
                       )}
                     </td>
-                    <td className="num mono">{c.score}</td>
-                    <td className="num mono">{c.value}</td>
-                    <td>
+                    <td className="num mono" data-label="Score">{c.score}</td>
+                    <td className="num mono" data-label="Value">{c.value}</td>
+                    <td data-label="Reliability">
                       <span className="ca-rel">
                         <Meter value={c.reliability} />
                         <span className="mono">{c.reliability}</span>
                       </span>
                     </td>
-                    <td>
+                    <td data-label="6 mo">
                       <Sparkline values={c.trend} />
                     </td>
-                    <td className="num mono">{c.arCents > 0n ? money(c.arCents) : '—'}</td>
-                    <td>
+                    <td className="num mono" data-label="AR">{c.arCents > 0n ? money(c.arCents) : <span className="muted">-</span>}</td>
+                    <td data-label="Flags">
                       {c.patterns.length ? (
                         <Badge tone="bad">
                           {c.patterns.length === 1
@@ -216,7 +216,7 @@ export function Portfolio({
                             : `${c.patterns.length} patterns`}
                         </Badge>
                       ) : (
-                        <span className="muted">—</span>
+                        <span className="muted">-</span>
                       )}
                     </td>
                   </tr>
@@ -448,11 +448,11 @@ function ClientDetail({ c, policy }: { c: ScoredClient; policy: Policy }) {
         </li>
         <li>
           <span>Grace days</span>
-          <span className="mono">{rule?.graceDays ?? '—'}</span>
+          <span className="mono">{rule?.graceDays ?? '-'}</span>
         </li>
         <li>
           <span>Agent may go up to</span>
-          <span>{rule ? LADDER[rule.ceiling] : '—'}</span>
+          <span>{rule ? LADDER[rule.ceiling] : '-'}</span>
         </li>
         <li>
           <span>Model suggests</span>

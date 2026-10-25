@@ -26,10 +26,14 @@ const FILTERS = {
   top: { label: 'Top clients', reason: 'top', open: true },
   offboarding: { label: 'Offboarding', reason: 'offboarding', open: true },
   exploit: { label: 'Exploit fixes', reason: 'exploit', open: true },
+  policy: { label: 'Contract changes', reason: 'policy', open: true },
   decided: { label: 'Decided', reason: undefined, open: false },
 } as const;
 
 type FilterKey = keyof typeof FILTERS;
+
+/** Changes the controller made in the console carry no agent confidence. */
+const byPerson = (w: { policyRef: string }) => w.policyRef === 'manual' || /^(credit-tiers|credit-model|exploit-fix-)/.test(w.policyRef);
 
 /**
  * The agent acts on its own; this is the short list it asks a person about:
@@ -137,7 +141,7 @@ export function WorkQueue({ focus }: { focus?: Focus }) {
         </div>
       ) : (
         <div className="table-wrap">
-          <table className="table clients">
+          <table className="table clients cards">
             <thead>
               <tr>
                 <th>Client</th>
@@ -160,7 +164,7 @@ export function WorkQueue({ focus }: { focus?: Focus }) {
                     className={w.id === openId ? 'selected' : ''}
                     onClick={() => setOpenId(w.id)}
                   >
-                    <td>
+                    <td className="cell-main">
                       <div className="client-cell">
                         {c && <Avatar id={c.id} name={c.name} />}
                         <div>
@@ -179,15 +183,15 @@ export function WorkQueue({ focus }: { focus?: Focus }) {
                         </div>
                       </div>
                     </td>
-                    <td className="muted">{c ? `T${c.tier}` : '—'}</td>
-                    <td className="ask">
+                    <td className="muted" data-label="Tier">{c ? `T${c.tier}` : '-'}</td>
+                    <td className="ask" data-label="What the agent wants">
                       {plainText(w.title, names)}
                       <div className="eyebrow kind-line">
                         <KindIcon kind={w.kind} />
-                        Agent {Math.round(w.confidence * 100)}% sure · {label(w.kind)}
+                        {byPerson(w) ? label(w.kind) : `Agent ${Math.round(w.confidence * 100)}% sure · ${label(w.kind)}`}
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Why it's asking">
                       {r && (
                         <>
                           <Badge tone={r === 'exploit' ? 'bad' : r === 'top' ? 'info' : 'warn'}>
@@ -197,13 +201,13 @@ export function WorkQueue({ focus }: { focus?: Focus }) {
                         </>
                       )}
                     </td>
-                    <td className="num">
-                      {w.amountCents ? money(w.amountCents) : <span className="muted">—</span>}
+                    <td className="num" data-label="Amount">
+                      {w.amountCents ? money(w.amountCents) : <span className="muted">-</span>}
                     </td>
-                    <td>
+                    <td data-label="Status">
                       <StateBadge state={w.state} />
                     </td>
-                    <td>
+                    <td className="cell-action">
                       <button
                         className="btn"
                         onClick={(e) => {
@@ -401,7 +405,7 @@ function Drawer({
         <ul className="list">
           <li>
             <span>
-              {policy ? <strong>{plain(policy.title)}</strong> : <strong>{item.policyRef ? plain(item.policyRef) : '—'}</strong>}
+              {policy ? <strong>{plain(policy.title)}</strong> : <strong>{item.policyRef ? plain(item.policyRef) : '-'}</strong>}
             </span>
             {policy && (
               <Badge tone={policy.status === 'active' ? 'good' : 'neutral'}>{policy.status}</Badge>

@@ -302,7 +302,7 @@ function WeightsCard({ book, policy }: { book: ScoredClient[]; policy: Policy })
       });
       setResult({
         tone: 'good',
-        text: 'Submitted. Once the other controller approves, every client is re-scored.',
+        text: 'Applied. Every client is re-scored on the new weights.',
       });
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
@@ -363,7 +363,7 @@ function WeightsCard({ book, policy }: { book: ScoredClient[]; policy: Policy })
               disabled={busy || session.role !== 'CONTROLLER'}
               onClick={submit}
             >
-              Submit for approval
+              Apply change
             </button>
           </div>
           {result && <p className={`notice ${result.tone}`}>{result.text}</p>}

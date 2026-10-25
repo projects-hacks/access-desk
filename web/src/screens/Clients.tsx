@@ -106,7 +106,7 @@ export function Clients() {
         </div>
       ) : (
         <div className="table-wrap">
-          <table className="table clients">
+          <table className="table clients cards">
             <thead>
               <tr>
                 {header('client', 'Client')}
@@ -128,7 +128,7 @@ export function Clients() {
                   className={r.client.id === panel?.clientId ? 'selected' : ''}
                   onClick={() => setPanel({ clientId: r.client.id, mode: 'overview' })}
                 >
-                  <td>
+                  <td className="cell-main">
                     <div className="client-cell">
                       <Avatar id={r.client.id} name={r.client.name} />
                       <div>
@@ -142,20 +142,20 @@ export function Clients() {
                       </div>
                     </div>
                   </td>
-                  <td className="muted">T{r.client.tier}</td>
-                  <td className="num">
-                    {r.unpaidCents > 0n ? money(r.unpaidCents) : <span className="muted">—</span>}
+                  <td className="muted" data-label="Tier">T{r.client.tier}</td>
+                  <td className="num" data-label="Unpaid">
+                    {r.unpaidCents > 0n ? money(r.unpaidCents) : <span className="muted">-</span>}
                     {r.disputedCents > 0n && (
                       <div className="eyebrow">{money(r.disputedCents)} disputed</div>
                     )}
                   </td>
-                  <td className={`num ${r.inDefault ? 'late' : ''}`}>
-                    {r.daysPastDue > 0 ? `${r.daysPastDue}d` : <span className="muted">—</span>}
+                  <td className={`num ${r.inDefault ? 'late' : ''}`} data-label="Days late">
+                    {r.daysPastDue > 0 ? `${r.daysPastDue}d` : <span className="muted">-</span>}
                     {r.daysPastDue > 0 && !r.inDefault && <div className="eyebrow">in grace</div>}
                   </td>
-                  <td>
+                  <td data-label="Expected payment">
                     {!r.expected ? (
-                      <span className="muted">—</span>
+                      <span className="muted">-</span>
                     ) : 'prepay' in r.expected ? (
                       'Prepay only'
                     ) : (
@@ -165,14 +165,14 @@ export function Clients() {
                       </>
                     )}
                   </td>
-                  <td>
+                  <td data-label="Status">
                     <Badge tone={r.status.tone}>{r.status.label}</Badge>
                   </td>
-                  <td>
+                  <td data-label="Access">
                     <Access row={r} />
                   </td>
-                  <td className="next" title={r.next}><span className="clamp-2">{r.next}</span></td>
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td className="next" data-label="Next step" title={r.next}><span className="clamp-2">{r.next}</span></td>
+                  <td className="cell-menu" onClick={(e) => e.stopPropagation()}>
                     <RowMenu
                       name={r.client.name}
                       onPick={(mode) => setPanel({ clientId: r.client.id, mode })}

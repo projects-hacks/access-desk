@@ -69,7 +69,7 @@ export function TiersPolicy({ book, policy }: { book: ScoredClient[]; policy: Po
       });
       setResult({
         tone: 'good',
-        text: 'Submitted. It waits in Approvals for the other controller.',
+        text: 'Applied. The new guidelines are in force.',
       });
       setReason('');
     } catch (e) {
@@ -120,6 +120,11 @@ export function TiersPolicy({ book, policy }: { book: ScoredClient[]; policy: Po
 
         <div className="ca-card">
           <h3>Tiers under this draft</h3>
+          <p className="muted">
+            By score, compared with today's guidelines. Clients' actual tiers move one step at a time
+            through reviews; today they are{' '}
+            {draft.map((t) => `${book.filter((c) => c.client.tier === t.tier).length} in Tier ${t.tier}`).join(', ')}.
+          </p>
           <ul className="ca-tiercards">
             {draft.map((t) => {
               const now = book.filter(
@@ -263,7 +268,7 @@ export function TiersPolicy({ book, policy }: { book: ScoredClient[]; policy: Po
           </span>
           <input
             className="search ca-reason"
-            placeholder="Reasoning for the other controller"
+            placeholder="Why this change (kept in the audit log)"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             aria-label="Reasoning"
@@ -279,7 +284,7 @@ export function TiersPolicy({ book, policy }: { book: ScoredClient[]; policy: Po
             disabled={busy || !reason.trim() || session.role !== 'CONTROLLER'}
             onClick={submit}
           >
-            {busy ? 'Submitting…' : 'Submit for approval'}
+            {busy ? 'Applying…' : 'Apply change'}
           </button>
         </div>
       )}
