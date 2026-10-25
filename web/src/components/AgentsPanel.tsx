@@ -292,7 +292,10 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
   const { roster, needs, now, today, earlier, total, before, beforeDay, learned, working, isFresh } = useAgents();
   const { connected } = useSession();
   const simTime = useSimTime();
-  const timeOf = (v: EpisodeView) => simTime(v.episode.startedAt, v.episode.simDate) || clock(v.episode.startedAt);
+  // Running: when it began ("since 12:35"); finished: when it last moved.
+  const timeOf = (v: EpisodeView) => v.running
+    ? simTime(v.episode.startedAt, v.episode.simDate) || clock(v.episode.startedAt)
+    : simTime(v.lastAt, v.day) || clock(v.lastAt);
   const [expanded, setExpanded] = useState<Set<bigint>>(new Set());
   const toggle = (id: bigint) =>
     setExpanded((s) => {

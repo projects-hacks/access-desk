@@ -37,6 +37,9 @@ export type EpisodeView = {
   running: boolean;
   /** Agents working on this episode right now (a Droid session can take a minute or two). */
   working: string[];
+  /** When it last moved, and the business day that was: a person deciding an old request brings it back to today. */
+  lastAt: { microsSinceUnixEpoch: bigint };
+  day: string;
   /** Last step minus first, in milliseconds. */
   totalMs: number;
 };
@@ -181,9 +184,18 @@ export function useAgents(): AgentsView {
     // The panel is about the agents: an episode shows once an agent has a step in it, or while an
     // agent is working on it. Everything else (a withdrawal the platform paid out, say) is in the Audit log.
     const withAgent = (id: bigint) => busy.has(id) || (stepsBy.get(id) ?? []).some((s) => isAgent(s.actor));
+    // The business day a moment falls in: the last day whose first audit row came before it.
+    const dayStart = new Map<string, number>();
+    for (const e of audit) {
+      const t = ms(e.at);
+      const s = dayStart.get(e.simDate);
+      if (s === undefined || t < s) dayStart.set(e.simDate, t);
+    }
+    const days = [...dayStart].sort((a, b) => a[1] - b[1]);
+    const dayAt = (t: number) => days.filter(([, s]) => s <= t).at(-1)?.[0];
+
     const views = [...episodes]
       .filter((e) => withAgent(e.id))
-      .sort((a, b) => (a.id < b.id ? 1 : -1))
       .map((raw): EpisodeView & { settling: boolean } => {
         // An outcome written as points reads as its first point on the one-line row.
         const outcome = raw.outcome ? (bulletLines(raw.outcome)?.[0] ?? raw.outcome) : '';
@@ -199,14 +211,17 @@ export function useAgents(): AgentsView {
           working: [...new Set(tasks.filter((t) => t.episodeId === raw.id && t.status === 'running' && open(t)).map((t) => t.agent))],
           settling: running || now - landed < SETTLE_MS,
           totalMs: list.length > 1 ? ms(list[list.length - 1]!.at) - ms(list[0]!.at) : 0,
+          lastAt: list.at(-1)?.at ?? raw.startedAt,
+          day: (list.length ? dayAt(ms(list.at(-1)!.at)) : undefined) ?? raw.simDate,
         };
-      });
+      })
+      .sort((a, b) => ms(b.lastAt) - ms(a.lastAt) || (a.episode.id < b.episode.id ? 1 : -1));
     const live = views.find((v) => v.settling);
     // History lives in the Audit log; the panel is about the business day.
-    const earlier = views.filter((v) => v !== live && v.episode.simDate === today);
-    const older = views.filter((v) => v !== live && v.episode.simDate !== today);
-    const beforeDay = older.find((v) => v.episode.simDate)?.episode.simDate ?? '';
-    const before = earlier.length < 3 ? older.filter((v) => v.episode.simDate === beforeDay).slice(0, 5) : [];
+    const earlier = views.filter((v) => v !== live && v.day === today);
+    const older = views.filter((v) => v !== live && v.day !== today);
+    const beforeDay = older.find((v) => v.day)?.day ?? '';
+    const before = earlier.length < 3 ? older.filter((v) => v.day === beforeDay).slice(0, 5) : [];
 
     const roster = AGENTS.map(({ key, name, role, purpose }): AgentStatus => {
       const mine = tasks.filter((t) => t.agent === key);
