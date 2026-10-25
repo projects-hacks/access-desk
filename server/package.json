@@ -18,6 +18,7 @@
     "ledger:verify": "tsx --env-file-if-exists=../.env src/scripts/ledger-verify.ts",
     "tieout:verify": "tsx --env-file-if-exists=../.env src/scripts/tieout-verify.ts",
     "actions:verify": "tsx --env-file-if-exists=../.env src/scripts/actions-verify.ts",
+    "portal:verify": "tsx --env-file-if-exists=../.env src/scripts/portal-verify.ts",
     "credit:fixture": "tsx --env-file-if-exists=../.env src/scripts/credit-fixture.ts",
     "credit:verify": "tsx --env-file-if-exists=../.env src/scripts/credit-verify.ts",
     "reset": "tsx --env-file-if-exists=../.env src/scripts/reset.ts"

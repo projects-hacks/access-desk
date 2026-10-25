@@ -29,6 +29,7 @@
     "ledger:verify": "pnpm --filter @access-desk/server ledger:verify",
     "tieout:verify": "pnpm --filter @access-desk/server tieout:verify",
     "actions:verify": "pnpm --filter @access-desk/server actions:verify",
+    "portal:verify": "pnpm --filter @access-desk/server portal:verify",
     "credit:fixture": "pnpm --filter @access-desk/server credit:fixture",
     "credit:verify": "pnpm --filter @access-desk/server credit:verify"
   },

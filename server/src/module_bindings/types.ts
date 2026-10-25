@@ -364,6 +364,33 @@ export const MetricSnapshot = __t.object("MetricSnapshot", {
 });
 export type MetricSnapshot = __Infer<typeof MetricSnapshot>;
 
+export const MyAccessRequests = __t.object("MyAccessRequests", {});
+export type MyAccessRequests = __Infer<typeof MyAccessRequests>;
+
+export const MyBankAccounts = __t.object("MyBankAccounts", {});
+export type MyBankAccounts = __Infer<typeof MyBankAccounts>;
+
+export const MyClient = __t.object("MyClient", {});
+export type MyClient = __Infer<typeof MyClient>;
+
+export const MyHoldings = __t.object("MyHoldings", {});
+export type MyHoldings = __Infer<typeof MyHoldings>;
+
+export const MyHolds = __t.object("MyHolds", {});
+export type MyHolds = __Infer<typeof MyHolds>;
+
+export const MyInvoices = __t.object("MyInvoices", {});
+export type MyInvoices = __Infer<typeof MyInvoices>;
+
+export const MyLevers = __t.object("MyLevers", {});
+export type MyLevers = __Infer<typeof MyLevers>;
+
+export const MyNotices = __t.object("MyNotices", {});
+export type MyNotices = __Infer<typeof MyNotices>;
+
+export const MyPermissions = __t.object("MyPermissions", {});
+export type MyPermissions = __Infer<typeof MyPermissions>;
+
 export const Notice = __t.object("Notice", {
   id: __t.u64(),
   clientId: __t.string(),

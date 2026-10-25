@@ -35,6 +35,8 @@ const InjectSchema = z.object({
 
 const WithdrawSchema = z.object({ clientId: z.string(), amount: z.number().positive().describe('Dollars requested') });
 
+const PortalAsSchema = z.object({ clientId: z.string().min(1), identity: z.string().regex(/^(0x)?[0-9a-fA-F]{64}$/, 'identity must be a 64-char hex identity') });
+
 const toCents = (dollars: number) => Math.round(dollars * 100);
 
 /**
@@ -170,6 +172,19 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
       custodyUsdCents: db.custodyHolding.id.find(`${clientId}:USD`)?.valueCents.toString() ?? null,
       ms: Date.now() - startedAt,
     };
+  });
+
+  /** Binds the browser's own identity to a client, so the portal views return only that client's rows. */
+  app.post('/demo/portal-as', async (req, reply) => {
+    const parsed = PortalAsSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues });
+    const { clientId, identity } = parsed.data;
+    try {
+      await conn.reducers.bindPortal({ identityHex: identity, clientId });
+    } catch (e) {
+      return reply.code(422).send({ error: e instanceof Error ? e.message : String(e) });
+    }
+    return { clientId, identity };
   });
 
   app.post('/demo/advance', async (req, reply) => {

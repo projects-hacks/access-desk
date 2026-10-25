@@ -37,6 +37,7 @@ import {
 import AddRmNoteReducer from "./add_rm_note_reducer";
 import AdvanceClockReducer from "./advance_clock_reducer";
 import AssignRoleReducer from "./assign_role_reducer";
+import BindPortalReducer from "./bind_portal_reducer";
 import ClaimGatewayCommandReducer from "./claim_gateway_command_reducer";
 import CompleteGatewayCommandReducer from "./complete_gateway_command_reducer";
 import FailGatewayCommandReducer from "./fail_gateway_command_reducer";
@@ -122,6 +123,15 @@ import InvoiceRow from "./invoice_table";
 import LedgerEntryRow from "./ledger_entry_table";
 import LoanRow from "./loan_table";
 import MetricSnapshotRow from "./metric_snapshot_table";
+import MyAccessRequestsRow from "./my_access_requests_table";
+import MyBankAccountsRow from "./my_bank_accounts_table";
+import MyClientRow from "./my_client_table";
+import MyHoldingsRow from "./my_holdings_table";
+import MyHoldsRow from "./my_holds_table";
+import MyInvoicesRow from "./my_invoices_table";
+import MyLeversRow from "./my_levers_table";
+import MyNoticesRow from "./my_notices_table";
+import MyPermissionsRow from "./my_permissions_table";
 import NoticeRow from "./notice_table";
 import OwedToClientRow from "./owed_to_client_table";
 import PayerIdentityRow from "./payer_identity_table";
@@ -721,6 +731,69 @@ const tablesSchema = __schema({
       { name: 'work_item_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, WorkItemRow),
+  myAccessRequests: __table({
+    name: 'my_access_requests',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyAccessRequestsRow),
+  myBankAccounts: __table({
+    name: 'my_bank_accounts',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyBankAccountsRow),
+  myClient: __table({
+    name: 'my_client',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyClientRow),
+  myHoldings: __table({
+    name: 'my_holdings',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyHoldingsRow),
+  myHolds: __table({
+    name: 'my_holds',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyHoldsRow),
+  myInvoices: __table({
+    name: 'my_invoices',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyInvoicesRow),
+  myLevers: __table({
+    name: 'my_levers',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyLeversRow),
+  myNotices: __table({
+    name: 'my_notices',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyNoticesRow),
+  myPermissions: __table({
+    name: 'my_permissions',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyPermissionsRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -728,6 +801,7 @@ const reducersSchema = __reducers(
   __reducerSchema("add_rm_note", AddRmNoteReducer),
   __reducerSchema("advance_clock", AdvanceClockReducer),
   __reducerSchema("assign_role", AssignRoleReducer),
+  __reducerSchema("bind_portal", BindPortalReducer),
   __reducerSchema("claim_gateway_command", ClaimGatewayCommandReducer),
   __reducerSchema("complete_gateway_command", CompleteGatewayCommandReducer),
   __reducerSchema("fail_gateway_command", FailGatewayCommandReducer),

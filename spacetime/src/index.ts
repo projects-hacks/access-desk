@@ -17,3 +17,6 @@ export { proposePaymentMatch } from './reducers/matches';
 export { recordPolicyOutcome, upsertCreditProfile, upsertExploitFlag } from './reducers/credit';
 export { proposePermissionChange, proposeTierChange } from './reducers/manual';
 export { proposeGuidelineChange, recordConsolePrecedent, setStrategic } from './reducers/guidelines';
+export {
+  bindPortal, myAccessRequests, myBankAccounts, myClient, myHoldings, myHolds, myInvoices, myLevers, myNotices, myPermissions,
+} from './reducers/portal';
