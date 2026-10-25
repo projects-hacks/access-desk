@@ -258,7 +258,7 @@ export function AuditLog() {
                           : <blockquote className="activity-why">“{why}”</blockquote>)}
                         {e.policyRef && e.policyRef !== 'manual' && (
                           <span className="activity-policy">
-                            Under policy: {policyTitle.get(e.policyRef.split(':')[0]!)?.title ?? plainText(e.policyRef)}
+                            Under policy: {e.policyRef.includes(':') ? "this client's own policy" : policyTitle.get(e.policyRef)?.title ?? plainText(e.policyRef)}
                           </span>
                         )}
                       </div>

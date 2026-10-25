@@ -127,7 +127,8 @@ export const isNews = (e: AuditEvent) => !QUIET.has(e.action);
 export function agentOf(e: AuditEvent, kind?: string): (typeof AGENTS)[number] {
   const key =
     e.action === 'GUARDRAIL_REFUSED' ? e.fromState
-    : e.action === 'CREDIT_SCORED' ? 'learning'
+    : e.action === 'CREDIT_SCORED' || e.action === 'POLICY_OUTCOME' || e.action === 'LEARNED' ? 'learning'
+    : e.action === 'POLICY_SAVED' || e.action === 'POLICY_ACTIVATED' ? 'scoring'
     : e.action === 'TIER_CHANGED' || kind === 'CREDIT_REVIEW' || kind === 'POLICY_DRAFT' || (e.action === 'AGENT_WAITED' && /tier/.test(e.toState)) ? 'scoring'
     : e.action === 'EXPLOIT_FLAGGED' || kind === 'EXPLOIT_FLAG' ? 'exploit'
     : 'access';

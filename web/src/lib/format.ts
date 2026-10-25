@@ -83,6 +83,7 @@ export function plainText(text: string, names: Map<string, string> = new Map()):
     .replace(/\b[a-z]+(?:_[a-z]+)+\b/g, (w) => w.replace(/_/g, ' '))
     .replace(/\(([A-Z]{3,}(?:, [A-Z]{3,})*)\)/g, (_all, w: string) => `(${w.toLowerCase()})`)
     .replace(/\bapi\b/gi, 'API')
+    .replace(/\b(Lp|Llc|Llp|Ltd|Plc)\b/g, (w) => w.toUpperCase())
     .replace(/^([^:]{2,60}): ([^:]{2,60}): /, (all, a: string, b: string) => {
       const x = a.toLowerCase();
       const y = b.toLowerCase();
