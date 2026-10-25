@@ -1,6 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import {
-  Activity, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, CheckCircle2, Gauge, Lock, ShieldX, SlidersHorizontal, Sparkles, Timer,
+  Activity, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, CalendarDays, CheckCircle2, Gauge, Lock, ShieldX, SlidersHorizontal, Sparkles, Timer,
   Unlock, XCircle, Zap, type LucideIcon,
 } from 'lucide-react';
 import { useTable } from 'spacetimedb/react';
@@ -19,10 +19,10 @@ export function TopBar() {
   );
 }
 
-const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-/** The platform the desk runs and its business date, as a calendar tile. */
+/** The platform the desk runs and its business date: "March 8, 2026 (Sunday)". */
 export function PlatformDate({ compact = false }: { compact?: boolean }) {
   const clock = useClock();
   const platform = usePlatform();
@@ -36,11 +36,11 @@ export function PlatformDate({ compact = false }: { compact?: boolean }) {
       <span className="platform-name">{platform?.name ?? 'Platform'}</span>
       {d && (
         <span className="cal" aria-label={simDay(date)}>
-          <span className="cal-tile">
-            <span className="cal-month">{MONTH[d.getUTCMonth()]}</span>
-            <span className="cal-day">{d.getUTCDate()}</span>
+          <CalendarDays size={15} aria-hidden className="cal-icon" />
+          <span className="cal-date">
+            {MONTH[d.getUTCMonth()]} {d.getUTCDate()}, {d.getUTCFullYear()}
+            <span className="cal-weekday"> ({WEEKDAY[d.getUTCDay()]})</span>
           </span>
-          <span className="cal-weekday">{WEEKDAY[d.getUTCDay()]}</span>
         </span>
       )}
     </div>
