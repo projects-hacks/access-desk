@@ -115,7 +115,7 @@ function StepRow({ step, t0, last, animate }: { step: EpisodeStep; t0: number; l
         )}
         {step.reason && (bulletLines(step.reason) ? (
           <ul
-            className={`ap-reason list ${open || typing ? 'open' : ''}`}
+            className={`ap-reason ap-reason-points ${open || typing ? 'open' : ''}`}
             {...activate(() => setOpen(!open))}
             aria-expanded={open}
             title={open ? 'Show less' : 'Show more'}

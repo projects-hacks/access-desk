@@ -934,10 +934,10 @@ i.open { background: #f2c2c6; }
 .ap-reason { font-size: 12.5px; line-height: 1.45; font-style: italic; color: #6b717b; cursor: pointer; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .ap-reason:hover { color: #3f444c; }
 .ap-reason.open { -webkit-line-clamp: unset; }
-.ap-reason.list { display: block; margin: 2px 0 0; padding-left: 15px; font-style: normal; max-height: 2.9em; }
-.ap-reason.list.open { max-height: none; }
-.ap-reason.list li { margin: 1px 0; }
-.ap-reason.list li::marker { color: #a3a8b0; }
+.ap-reason.ap-reason-points { display: block; margin: 2px 0 0; padding-left: 15px; font-style: normal; max-height: 2.9em; }
+.ap-reason.ap-reason-points.open { max-height: none; }
+.ap-reason.ap-reason-points li { margin: 1px 0; }
+.ap-reason.ap-reason-points li::marker { color: #a3a8b0; }
 .ap-points { margin: 0; padding-left: 16px; display: block; -webkit-line-clamp: unset; overflow: visible; }
 .ap-points li { margin: 1px 0; }
 .ap-points li::marker { color: #a3a8b0; }
