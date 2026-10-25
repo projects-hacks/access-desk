@@ -9,6 +9,7 @@ import { LeverChips, stateAfter, useLevers } from '../components/LeverChips';
 import { label, money, parseJson, percent, plainDates, plainText, points } from '../lib/format';
 import { REASONS, reasonFor, waitingReason } from '../lib/autonomy';
 import { useSession } from '../lib/session';
+import { actor } from '../lib/bank';
 import { reducers, tables } from '../module_bindings';
 import type {
   AuditEvent,
@@ -483,11 +484,10 @@ function Drawer({
           {history.map((e) => (
             <li key={String(e.id)} className={e.allowed ? '' : 'denied'}>
               <span className="eyebrow">
-                {plainDates(e.simDate)} · {e.actorName || e.actorRole.toLowerCase()}
+                {plainDates(e.simDate)} · {e.action === 'LEARNED' ? 'Iris' : actor(e, item.kind)}
               </span>
               <span>
-                {label(e.action)}
-                {e.fromState && e.toState ? ` ${label(e.fromState)} → ${label(e.toState)}` : ''}
+                {historyLine(e)}
                 {!e.allowed && ' · refused'}
               </span>
               {e.detail && <span className="muted">{plain(e.detail)}</span>}
@@ -497,4 +497,15 @@ function Drawer({
       </div>
     </aside>
   );
+}
+
+/** One line of a request's history, in words. */
+function historyLine(e: { action: string; toState: string }): string {
+  if (e.action === 'PROPOSE') return 'Proposed';
+  if (e.action === 'AUTO_APPLIED') return 'Applied on its own';
+  if (e.action === 'LEARNED') return 'Lesson recorded for next time';
+  if (e.action === 'TRANSITION') {
+    return ({ APPROVED: 'Approved', REJECTED: 'Rejected', WITHDRAWN: 'Withdrawn', NEEDS_INFO: 'Asked for more information', POSTED: 'Done at the platform', PROPOSED: 'Back to proposed' } as Record<string, string>)[e.toState] ?? label(e.toState);
+  }
+  return label(e.action);
 }
