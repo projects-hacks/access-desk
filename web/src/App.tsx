@@ -54,7 +54,7 @@ export function App() {
     <div className={`app ${booting ? 'booting' : ''} ${agentsOpen ? 'agents-open' : ''}`}>
       <Splash ready={itemsReady && clientsReady} onLeave={() => setBooting(false)} />
       <header className="appbar reveal" style={{ '--d': '0ms' } as CSSProperties}>
-        <div className="brand">Access Desk</div>
+        <div className="brand">Neo</div>
         <nav className="screens" aria-label="Screens">
           <SlidingPill active={screen} />
           {(Object.keys(SCREENS) as ScreenKey[]).map((key) => (

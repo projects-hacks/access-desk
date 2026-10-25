@@ -41,7 +41,7 @@ export function Splash({ ready, onLeave }: { ready: boolean; onLeave: () => void
       className="splash"
       data-leaving={phase === 'leaving' || undefined}
       role="status"
-      aria-label="Loading Access Desk"
+      aria-label="Loading Neo"
     >
       <span className="splash-logo">
         <img src={RING} alt="" />
