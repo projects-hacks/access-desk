@@ -106,6 +106,9 @@ export function plainText(text: string, names: Map<string, string> = new Map()):
     .replace(/\(([A-Z]{3,}(?:, [A-Z]{3,})*)\)/g, (_all, w: string) => `(${w.toLowerCase()})`)
     .replace(/\bapi\b/gi, 'API')
     .replace(/\b(Lp|Llc|Llp|Ltd|Plc)\b/g, (w) => w.toUpperCase())
+    // Older records named the model provider and wrote arrows as ->.
+    .replace(/\bClaude kept\b/g, 'Kept')
+    .replace(/\s->\s/g, ' → ')
     .replace(/^([^:]{2,60}): ([^:]{2,60}): /, (all, a: string, b: string) => {
       const x = a.toLowerCase();
       const y = b.toLowerCase();
