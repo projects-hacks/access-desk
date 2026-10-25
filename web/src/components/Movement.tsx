@@ -1,3 +1,4 @@
+import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import type { CashMovement, PaymentApplication } from '../module_bindings/types';
 import { matchBadge, nessieId, rail } from '../lib/bank';
 import { shortDate } from '../lib/clients';
@@ -16,6 +17,9 @@ export function Movement({ m, apps, fresh, known }: { m: CashMovement; apps: Pay
     <li className={`movement ${fresh ? 'fresh' : ''}`}>
       <details>
         <summary>
+          <span className={`movement-dir ${out ? 'out' : 'in'}`} aria-label={out ? 'Sent' : 'Received'}>
+            {out ? <ArrowUpRight size={15} /> : <ArrowDownLeft size={15} />}
+          </span>
           <span className="movement-date mono">{shortDate(m.valueOn)}</span>
           <span className="movement-who">
             <strong>{m.origName || known || (m.origAccount ? `Unknown wallet ${m.origAccount.slice(0, 8)}…` : out ? 'Outgoing' : 'Unknown payer')}</strong>
@@ -24,7 +28,7 @@ export function Movement({ m, apps, fresh, known }: { m: CashMovement; apps: Pay
               {m.refs.length > 0 && ` · ${m.refs.join(' ')}`}
             </span>
           </span>
-          <span className={`movement-amount mono ${out ? 'out' : 'in'}`}>
+          <span className={`movement-amount tnum ${out ? 'out' : 'in'}`}>
             {out ? '−' : '+'}
             {money(m.amountCents)}
           </span>
@@ -40,7 +44,7 @@ export function Movement({ m, apps, fresh, known }: { m: CashMovement; apps: Pay
             <li><span>References</span><span className="mono">{m.refs.join(' ') || '—'}</span></li>
             {m.remittance && <li><span>Remittance</span><span>{m.remittance}</span></li>}
             {m.instructedCents !== undefined && (
-              <li><span>Sent / charges</span><span className="mono">{money(m.instructedCents)} / {money(m.chargesCents ?? 0n)} {m.chargeBearer ?? ''}</span></li>
+              <li><span>Sent / charges</span><span className="tnum">{money(m.instructedCents)} / {money(m.chargesCents ?? 0n)} {m.chargeBearer ?? ''}</span></li>
             )}
             <li>
               <span>Read by</span>
@@ -55,7 +59,7 @@ export function Movement({ m, apps, fresh, known }: { m: CashMovement; apps: Pay
                 {apps.map((a) => (
                   <li key={String(a.id)}>
                     <span className="mono">{a.invoiceId}</span>
-                    <span className="mono">
+                    <span className="tnum">
                       {money(a.amountCents)} · {label(a.method)}
                       {a.policyRef && ` · ${a.policyRef}`}
                       {a.posted ? ' · billing confirmed' : ' · billing pending'}

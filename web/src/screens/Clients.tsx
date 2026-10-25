@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { AutonomyBand } from '../components/AutonomyBand';
+import { Avatar } from '../components/Avatar';
 import { Badge } from '../components/Badge';
 import { ClientPanel, type PanelMode } from '../components/ClientPanel';
 import { SlidingPill } from '../components/SlidingPill';
@@ -128,12 +129,17 @@ export function Clients() {
                   onClick={() => setPanel({ clientId: r.client.id, mode: 'overview' })}
                 >
                   <td>
-                    <div className="title">
-                      {r.client.name}
-                      {r.client.strategic && <span className="star"> · Strategic</span>}
-                    </div>
-                    <div className="eyebrow">
-                      {r.client.segment} · <span className="mono">{r.client.id}</span>
+                    <div className="client-cell">
+                      <Avatar id={r.client.id} name={r.client.name} />
+                      <div>
+                        <div className="title">
+                          {r.client.name}
+                          {r.client.strategic && <span className="star"> · Strategic</span>}
+                        </div>
+                        <div className="eyebrow">
+                          {r.client.segment} · <span className="mono">{r.client.id}</span>
+                        </div>
+                      </div>
                     </div>
                   </td>
                   <td className="muted">T{r.client.tier}</td>

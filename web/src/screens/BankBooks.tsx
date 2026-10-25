@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { CheckCircle2, Landmark, Radio, Send } from 'lucide-react';
 import { useTable } from 'spacetimedb/react';
 import { Badge } from '../components/Badge';
 import { Movement } from '../components/Movement';
@@ -55,7 +56,7 @@ export function BankBooks() {
       </p>
 
       <h4 className="row spread">
-        <span>Accounts against the ledger</span>
+        <span className="row"><Landmark size={15} aria-hidden /> Accounts against the ledger</span>
         {run && (
           <Badge tone={tied ? 'good' : 'bad'}>
             {tied ? 'Tied to the cent' : `${money(run.unexplainedCents)} unexplained`}
@@ -88,9 +89,9 @@ export function BankBooks() {
                       {meta.gl && <> · GL {meta.gl}</>}
                     </span>
                   </td>
-                  <td className="num mono">{money(a.operations)}</td>
-                  <td className="num mono">{money(a.ledger)}</td>
-                  <td className={`num mono ${diff === 0n ? 'tie' : 'late'}`}>{diff === 0n ? '✓' : money(diff)}</td>
+                  <td className="num">{money(a.operations)}</td>
+                  <td className="num">{money(a.ledger)}</td>
+                  <td className={`num ${diff === 0n ? 'tie' : 'late'}`}>{diff === 0n ? <CheckCircle2 size={16} aria-label="Tied" /> : money(diff)}</td>
                 </tr>
               );
             })}
@@ -104,7 +105,7 @@ export function BankBooks() {
               <span>
                 <Badge tone={b.kind === 'unexplained' ? 'bad' : 'info'}>{label(b.kind)}</Badge> {b.detail}
               </span>
-              <span className="mono">{money(b.amountCents)}</span>
+              <span className="tnum">{money(b.amountCents)}</span>
             </li>
           ))}
         </ul>
@@ -113,7 +114,7 @@ export function BankBooks() {
 
       <SendWire />
 
-      <h4>Bank feed</h4>
+      <h4 className="row"><Radio size={15} aria-hidden /> Bank feed <span className="live-pill">live</span></h4>
       <div className="filters" role="toolbar" aria-label="Filter movements">
         {(Object.keys(FEED_FILTERS) as FeedFilter[]).map((k) => (
           <button key={k} className={`filter ${filter === k ? 'active' : ''}`} onClick={() => setFilter(k)}>
@@ -192,6 +193,7 @@ function SendWire() {
         <input className="field mono" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" aria-label="Amount in dollars" />
         <input className="field grow" value={remittance} onChange={(e) => setRemittance(e.target.value)} placeholder="Remittance, as the payer would type it" aria-label="Remittance" />
         <button className="btn primary" disabled={busy || !Number(amount)} onClick={send}>
+          <Send size={14} aria-hidden />
           {busy ? 'Sending…' : 'Send wire'}
         </button>
       </div>
