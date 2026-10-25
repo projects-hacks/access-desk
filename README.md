@@ -99,6 +99,8 @@ flowchart LR
 
 Each agent handles one client per task, several clients in parallel. When Sage or Rowan has a real decision to make, a Droid session reads the client through tools (overview, invoices, payments, history, similar cases at other clients) and acts through the same guarded reducers. Quinn asks Droid for tier and policy decisions. Routine cases run on rules in milliseconds, and the rules take over if the model times out or is refused. See [agents](docs/agents.md).
 
+**Where Droid runs:** sessions start in [`agents/src/llm/agentSession.ts`](agents/src/llm/agentSession.ts) (built-in tools off, permission requests refused, one MCP server). The tools are in [`agents/src/tools/`](agents/src/tools/): read tools scoped to one client per session, and action tools that go through the database's guardrails, one action per task. Quinn's decisions go through [`agents/src/credit/decide.ts`](agents/src/credit/decide.ts). The database fires the triggers: a payment, an RM note, a deadline, a new business day.
+
 ## Guardrails live in the database
 
 Agents act through the same reducers as people, so their proposals face the same checks inside the transaction: contract clauses, the platform's capabilities, policy, the amount owed, cure periods, hedged positions, payments still in transit, and who may approve what. A refused action is recorded and shown with what the agent did instead. Nobody approves their own proposal, and only the gateway writes to the bank and the platform.
@@ -112,7 +114,7 @@ The hosted server keeps Northstar Prime alive. A business day passes every 15 mi
 | | Used for |
 |---|---|
 | [SpacetimeDB](https://spacetimedb.com) | The shared state: reducers hold the rules, the task queue wakes the agents, subscriptions push every change, a scheduled reducer runs the business clock. [Why SpacetimeDB](docs/spacetimedb.md) |
-| [Factory Droid](https://factory.ai) | The agents' reasoning, with tools served over MCP |
+| [Factory Droid](https://factory.ai) | The agents' reasoning: Droid sessions with our own tools over MCP, scoped to one client ([where](#the-agents)) |
 | [Capital One Nessie](http://api.nessieisreal.com) | Bank accounts, wires, ACH, refunds and withdrawals |
 | [Microsoft Azure](https://azure.microsoft.com/products/container-apps) | Container Apps for the API server and the agents, deployed by GitHub Actions |
 | React and Vite | The controller console and the client view, on Vercel |
