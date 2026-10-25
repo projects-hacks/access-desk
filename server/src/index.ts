@@ -10,6 +10,8 @@ import { Sync } from './sync';
 import { demoRoutes } from './demo/routes';
 import { buildSeedPlan } from './integrations/nessie/seed-plan';
 import { startPriceFeed } from './integrations/prices';
+import { World } from './world/engine';
+import { worldRoutes } from './world/routes';
 
 if (!env.SERVER_HOST) {
   console.error('This server runs sync and the gateway on the shared database, and only one may run (the hosted one).\n'
@@ -42,6 +44,15 @@ if (env.DEMO_CONTROLS) {
   await app.register(demoRoutes, { conn: demoConn, sync, gateway: () => gateway, bank, plan: buildSeedPlan(ds), ds, platform });
 }
 
+// The platform living on its own (clock, billing, client payments, trades): opt in with WORLD_EVENTS=true.
+let world: World | undefined;
+if (env.WORLD_EVENTS) {
+  if (!env.STDB_DEMO_TOKEN) throw new Error('WORLD_EVENTS=true needs STDB_DEMO_TOKEN (role DEMO)');
+  const { conn: worldConn } = await connectStdb(env.STDB_DEMO_TOKEN, 'world');
+  world = await World.open({ conn: worldConn, sync, bank, ds, platform, log });
+}
+worldRoutes(app, () => world);
+
 // Routes are registered above; the gateway below calls the platform API on this server, so listen first.
 await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
@@ -55,6 +66,7 @@ if (env.STDB_GATEWAY_TOKEN) {
 }
 sync.start();
 startPriceFeed(syncConn, platform, log);
+world?.start();
 
 // Reconnects are automatic. A connection down for two minutes means something is wrong
 // that a fresh process fixes (the platform replays from the database on boot): exit and

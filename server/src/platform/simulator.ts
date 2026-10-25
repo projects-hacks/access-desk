@@ -1,5 +1,5 @@
 import type { Dataset, Invoice } from '../dataset';
-import { baselineJournals, isBalanced, type Journal } from '../dataset/gl';
+import { ACCOUNTS, REVENUE, baselineJournals, isBalanced, type Journal } from '../dataset/gl';
 import { PRICES, holdingsFor, leversFor, type HoldingRow, type LeverRow } from '../dataset/platform-data';
 import type { GatewayAction, GatewayResult, InvoiceState } from './commands';
 
@@ -36,6 +36,24 @@ export class PlatformSimulator {
     }
     for (const j of baselineJournals(this.ds)) this.journals.set(j.journalId, j);
     for (const asset of this.prices.keys()) this.revalue(asset);
+  }
+
+  /**
+   * Billing issues invoices (the platform's own business, not a gateway command) and books them:
+   * Dr receivables, Cr revenue. Idempotent by invoice id; returns the ones that were new.
+   */
+  issue(invoices: Invoice[]): Invoice[] {
+    const added: Invoice[] = [];
+    for (const i of invoices) {
+      if (this.invoices.has(i.id)) continue;
+      this.invoices.set(i.id, { ...i });
+      this.journals.set(`JE-INV-${i.id}`, {
+        journalId: `JE-INV-${i.id}`, postedOn: i.issuedOn, ref: i.id, memo: `${i.label} · ${i.period}`, source: 'billing',
+        lines: [{ account: ACCOUNTS.RECEIVABLES, debitCents: i.amountCents, creditCents: 0 }, { account: REVENUE[i.product], debitCents: 0, creditCents: i.amountCents }],
+      });
+      added.push(i);
+    }
+    return added;
   }
 
   /** A new market price: revalues every holding of that asset. Returns the holdings that changed. */

@@ -30,6 +30,19 @@ const EnvSchema = z.object({
   NESSIE_RUN: z.string().default('dev'),
   /** `fake` swaps Nessie for the in-memory bank (tests, or if Nessie is down). */
   BANK_MODE: z.enum(['nessie', 'fake']).default('nessie'),
+  /** The platform lives on its own: sim clock, monthly billing, client payments, trades and withdrawals (world/). SERVER_HOST only. */
+  WORLD_EVENTS: z.stringbool().default(false),
+  /** Real seconds per simulated day; the clock is kept at this pace (0 = leave the clock alone). */
+  WORLD_SECONDS_PER_DAY: z.coerce.number().int().min(0).max(3600).default(240),
+  /** A client event every this many real seconds, jittered between min and max. */
+  WORLD_EVENT_MIN_SECONDS: z.coerce.number().positive().default(20),
+  WORLD_EVENT_MAX_SECONDS: z.coerce.number().positive().default(60),
+  /** At most this many events per client per simulated day. */
+  WORLD_CLIENT_DAY_CAP: z.coerce.number().int().min(1).default(2),
+  /** Nessie writes the world may make per minute. */
+  WORLD_BANK_WRITES_PER_MINUTE: z.coerce.number().int().min(1).default(20),
+  /** A paused clock is put back to speed after this long (a short pause by a person is respected). */
+  WORLD_PAUSE_GRACE_SECONDS: z.coerce.number().int().min(0).default(300),
   PLATFORM_NAME: z.string().default('Northstar Prime'),
   PLATFORM_LEGAL_NAME: z.string().default('Northstar Prime Ltd'),
   SIM_DATE: z.iso.date().default('2026-03-03'),

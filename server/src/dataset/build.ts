@@ -7,8 +7,8 @@ import type { BankMovement, Client, Dataset, Invoice, OnchainPayment, Party } fr
 
 const SIM_DATE = '2026-03-03';
 const BANK_WINDOW_START = '2026-02-01';
-const PRODUCT_ORDER: Product[] = ['CUSTODY', 'TRADING', 'FINANCING', 'API'];
-const LABELS: Record<Product, string> = {
+export const PRODUCT_ORDER: Product[] = ['CUSTODY', 'TRADING', 'FINANCING', 'API'];
+export const LABELS: Record<Product, string> = {
   CUSTODY: 'Custody fees',
   TRADING: 'Trading fees',
   FINANCING: 'Financing interest',
@@ -28,7 +28,7 @@ function toCents(dollars: number): number {
 }
 
 /** Monthly amount with a stable ±8% wobble, rounded to $10. */
-function monthlyAmount(client: Client, product: Product, period: string): number {
+export function monthlyAmount(client: Client, product: Product, period: string): number {
   const base = client.monthly[product] ?? 0;
   const factor = 0.92 + unit(`${client.id}:${product}:${period}`) * 0.16;
   return toCents(Math.round((base * factor) / 10) * 10);

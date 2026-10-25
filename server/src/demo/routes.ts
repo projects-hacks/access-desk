@@ -2,10 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { tables, type DbConnection } from '../module_bindings';
 import type { Dataset } from '../dataset';
-import { wireIn } from '../integrations/bank-text/format';
 import type { Bank } from '../integrations/nessie/bank';
 import { resetBank, settleWire } from '../integrations/nessie/reset';
-import { PLATFORM_BANK, type SeedPlan } from '../integrations/nessie/seed-plan';
+import { postIncomingWire } from '../integrations/nessie/payments-in';
+import type { SeedPlan } from '../integrations/nessie/seed-plan';
 import { env } from '../lib/env';
 import type { Gateway } from '../gateway/executor';
 import type { PlatformSimulator } from '../platform/simulator';
@@ -130,29 +130,18 @@ export async function demoRoutes(app: FastifyInstance, deps: Deps) {
   async function receiveWire(p: z.infer<typeof InjectSchema>) {
     const startedAt = Date.now();
     const client = p.payer.clientId ? ds.clients.find((c) => c.id === p.payer.clientId) : undefined;
-    const collections = bank.map.accounts.collections;
-    if (!collections) throw new Error('collections account missing');
 
     const count = [...db.cashMovement.iter()].filter((m) => m.bankRef.startsWith('JD-')).length;
     const trn = `JD-${String(count + 1).padStart(4, '0')}`;
     const name = p.payer.name ?? client!.legalName;
     const account = client ? bank.map.accounts[client.id]!.number : `9${String(Math.abs(hash(name))).padStart(15, '0').slice(0, 15)}`;
     const payerBank = client?.bank ?? (p.network === 'SWIFT' ? { name: 'HSBC BANK PLC', id: 'MIDLGB22', country: 'GB' } : { name: 'TRUIST BANK', id: '061000104', country: 'US' });
-    const receivedCents = toCents(p.amount);
-    const chargesCents = p.network === 'SWIFT' ? toCents(p.charges) : 0;
-    const description = wireIn({
-      trn, date: simDate(), orig: name, origAccount: account, bank: payerBank, remittance: p.remittance,
-      international: p.network === 'SWIFT' ? { uetr: crypto.randomUUID(), instructedCents: receivedCents + chargesCents, chargeBearer: 'SHA', chargesCents } : undefined,
+    // Known payers: the other side is recorded in their bank too.
+    await postIncomingWire(bank, ds.platform.legalName, {
+      trn, date: simDate(), payer: { name, account, bank: payerBank, accountKey: client?.id }, amountCents: toCents(p.amount),
+      remittance: p.remittance, status: p.status === 'posted' ? 'completed' : 'pending',
+      swift: p.network === 'SWIFT' ? { chargeBearer: 'SHA', chargesCents: toCents(p.charges) } : undefined,
     });
-    const status = p.status === 'posted' ? 'completed' : 'pending';
-    await bank.api.createDeposit(collections.id, { medium: 'balance', transaction_date: simDate(), status, amount: receivedCents, description });
-    // Known payers: record the other side in their bank too.
-    if (client) {
-      await bank.api.createWithdrawal(bank.map.accounts[client.id]!.id, {
-        medium: 'balance', transaction_date: simDate(), status: 'completed', amount: receivedCents + chargesCents,
-        description: `WIRE TYPE:FED OUT TRN:${trn} BNF:${ds.platform.legalName.toUpperCase()} ID:${collections.number} RCV BK:${PLATFORM_BANK.name} PMT DET:${p.remittance.toUpperCase()}`,
-      });
-    }
     await sync.cash(client ? [client.id] : []);
     await awaitMovement(trn);
     return outcome(trn, startedAt);

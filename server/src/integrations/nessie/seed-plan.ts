@@ -130,14 +130,19 @@ function partyBank(ds: Dataset, party: Party): Client['bank'] {
 export const PLATFORM_BANK = { name: 'JPMORGAN CHASE BANK NA', id: '021000021' };
 
 const STYLES: RemittanceStyle[] = ['spaced', 'slashed', 'words', 'range'];
-function styleFor(clientId: string): RemittanceStyle {
+export function styleFor(clientId: string): RemittanceStyle {
   let h = 0;
   for (const ch of clientId) h = (h * 31 + ch.charCodeAt(0)) % 9973;
   return STYLES[h % STYLES.length]!;
 }
 
 /** Payers that habitually mistype digits (letters for digits). */
-const TYPO_CLIENTS = new Set(['ORG-90142']);
+export const TYPO_CLIENTS = new Set(['ORG-90142']);
+
+/** A keying slip in the first invoice number: letter I for 1 (or O for 0). */
+export function withTypo(text: string): string {
+  return /\d*1\d*/.test(text) ? text.replace(/(\d*?)1/, '$1I') : text.replace(/(\d)0/, '$1O');
+}
 
 /** What the payer wrote in the remittance field. */
 function remittanceFor(ds: Dataset, m: BankMovement): string {
@@ -152,10 +157,8 @@ function remittanceFor(ds: Dataset, m: BankMovement): string {
   if (org) return `REF ${org} PER WIRE INSTRUCTIONS`;
   if (!invoices.length) return '';
   const international = party && partyBank(ds, party).country !== 'US';
-  let text = invoiceRemittance(invoices, international ? 'swift' : styleFor(clientId ?? ''), international ? '/RFB/JAN26' : '');
-  // A keying slip in the first invoice number: letter I for 1 (or O for 0).
-  if (clientId && TYPO_CLIENTS.has(clientId)) text = /\d*1\d*/.test(text) ? text.replace(/(\d*?)1/, '$1I') : text.replace(/(\d)0/, '$1O');
-  return text;
+  const text = invoiceRemittance(invoices, international ? 'swift' : styleFor(clientId ?? ''), international ? '/RFB/JAN26' : '');
+  return clientId && TYPO_CLIENTS.has(clientId) ? withTypo(text) : text;
 }
 
 function movementTransactions(ds: Dataset, m: BankMovement): TransactionPlan[] {
