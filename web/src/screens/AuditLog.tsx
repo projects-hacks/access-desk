@@ -338,6 +338,12 @@ function sentence(e: AuditEvent): string {
       return 'Moved the date forward';
     case 'GUARDRAIL_REFUSED':
       return 'Refused by a guardrail';
+    case 'LEARNED':
+      return 'Lesson recorded from a rejection';
+    case 'POLICY_OUTCOME':
+      return e.toState === 'passing' ? 'Client policy is working' : 'Client policy is not working yet';
+    case 'POLICY_ACTIVATED':
+      return 'Client policy put in force';
     case 'ORDER_REFUSED':
       return 'Order refused';
     case 'ORDER_PLACED':

@@ -16,6 +16,8 @@ export const AGENTS = [
 const AGENT_KEYS = new Set<string>(AGENTS.map((a) => a.key));
 export const isAgent = (actor: string) => AGENT_KEYS.has(actor);
 
+const LEARNING = new Set(['LEARNED', 'POLICY_OUTCOME', 'POLICY_ACTIVATED']);
+
 /** An episode counts as running while one of its tasks is open or a step landed this recently. */
 const BUSY_MS = 3_000;
 /** A finished episode stays in the "Now" card this long so the outcome can be read. */
@@ -123,6 +125,8 @@ export type AgentsView = {
   /** While today has little to show: the last few episodes of the day before, and that day. */
   before: EpisodeView[];
   beforeDay: string;
+  /** Lessons recorded today: rejections learned from, client policies checked or put in force. */
+  learned: number;
   working: boolean;
   /** Did this step arrive by push in the last few seconds (as opposed to being there on load)? */
   isFresh: (step: EpisodeStep) => boolean;
@@ -135,6 +139,7 @@ export function useAgents(): AgentsView {
   const [steps, stepsReady] = useTable(tables.episodeStep);
   const [clients, clientsReady] = useTable(tables.client);
   const [clockRows] = useTable(tables.clock);
+  const [audit] = useTable(tables.auditEvent);
   const today = clockRows[0]?.simDate ?? '';
   const ready = tasksReady && episodesReady && stepsReady && clientsReady;
   const now = useNow(1000);
@@ -232,8 +237,9 @@ export function useAgents(): AgentsView {
       total: earlier.length,
       before,
       beforeDay,
+      learned: audit.filter((e) => e.simDate === today && e.allowed && LEARNING.has(e.action)).length,
       working: roster.some((r) => r.working) || !!live?.running,
       isFresh: (step: EpisodeStep) => now - (arrivals.get(step.id) ?? 0) < SETTLE_MS,
     };
-  }, [tasks, episodes, steps, clients, today, ready, now, arrivals]);
+  }, [tasks, episodes, steps, clients, audit, today, ready, now, arrivals]);
 }

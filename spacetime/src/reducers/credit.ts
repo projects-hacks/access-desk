@@ -101,6 +101,12 @@ export function recordCreditPrecedent(ctx: Ctx, workItemId: bigint, decision: 'A
   };
   if (ctx.db.precedent.id.find(row.id)) ctx.db.precedent.id.update(row);
   else ctx.db.precedent.insert(row);
+  if (decision === 'Rejected') {
+    audit(ctx, {
+      action: 'LEARNED', subjectType: 'precedent', subjectId: row.id, clientId: item.clientId, workItemId: item.id,
+      toState: 'rejected', detail: overrideReason, policyRef: item.policyRef,
+    });
+  }
 }
 
 /**

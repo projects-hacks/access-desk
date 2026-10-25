@@ -328,6 +328,25 @@ export function stepFromAudit(ctx: Ctx, e: AuditLike) {
     }
     case 'RM_NOTE':
       return step(ctx, { clientId, actor: 'person', text, opens: `RM note: ${text}` });
+    case 'LEARNED': {
+      const item = e.workItemId !== undefined ? ctx.db.workItem.id.find(e.workItemId) : undefined;
+      const who = ctx.db.actor.identity.find(ctx.sender)?.name ?? 'A controller';
+      return step(ctx, {
+        clientId, actor: 'learning', workItemId: e.workItemId, opens: true,
+        text: `Learned from ${who}: ${item ? `"${item.title}" was rejected` : 'a proposal was rejected'}. It won't be proposed again for 30 days.`,
+        reason: text,
+      });
+    }
+    case 'POLICY_OUTCOME':
+      return step(ctx, {
+        clientId, actor: 'learning', opens: true, reason: text,
+        text: e.toState === 'passing' ? 'This client\'s own policy is working.' : 'This client\'s own policy is not working yet. Quinn will propose a better version.',
+      });
+    case 'POLICY_ACTIVATED':
+      return e.allowed === false ? undefined : step(ctx, {
+        clientId, actor: 'learning', workItemId: e.workItemId,
+        text: `New policy in force: ${text.split(' · ')[0]}. Iris checks it against every payment from here on.`,
+      });
     case 'WITHDRAWAL_REQUESTED': {
       const r = ctx.db.accessRequest.id.find(BigInt(e.subjectId));
       const name = ctx.db.client.id.find(clientId)?.name ?? 'The client';

@@ -1018,3 +1018,4 @@ i.open { background: #f2c2c6; }
 .controller-name { display: flex; flex-direction: column; line-height: 1.15; }
 .controller-name strong { font-size: 13px; font-weight: 600; }
 .controller-name span { font-size: 11px; color: var(--muted); }
+.ap-learned { color: var(--good); font-weight: 500; }

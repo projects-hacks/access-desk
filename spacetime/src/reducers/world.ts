@@ -10,6 +10,7 @@ import { clockTick } from '../tables/world';
 import { sendDefaultNotices } from './actions';
 import { requeueStuckCommands } from '../payments/gateway';
 import { requeueStuckTasks, route } from '../agents';
+import { recordWeeklyAutonomy } from '../autonomyTrend';
 
 /** Runs on first publish (and after a data reset). The publisher becomes ADMIN. */
 export const init = spacetimedb.init((ctx) => {
@@ -75,6 +76,7 @@ function moveClock(ctx: Ctx, days: number, trigger: string) {
     ctx.db.clock.id.update({ ...c, simDate: to, secondsPerDay: stop ? 0 : c.secondsPerDay, runUntil: stop ? undefined : c.runUntil, updatedAt: ctx.timestamp });
     evaluateDeadlines(ctx);
     sendDefaultNotices(ctx);
+    recordWeeklyAutonomy(ctx, to);
     if (stop) break;
   }
   const to = simDate(ctx);

@@ -245,7 +245,7 @@ function NeedCard({ need, onOpen }: { need: Need; onOpen: () => void }) {
 export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
   open: boolean; onToggle: () => void; onOpenApprovals: (need: Need) => void; onOpenAudit: () => void;
 }) {
-  const { roster, needs, now, today, earlier, total, before, beforeDay, working, isFresh } = useAgents();
+  const { roster, needs, now, today, earlier, total, before, beforeDay, learned, working, isFresh } = useAgents();
   const { connected } = useSession();
   const simTime = useSimTime();
   const timeOf = (v: EpisodeView) => simTime(v.episode.startedAt, v.episode.simDate) || clock(v.episode.startedAt);
@@ -320,7 +320,10 @@ export function AgentsPanel({ open, onToggle, onOpenApprovals, onOpenAudit }: {
         <section className="ap-section">
           <div className="ap-headrow">
             <h4 className="ap-head">Today · {simDay(today).replace(/, \d{4}$/, '')}</h4>
-            {total > 0 && <span>{total > earlier.length ? `latest ${EARLIER_LIMIT} of ${total}` : `${total} ${total === 1 ? 'episode' : 'episodes'}`}</span>}
+            <span>
+              {total > 0 ? (total > earlier.length ? `latest ${EARLIER_LIMIT} of ${total}` : `${total} ${total === 1 ? 'episode' : 'episodes'}`) : ''}
+              {learned > 0 && <span className="ap-learned">{total > 0 ? ' · ' : ''}{learned} learned</span>}
+            </span>
           </div>
           {earlier.length ? (
             <ul className="ap-list">
