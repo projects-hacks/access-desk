@@ -98,8 +98,26 @@ export function plainText(text: string, names: Map<string, string> = new Map()):
  * Reasoning as separate points. Agents write one point per "- " line; older text written as one
  * paragraph is split at sentence ends and semicolons. Dashes used as punctuation become commas.
  */
+/** Pattern codes the agents use, in the words on the Exploits screen. */
+const PATTERN_WORDS: Record<string, string> = {
+  restriction_eve: 'pays only on the eve of a restriction',
+  partial_reset: 'small partial payments that reset the clock',
+  pays_restricted_only: 'pays only the product that was restricted',
+  quarter_end: 'holds payments until quarter end',
+  recent_late: 'paying later than it used to',
+  lateness_jump: 'suddenly paying much later',
+  dispute_delay: 'disputes that delay payment',
+  withdrawal_during_cure: 'withdrew cash during its cure period',
+};
+
 export function points(text: string): string[] {
   const clean = text
+    .replace(/\b([A-Za-z]+(?:_[a-z]+)+)\b/g, (w, _c, at: number) => {
+      const words = PATTERN_WORDS[w.toLowerCase()];
+      if (!words) return w.replace(/_/g, ' ');
+      const lead = at === 0 || /[.!?]\s*$|^\s*-\s*$/.test(text.slice(Math.max(0, at - 3), at));
+      return `${lead ? 'The' : 'the'} pattern “${words}”`;
+    })
     .replace(/\s*[—–]\s*/g, ', ')
     // Older proposals spelled their criteria as formulas.
     .replace(/share paid within grace >= 1(?:\.0+)?\b/g, 'every invoice paid within grace')
