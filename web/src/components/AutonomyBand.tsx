@@ -39,7 +39,7 @@ export function AutonomyBand() {
           <span className="band-sub">{d.auto} of {d.total} decisions</span>
         </div>
         {trend.length > 1 && (
-          <div className="band-trend" title="Share of cases that needed a person, by week">
+          <div className="band-trend" title="Share of decisions that needed a person, four-week rolling, by week">
             <Sparkline values={trend.map((m) => m.value)} />
             <span className="band-sub">
               needed a person: {Math.round(trend[0]!.value)}% → {trend.at(-1)!.value.toFixed(1)}% in {trend.length} weeks
