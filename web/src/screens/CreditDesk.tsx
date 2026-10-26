@@ -127,7 +127,7 @@ export function CreditDesk() {
         <div>
           <h2>Credit analyst</h2>
           <p className="muted">
-            {config.stdbDatabase} · sim date {clock[0]?.simDate ?? '…'} ·{' '}
+            Neo · sim date {clock[0]?.simDate ?? '…'} ·{' '}
             <span className={conn.isActive ? 'ok' : 'bad'}>{conn.isActive ? 'connected' : 'connecting…'}</span>
             {!config.stdbToken && <span className="bad"> · read-only (no controller token)</span>}
           </p>
