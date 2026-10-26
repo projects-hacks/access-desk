@@ -107,7 +107,9 @@ Agents act through the same reducers as people, so their proposals face the same
 
 ## The platform runs on its own
 
-The hosted server keeps Northstar Prime alive. A business day passes every 15 minutes. Billing issues invoices each month. Clients behave like themselves: most pay on time, some pay late or in part, one games the terms, a few are chronically late, and now and then a wire is short, duplicated or returned. Clients also withdraw and trade at live prices. Everything goes through the real paths, so you can step in at any moment as the controller, Maya Chen: approve, reject, pay, trade or change a client by hand. Her changes apply at once and the desk carries on from there. See [world](docs/world.md).
+During Cal Hacks the hosted server kept Northstar Prime alive: a business day passed every 15 minutes, billing issued invoices each month, and clients behaved like themselves: most paid on time, some paid late or in part, one gamed the terms, a few were chronically late, and now and then a wire was short, duplicated or returned. Clients also withdrew and traded at live prices. See [world](docs/world.md).
+
+The hackathon is over, so that engine is now off and the business clock is paused. To show the desk at work, use **Scenarios** (bottom left of the console). Each one makes a single real event happen to a client that fits it right now: a client pays, a payment arrives from a parent company, an RM asks to hold off or reports an acquisition, a wire arrives short or twice, or a client withdraws during its cure period. Everything after the event is the desk responding on its own.
 
 ## Built with
 

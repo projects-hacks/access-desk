@@ -45,6 +45,7 @@ if (env.DEMO_CONTROLS) {
 }
 
 // The platform living on its own (clock, billing, client payments, trades): opt in with WORLD_EVENTS=true.
+// Off on the hosted server since Cal Hacks ended; demo scenarios trigger events on demand instead.
 let world: World | undefined;
 if (env.WORLD_EVENTS) {
   if (!env.STDB_DEMO_TOKEN) throw new Error('WORLD_EVENTS=true needs STDB_DEMO_TOKEN (role DEMO)');
